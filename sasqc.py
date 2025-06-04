@@ -18,8 +18,8 @@ app.config['QR_FOLDER'] = 'static/qr_codes'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['QR_FOLDER'], exist_ok=True)
 
-EMAIL_ADDRESS = "your_email@example.com"
-EMAIL_PASSWORD = "your_email_password"
+EMAIL_ADDRESS = "Somyotsw442@gmail.com"
+EMAIL_PASSWORD = "dfwj earf bvuj jcrv"
 
 # Register Thai font
 pdfmetrics.registerFont(TTFont('THSarabunNew', 'THSarabunNew.ttf'))
