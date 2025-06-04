@@ -18,8 +18,8 @@ app.config['QR_FOLDER'] = 'static/qr_codes'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['QR_FOLDER'], exist_ok=True)
 
-EMAIL_ADDRESS = "your_email@example.com"
-EMAIL_PASSWORD = "your_email_password"
+EMAIL_ADDRESS = "somyotsw442@gmail.com"
+EMAIL_PASSWORD = "dfwj earf bvuj jcrv"
 
 # Register Thai font
 pdfmetrics.registerFont(TTFont('THSarabunNew', 'THSarabunNew.ttf'))
@@ -28,7 +28,7 @@ def generate_serial():
     return ''.join(random.choices(string.digits, k=10))
 
 def create_qr(serial):
-    img = qrcode.make(url_for('show_customer_report', serial=serial, _external=True))
+    img = qrcode.make(url_for('show_pdf_options', serial=serial, _external=True))
     qr_path = os.path.join(app.config['QR_FOLDER'], f'{serial}.png')
     img.save(qr_path)
     return qr_path
@@ -90,7 +90,10 @@ def generate_serial_and_qr():
     pdf_path = f'static/{serial}_report.pdf'
     c = canvas.Canvas(pdf_path, pagesize=A4)
     c.setFont('THSarabunNew', 16)
-    c.drawImage("logo_sas.png", 430, 770, width=120, height=50)
+    try:
+        c.drawImage("static/logo_sas.png", 430, 770, width=120, height=50)
+    except:
+        pass
 
     c.setFont("THSarabunNew", 18)
     c.drawString(30, 800, "SAS QC Gear Motor")
@@ -147,3 +150,34 @@ def send_email(serial):
         smtp.send_message(msg)
 
     return f"ส่งอีเมลไปยัง {recipient} สำเร็จแล้วครับ"
+
+@app.route('/report/<serial>', methods=['GET'])
+def show_customer_report(serial):
+    info_path = f'static/{serial}_info.txt'
+    if not os.path.exists(info_path):
+        return f"ไม่พบข้อมูล Serial: {serial}", 404
+
+    with open(info_path, 'r') as f:
+        lines = f.read().splitlines()
+
+    warranty_start = datetime.strptime(lines[0], '%Y-%m-%d')
+    warranty_days = int(lines[1])
+    inspector = lines[2]
+    qc_date = lines[3]
+    images = lines[4:]
+
+    warranty_end = warranty_start + timedelta(days=warranty_days)
+    today = datetime.now().date()
+    remaining_days = (warranty_end.date() - today).days
+
+    status = "ยังอยู่ในระยะประกัน" if remaining_days > 0 else "สิ้นสุดการรับประกัน"
+
+    return render_template('customer_report.html',
+                           serial=serial,
+                           inspector=inspector,
+                           qc_date=qc_date,
+                           warranty_start=warranty_start.date(),
+                           warranty_end=warranty_end.date(),
+                           remaining_days=remaining_days,
+                           status=status,
+                           images=images)

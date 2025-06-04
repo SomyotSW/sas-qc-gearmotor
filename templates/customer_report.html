@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ผลการตรวจสอบ QC</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'TH Sarabun New', sans-serif;
+            background-color: #f4f4f4;
+            padding: 20px;
+            line-height: 1.8;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h2 {
+            text-align: center;
+            color: #007bff;
+        }
+        .footer {
+            margin-top: 20px;
+            text-align: right;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>ผลการตรวจสอบ SAS QC Gear Motor</h2>
+        <p><strong>Serial No.:</strong> {{ serial }}</p>
+
+        <p><strong>วันหมดระยะประกัน:</strong> <span id="expire_date">กำลังคำนวณ...</span></p>
+        <p><strong>สถานะ:</strong> <span id="status">-</span></p>
+
+        <div class="footer">
+            <a href="https://www.motorsas.com" target="_blank">www.motorsas.com</a>
+        </div>
+    </div>
+
+    <script>
+        // โหลดวันจาก info.txt ถ้ามี API หรือ backend route เสริม
+        async function fetchWarranty(serial) {
+            try {
+                const res = await fetch(`/static/${serial}_info.txt`);
+                const data = await res.text();
+                const lines = data.trim().split('\\n');
+                const startDate = new Date(lines[0]);
+                const durationDays = parseInt(lines[1]);
+                const endDate = new Date(startDate);
+                endDate.setDate(startDate.getDate() + durationDays);
+
+                const now = new Date();
+                const expireText = endDate.toLocaleDateString('th-TH');
+                document.getElementById('expire_date').innerText = expireText;
+
+                const status = (now > endDate) ? '❌ สิ้นสุดการรับประกัน' : '✅ อยู่ในระยะรับประกัน';
+                document.getElementById('status').innerText = status;
+            } catch {
+                document.getElementById('expire_date').innerText = 'ไม่พบข้อมูล';
+                document.getElementById('status').innerText = 'ไม่สามารถตรวจสอบได้';
+            }
+        }
+
+        fetchWarranty("{{ serial }}");
+    </script>
+</body>
+</html>
