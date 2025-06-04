@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SAS QC Gear Motor</title>
+</head>
+<body>
+    <h2>ฟอร์มตรวจสอบ SAS QC Gear Motor</h2>
+    <form method="POST" enctype="multipart/form-data">
+        <label>ค่ากระแสของมอเตอร์ (A):</label><br>
+        <input type="text" name="motor_current" required><br>
+        <input type="file" name="motor_current_img"><br><br>
+
+        <label>เสียงหัวเกียร์:</label><br>
+        <input type="radio" name="gear_sound" value="ปกติ" required> ปกติ
+        <input type="radio" name="gear_sound" value="ไม่ปกติ"> ไม่ปกติ<br>
+        <input type="file" name="gear_sound_img"><br><br>
+
+        <label>ภาพหลังการประกอบ Gear + Motor:</label><br>
+        <input type="file" name="assembly_img"><br><br>
+
+        <label>การตรวจสอบครบถ้วน:</label><br>
+        <input type="radio" name="check_complete" value="ครบถ้วน" required> ครบถ้วน
+        <input type="radio" name="check_complete" value="ไม่ถูกต้อง"> ไม่ถูกต้อง<br>
+        <textarea name="incomplete_reason" placeholder="กรณีไม่ครบถ้วน ให้ระบุเหตุผล..."></textarea><br>
+        <input type="file" name="check_complete_img"><br><br>
+
+        <label>ระยะเวลารับประกัน:</label><br>
+        <input type="radio" name="warranty" value="18" required> 18 เดือน
+        <input type="radio" name="warranty" value="24"> 24 เดือน<br><br>
+
+        <label>ชื่อผู้ตรวจสอบ:</label><br>
+        <input type="text" name="inspector" required><br><br>
+
+        <button type="submit">เสร็จสิ้น</button>
+    </form>
+</body>
+</html>
