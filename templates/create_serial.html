@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>สร้าง Serial Number</title>
+</head>
+<body>
+    <h2>ข้อมูล QC ถูกบันทึกเรียบร้อยแล้ว</h2>
+    <p>กรุณากดปุ่มด้านล่างเพื่อสร้าง Serial No. และ QR Code</p>
+    <form method="POST" action="/generate_serial">
+        <input type="hidden" name="motor_current" value="{{ motor_current }}">
+        <input type="hidden" name="gear_sound" value="{{ gear_sound }}">
+        <input type="hidden" name="check_complete" value="{{ check_complete }}">
+        <input type="hidden" name="incomplete_reason" value="{{ incomplete_reason }}">
+        <input type="hidden" name="warranty" value="{{ warranty }}">
+        <input type="hidden" name="inspector" value="{{ inspector }}">
+        <button type="submit">🔧 สร้าง Serial No.</button>
+    </form>
+</body>
+</html>
