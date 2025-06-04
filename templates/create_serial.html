@@ -2,19 +2,143 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>สร้าง Serial Number</title>
+    <title>สร้าง Serial No.</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --primary: #1E90FF;
+            --success: #28a745;
+            --danger: #dc3545;
+            --bg: #f4f6f8;
+            --text: #333;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 25px;
+            background: #fff;
+            border-radius: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: var(--primary);
+        }
+
+        .section {
+            margin-bottom: 20px;
+        }
+
+        .section p {
+            margin: 5px 0;
+            line-height: 1.6;
+        }
+
+        .highlight {
+            font-weight: bold;
+        }
+
+        .status-ok {
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        .status-bad {
+            color: var(--danger);
+            font-weight: bold;
+        }
+
+        .preview-img {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-top: 8px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        }
+
+        .generate-btn {
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            font-size: 18px;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .generate-btn:hover {
+            background: #006ddf;
+        }
+    </style>
 </head>
 <body>
-    <h2>ข้อมูล QC ถูกบันทึกเรียบร้อยแล้ว</h2>
-    <p>กรุณากดปุ่มด้านล่างเพื่อสร้าง Serial No. และ QR Code</p>
-    <form method="POST" action="/generate_serial">
-        <input type="hidden" name="motor_current" value="{{ motor_current }}">
-        <input type="hidden" name="gear_sound" value="{{ gear_sound }}">
-        <input type="hidden" name="check_complete" value="{{ check_complete }}">
-        <input type="hidden" name="incomplete_reason" value="{{ incomplete_reason }}">
-        <input type="hidden" name="warranty" value="{{ warranty }}">
-        <input type="hidden" name="inspector" value="{{ inspector }}">
-        <button type="submit">🔧 สร้าง Serial No.</button>
-    </form>
+    <div class="container">
+        <h2>ตรวจสอบก่อนสร้าง Serial No.</h2>
+
+        <div class="section">
+            <p class="highlight">1. ค่ากระแสมอเตอร์:</p>
+            <p>{{ motor_current }} A</p>
+            {% if image_paths.motor_current_img %}
+                <img src="{{ url_for('static', filename='uploads/' + image_paths.motor_current_img) }}" class="preview-img">
+            {% endif %}
+        </div>
+
+        <div class="section">
+            <p class="highlight">2. เสียงหัวเกียร์:</p>
+            <p class="{{ 'status-ok' if gear_sound == 'ปกติ' else 'status-bad' }}">{{ gear_sound }}</p>
+            {% if image_paths.gear_sound_img %}
+                <img src="{{ url_for('static', filename='uploads/' + image_paths.gear_sound_img) }}" class="preview-img">
+            {% endif %}
+        </div>
+
+        <div class="section">
+            <p class="highlight">3. การประกอบ Gear + Motor:</p>
+            {% if image_paths.assembly_img %}
+                <img src="{{ url_for('static', filename='uploads/' + image_paths.assembly_img) }}" class="preview-img">
+            {% else %}
+                <p>- ไม่ได้แนบรูป</p>
+            {% endif %}
+        </div>
+
+        <div class="section">
+            <p class="highlight">4. ตรวจสอบครบถ้วน:</p>
+            <p class="{{ 'status-ok' if check_complete == 'ถูกต้อง' else 'status-bad' }}">{{ check_complete }}</p>
+            {% if check_complete == 'ไม่ถูกต้อง' %}
+                <p><strong>เหตุผล:</strong> {{ incomplete_reason }}</p>
+            {% endif %}
+            {% if image_paths.check_complete_img %}
+                <img src="{{ url_for('static', filename='uploads/' + image_paths.check_complete_img) }}" class="preview-img">
+            {% endif %}
+        </div>
+
+        <div class="section">
+            <p class="highlight">5. ระยะเวลารับประกัน:</p>
+            <p>{{ warranty }} เดือน</p>
+
+            <p class="highlight">6. ผู้ตรวจสอบ:</p>
+            <p>{{ inspector }}</p>
+        </div>
+
+        <form action="/generate_serial" method="post">
+            <input type="hidden" name="motor_current" value="{{ motor_current }}">
+            <input type="hidden" name="gear_sound" value="{{ gear_sound }}">
+            <input type="hidden" name="check_complete" value="{{ check_complete }}">
+            <input type="hidden" name="incomplete_reason" value="{{ incomplete_reason }}">
+            <input type="hidden" name="warranty" value="{{ warranty }}">
+            <input type="hidden" name="inspector" value="{{ inspector }}">
+            <button type="submit" class="generate-btn">📌 สร้าง Serial No.</button>
+        </form>
+    </div>
 </body>
 </html>
