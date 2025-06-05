@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>เข้าสู่ระบบพนักงาน QC</title>
+    <style>
+        body { font-family: 'Sarabun', sans-serif; text-align: center; padding-top: 100px; background: #f5f6fa; }
+        form { background: white; display: inline-block; padding: 30px; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 8px; }
+        input { padding: 10px; font-size: 16px; width: 250px; margin: 10px 0; }
+        button { padding: 10px 20px; background: #2980b9; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <form method="POST">
+        <h2>เข้าสู่ระบบ QC / Store</h2>
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+        <input type="text" name="staff_id" placeholder="กรอกรหัสพนักงาน" required><br>
+        <button type="submit">เข้าสู่ระบบ</button>
+    </form>
+</body>
+</html>

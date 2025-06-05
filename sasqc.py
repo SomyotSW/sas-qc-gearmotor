@@ -1,5 +1,5 @@
 # sasqc.py
-from flask import Flask, render_template, request, redirect, send_file, url_for
+from flask import Flask, render_template, request, redirect, send_file, url_for, session
 import os
 from datetime import datetime, timedelta
 import qrcode
@@ -13,16 +13,21 @@ import smtplib
 from email.message import EmailMessage
 
 app = Flask(__name__)
+app.secret_key = 'Hihitler888'  # สำหรับ session login
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['QR_FOLDER'] = 'static/qr_codes'
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['QR_FOLDER'], exist_ok=True)
 
-EMAIL_ADDRESS = "your_email@example.com"
-EMAIL_PASSWORD = "your_email_password"
+EMAIL_ADDRESS = "somyotsw442@gmail.com"
+EMAIL_PASSWORD = "dfwj earf bvuj jcrv"
 
-pdfmetrics.registerFont(TTFont('THSarabunNew', 'static/THSarabunNew.ttf'))
+# พนักงานที่ได้รับอนุญาต
+AUTHORIZED_IDS = {'QC001', 'QC002', 'ST001'}
+
+# Register Thai font
+pdfmetrics.registerFont(TTFont('THSarabunNew', 'THSarabunNew.ttf'))
 
 def generate_serial():
     return ''.join(random.choices(string.digits, k=10))
@@ -33,12 +38,33 @@ def create_qr(serial):
     img.save(qr_path)
     return qr_path
 
-@app.route('/', methods=['GET'])
+@app.route('/', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        staff_id = request.form.get('staff_id')
+        if staff_id in AUTHORIZED_IDS:
+            session['staff_id'] = staff_id
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error='รหัสไม่ถูกต้อง')
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('staff_id', None)
+    return redirect(url_for('login'))
+
+@app.route('/form', methods=['GET'])
 def index():
+    if 'staff_id' not in session:
+        return redirect(url_for('login'))
     return render_template('form.html')
 
 @app.route('/submit', methods=['POST'])
 def submit_form():
+    if 'staff_id' not in session:
+        return redirect(url_for('login'))
+
     form = request.form
     files = request.files
 
@@ -61,6 +87,9 @@ def submit_form():
 
 @app.route('/generate_serial', methods=['POST'])
 def generate_serial_and_qr():
+    if 'staff_id' not in session:
+        return redirect(url_for('login'))
+
     form = request.form
     serial = generate_serial()
     qr_path = create_qr(serial)
@@ -71,20 +100,18 @@ def generate_serial_and_qr():
     warranty_end = warranty_start + timedelta(days=warranty_days)
 
     image_keys = ['motor_current_img', 'gear_sound_img', 'assembly_img', 'check_complete_img']
-    image_paths = {}
     with open(f'static/{serial}_info.txt', 'w') as f:
         f.write(warranty_start.strftime('%Y-%m-%d') + '\n')
         f.write(str(warranty_days) + '\n')
         f.write(form.get('inspector', '') + '\n')
         f.write(now.strftime('%Y-%m-%d') + '\n')
         for key in image_keys:
-            temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{key}.jpg")
-            if os.path.exists(temp_path):
+            filename = f"temp_{key}.jpg"
+            if os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
                 new_filename = f"{serial}_{key}.jpg"
-                new_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
-                os.rename(temp_path, new_path)
+                os.rename(os.path.join(app.config['UPLOAD_FOLDER'], filename),
+                          os.path.join(app.config['UPLOAD_FOLDER'], new_filename))
                 f.write(new_filename + '\n')
-                image_paths[key] = new_path
             else:
                 f.write('\n')
 
@@ -92,6 +119,7 @@ def generate_serial_and_qr():
     c = canvas.Canvas(pdf_path, pagesize=A4)
     c.setFont('THSarabunNew', 16)
     c.drawImage("static/logo_sas.png", 430, 770, width=120, height=50)
+
     c.setFont("THSarabunNew", 18)
     c.drawString(30, 800, "SAS QC Gear Motor")
     c.setFont("THSarabunNew", 16)
@@ -115,26 +143,14 @@ def generate_serial_and_qr():
     draw_line(f"7. รับประกันถึง: {warranty_end.strftime('%d-%m-%Y')}")
 
     c.drawImage(qr_path, 430, y - 100, width=100, height=100)
-
-    # เพิ่มรูปภาพที่แนบมาแต่ละขั้นตอน
-    y_img = y - 130
-    for label, key in zip([
-        "ภาพหลังการวัดค่ากระแส:",
-        "ภาพหลังตรวจเสียงหัวเกียร์:",
-        "ภาพหลังการประกอบ Motor + Gear:",
-        "ภาพหลังการตรวจสอบความครบถ้วน:"],
-        image_keys):
-        if key in image_paths:
-            draw_line(label)
-            c.drawImage(image_paths[key], 30, y_img - 180, width=200, height=150)
-            y_img -= 190
-
     c.save()
 
     return redirect(url_for('show_pdf_options', serial=serial))
 
 @app.route('/options/<serial>', methods=['GET'])
 def show_pdf_options(serial):
+    if 'staff_id' not in session:
+        return redirect(url_for('login'))
     return render_template('download_email.html', serial=serial)
 
 @app.route('/download/<serial>', methods=['GET'])
@@ -142,15 +158,11 @@ def download_pdf(serial):
     pdf_path = f'static/{serial}_report.pdf'
     return send_file(pdf_path, as_attachment=True)
 
-@app.route('/download_qr/<serial>')
-def download_qr(serial):
-    qr_path = os.path.join(app.config['QR_FOLDER'], f'{serial}.png')
-    return send_file(qr_path, as_attachment=True)
-
 @app.route('/send_email/<serial>', methods=['POST'])
 def send_email(serial):
     recipient = request.form.get('email')
     pdf_path = f'static/{serial}_report.pdf'
+
     msg = EmailMessage()
     msg['Subject'] = f'SAS QC Report: {serial}'
     msg['From'] = EMAIL_ADDRESS
@@ -165,7 +177,3 @@ def send_email(serial):
         smtp.send_message(msg)
 
     return f"ส่งอีเมลไปยัง {recipient} สำเร็จแล้วครับ"
-
-@app.route('/customer_report/<serial>')
-def show_customer_report(serial):
-    return render_template('customer_report.html', serial=serial)
