@@ -20,7 +20,7 @@ app.config['QR_FOLDER'] = 'static/qr_codes'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['QR_FOLDER'], exist_ok=True)
 
-EMAIL_ADDRESS = "somyotsw442@gmail.com"
+EMAIL_ADDRESS = "Somyotsw442@gmail.com"
 EMAIL_PASSWORD = "dfwj earf bvuj jcrv"
 
 # พนักงานที่ได้รับอนุญาต
@@ -145,7 +145,20 @@ def generate_serial_and_qr():
     c.drawImage(qr_path, 430, y - 100, width=100, height=100)
     c.save()
 
-    return redirect(url_for('show_pdf_options', serial=serial))
+    return redirect(url_for('show_customer_report', serial=serial))
+
+@app.route('/customer_report/<serial>')
+def show_customer_report(serial):
+    with open(f'static/{serial}_info.txt', 'r') as f:
+        lines = f.read().splitlines()
+        warranty_start = lines[0]
+        warranty_days = int(lines[1])
+        inspector = lines[2]
+        check_date = lines[3]
+    return render_template('customer_report.html',
+                           serial=serial,
+                           inspector=inspector,
+                           check_date=check_date)
 
 @app.route('/options/<serial>', methods=['GET'])
 def show_pdf_options(serial):
