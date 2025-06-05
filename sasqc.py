@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, send_file, url_for
+from flask import Flask, render_template, request, redirect, send_file, url_for, abort
 import os
 from datetime import datetime, timedelta
 import qrcode
@@ -21,8 +21,12 @@ os.makedirs(app.config['QR_FOLDER'], exist_ok=True)
 EMAIL_ADDRESS = "Somyotsw442@gmail.com"
 EMAIL_PASSWORD = "dfwj earf bvuj jcrv"
 
-# Register Thai font
 pdfmetrics.registerFont(TTFont('THSarabunNew', 'THSarabunNew.ttf'))
+
+ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def generate_serial():
     return ''.join(random.choices(string.digits, k=10))
@@ -42,12 +46,17 @@ def submit_form():
     form = request.form
     files = request.files
 
+    inspector = form.get('inspector', '').strip()
+    if not inspector:
+        return "กรุณาระบุชื่อผู้ตรวจสอบ", 400
+
     image_paths = {}
     for key in files:
-        if files[key].filename != '':
+        file = files[key]
+        if file.filename != '' and allowed_file(file.filename):
             filename = f"temp_{key}.jpg"
             path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            files[key].save(path)
+            file.save(path)
             image_paths[key] = filename
 
     return render_template('create_serial.html',
@@ -56,13 +65,12 @@ def submit_form():
                            check_complete=form.get('check_complete', ''),
                            incomplete_reason=form.get('incomplete_reason', ''),
                            warranty=form.get('warranty', ''),
-                           inspector=form.get('inspector', ''),
+                           inspector=inspector,
                            image_paths=image_paths)
 
 @app.route('/generate_serial', methods=['POST'])
 def generate_serial_and_qr():
     form = request.form
-
     serial = generate_serial()
     qr_path = create_qr(serial)
     now = datetime.now()

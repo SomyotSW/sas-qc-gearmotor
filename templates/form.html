@@ -4,156 +4,102 @@
     <meta charset="UTF-8">
     <title>SAS QC Gear Motor</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        :root {
-            --primary: #1E90FF;
-            --bg: #f4f6f8;
-            --text: #333;
-            --card: #fff;
-            --border: #ddd;
-        }
-
         body {
-            margin: 0;
-            font-family: 'Segoe UI', Tahoma, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', sans-serif;
         }
-
         .container {
             max-width: 700px;
-            margin: auto;
-            background: var(--card);
+            background: white;
             padding: 30px;
-            margin-top: 20px;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            margin-top: 40px;
         }
-
-        h1 {
+        h2 {
             text-align: center;
-            color: var(--primary);
-            margin-bottom: 30px;
-        }
-
-        label {
-            font-weight: bold;
-            margin-top: 10px;
-            display: block;
-        }
-
-        input[type="text"],
-        input[type="number"],
-        input[type="file"],
-        textarea,
-        select {
-            width: 100%;
-            padding: 10px;
-            margin-top: 6px;
-            margin-bottom: 15px;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            box-sizing: border-box;
-        }
-
-        .checkbox-group {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 15px;
-        }
-
-        .submit-btn {
-            width: 100%;
-            padding: 14px;
-            background: var(--primary);
-            border: none;
-            color: white;
-            font-size: 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-
-        .submit-btn:hover {
-            background: #006ddf;
-        }
-
-        footer {
-            text-align: right;
-            font-size: 12px;
-            margin-top: 30px;
-        }
-
-        footer a {
-            color: var(--primary);
-            text-decoration: none;
-        }
-
-        .logo {
-            width: 100px;
-            position: absolute;
-            right: 20px;
-            top: 20px;
-        }
-
-        .gif-container {
-            text-align: center;
+            color: #007bff;
             margin-bottom: 20px;
         }
-
-        .gif-container img {
-            max-width: 100%;
-            border-radius: 10px;
+        .form-label {
+            font-weight: bold;
+        }
+        .footer-link {
+            text-align: right;
+            font-size: 0.9rem;
+            color: #888;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <img src="{{ url_for('static', filename='logo_sas.png') }}" class="logo" alt="SAS Logo">
-        <h1>SAS QC Gear Motor</h1>
+<div class="container">
+    <h2>SAS QC Gear Motor</h2>
+    <form method="post" action="/submit" enctype="multipart/form-data">
 
-        <div class="gif-container">
-            <img src="{{ url_for('static', filename='Untitled design (7).gif') }}" alt="SAS Instruction">
+        <div class="mb-3">
+            <label class="form-label">1. ค่ากระแสมอเตอร์ (A):</label>
+            <input type="text" name="motor_current" class="form-control" placeholder="ใส่ตัวเลข หรือ -" required>
+            <input type="file" name="motor_current_img" class="form-control mt-2" accept="image/*">
         </div>
 
-        <form method="POST" action="/submit" enctype="multipart/form-data">
-            <label>1. ค่ากระแสมอเตอร์ (A):</label>
-            <input type="text" name="motor_current" placeholder="ใส่ตัวเลข หรือ -">
-            <input type="file" name="motor_current_img">
-
-            <label>2. ตรวจเสียงหัวเกียร์:</label>
-            <div class="checkbox-group">
-                <label><input type="radio" name="gear_sound" value="ปกติ" checked> ปกติ</label>
-                <label><input type="radio" name="gear_sound" value="ไม่ปกติ"> ไม่ปกติ</label>
+        <div class="mb-3">
+            <label class="form-label">2. ตรวจเสียงหัวเกียร์:</label><br>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="gear_sound" value="ปกติ" checked>
+                <label class="form-check-label">ปกติ</label>
             </div>
-            <input type="file" name="gear_sound_img">
-
-            <label>3. ภาพการประกอบ Motor + Gear:</label>
-            <input type="file" name="assembly_img">
-
-            <label>4. ตรวจสอบครบถ้วน:</label>
-            <div class="checkbox-group">
-                <label><input type="radio" name="check_complete" value="ถูกต้อง" checked> ครบถ้วน</label>
-                <label><input type="radio" name="check_complete" value="ไม่ถูกต้อง"> ไม่ถูกต้อง</label>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="gear_sound" value="ไม่ปกติ">
+                <label class="form-check-label">ไม่ปกติ</label>
             </div>
-            <textarea name="incomplete_reason" placeholder="หากไม่ครบถ้วน กรุณาระบุเหตุผล"></textarea>
-            <input type="file" name="check_complete_img">
+            <input type="file" name="gear_sound_img" class="form-control mt-2" accept="image/*">
+        </div>
 
-            <label>5. รับประกันสินค้า:</label>
-            <div class="checkbox-group">
-                <label><input type="radio" name="warranty" value="18"> 18 เดือน</label>
-                <label><input type="radio" name="warranty" value="24" checked> 24 เดือน</label>
+        <div class="mb-3">
+            <label class="form-label">3. ภาพการประกอบ Motor + Gear:</label>
+            <input type="file" name="assembly_img" class="form-control" accept="image/*">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">4. ตรวจสอบครบถ้วน:</label><br>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="check_complete" value="ครบถ้วน" checked>
+                <label class="form-check-label">ครบถ้วน</label>
             </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="check_complete" value="ไม่ถูกต้อง">
+                <label class="form-check-label">ไม่ถูกต้อง</label>
+            </div>
+            <textarea class="form-control mt-2" name="incomplete_reason" placeholder="หากไม่ครบถ้วน กรุณาระบุเหตุผล"></textarea>
+            <input type="file" name="check_complete_img" class="form-control mt-2" accept="image/*">
+        </div>
 
-            <label>6. ชื่อผู้ตรวจสอบ:</label>
-            <input type="text" name="inspector" placeholder="ใส่ชื่อผู้ตรวจสอบ">
+        <div class="mb-3">
+            <label class="form-label">5. การรับประกัน:</label><br>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="warranty" value="18">
+                <label class="form-check-label">18 เดือน</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="warranty" value="24" checked>
+                <label class="form-check-label">24 เดือน</label>
+            </div>
+        </div>
 
-            <button type="submit" class="submit-btn">📤 ส่งข้อมูลเพื่อสร้าง Serial No.</button>
-        </form>
+        <div class="mb-3">
+            <label class="form-label">6. ชื่อผู้ตรวจสอบ:</label>
+            <input type="text" name="inspector" class="form-control" required placeholder="ระบุชื่อ-นามสกุล">
+        </div>
 
-        <footer>
-            Powered by <a href="https://www.motorsas.com" target="_blank">www.motorsas.com</a>
-        </footer>
+        <div class="d-grid">
+            <button type="submit" class="btn btn-primary">✅ ส่งข้อมูลตรวจสอบ</button>
+        </div>
+    </form>
+    <div class="footer-link mt-3">
+        <a href="https://www.motorsas.com" target="_blank">www.motorsas.com</a>
     </div>
+</div>
 </body>
 </html>
