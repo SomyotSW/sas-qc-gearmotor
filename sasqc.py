@@ -13,15 +13,15 @@ import smtplib
 from email.message import EmailMessage
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_here'
+app.secret_key = 'Hihitler888'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['QR_FOLDER'] = 'static/qr_codes'
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['QR_FOLDER'], exist_ok=True)
 
-EMAIL_ADDRESS = "your_email@example.com"
-EMAIL_PASSWORD = "your_email_password"
+EMAIL_ADDRESS = "somyotsw442@gmail.com"
+EMAIL_PASSWORD = "dfwj earf bvuj jcrv"
 
 AUTHORIZED_IDS = {'QC001', 'QC002', 'ST001'}
 
