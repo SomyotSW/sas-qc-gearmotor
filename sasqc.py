@@ -1,4 +1,5 @@
-from flask import Flask, render_template, request, redirect, send_file, url_for, abort
+# sasqc.py
+from flask import Flask, render_template, request, redirect, send_file, url_for
 import os
 from datetime import datetime, timedelta
 import qrcode
@@ -18,36 +19,19 @@ app.config['QR_FOLDER'] = 'static/qr_codes'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['QR_FOLDER'], exist_ok=True)
 
-EMAIL_ADDRESS = "somyotsw442@gmail.com"
-EMAIL_PASSWORD = "dfwj earf bvuj jcrv"
+EMAIL_ADDRESS = "your_email@example.com"
+EMAIL_PASSWORD = "your_email_password"
 
-pdfmetrics.registerFont(TTFont('THSarabunNew', 'THSarabunNew.ttf'))
-
-ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+pdfmetrics.registerFont(TTFont('THSarabunNew', 'static/THSarabunNew.ttf'))
 
 def generate_serial():
     return ''.join(random.choices(string.digits, k=10))
 
 def create_qr(serial):
-    url = url_for('show_customer_report', serial=serial, _external=True)
-    img = qrcode.make(url)
+    img = qrcode.make(url_for('show_customer_report', serial=serial, _external=True))
     qr_path = os.path.join(app.config['QR_FOLDER'], f'{serial}.png')
     img.save(qr_path)
-    return qr_path, url
-
-def generate_qr_pdf(serial, qr_path, url):
-    pdf_path = f'static/{serial}_qr.pdf'
-    c = canvas.Canvas(pdf_path, pagesize=A4)
-    c.setFont('THSarabunNew', 18)
-    c.drawString(30, 800, f"QR Code สำหรับ Serial No.: {serial}")
-    c.drawImage(qr_path, 200, 550, width=200, height=200)
-    c.setFont('THSarabunNew', 14)
-    c.drawString(30, 520, f"สแกนเพื่อดูผลการตรวจสอบ: {url}")
-    c.save()
-    return pdf_path
+    return qr_path
 
 @app.route('/', methods=['GET'])
 def index():
@@ -58,17 +42,12 @@ def submit_form():
     form = request.form
     files = request.files
 
-    inspector = form.get('inspector', '').strip()
-    if not inspector:
-        return "กรุณาระบุชื่อผู้ตรวจสอบ", 400
-
     image_paths = {}
     for key in files:
-        file = files[key]
-        if file.filename != '' and allowed_file(file.filename):
+        if files[key].filename != '':
             filename = f"temp_{key}.jpg"
             path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(path)
+            files[key].save(path)
             image_paths[key] = filename
 
     return render_template('create_serial.html',
@@ -77,15 +56,14 @@ def submit_form():
                            check_complete=form.get('check_complete', ''),
                            incomplete_reason=form.get('incomplete_reason', ''),
                            warranty=form.get('warranty', ''),
-                           inspector=inspector,
+                           inspector=form.get('inspector', ''),
                            image_paths=image_paths)
 
 @app.route('/generate_serial', methods=['POST'])
 def generate_serial_and_qr():
     form = request.form
     serial = generate_serial()
-    qr_path, url = create_qr(serial)
-    qr_pdf_path = generate_qr_pdf(serial, qr_path, url)
+    qr_path = create_qr(serial)
     now = datetime.now()
 
     warranty_days = 18 * 30 if form.get('warranty') == '18' else 24 * 30
@@ -93,29 +71,27 @@ def generate_serial_and_qr():
     warranty_end = warranty_start + timedelta(days=warranty_days)
 
     image_keys = ['motor_current_img', 'gear_sound_img', 'assembly_img', 'check_complete_img']
+    image_paths = {}
     with open(f'static/{serial}_info.txt', 'w') as f:
         f.write(warranty_start.strftime('%Y-%m-%d') + '\n')
         f.write(str(warranty_days) + '\n')
         f.write(form.get('inspector', '') + '\n')
         f.write(now.strftime('%Y-%m-%d') + '\n')
         for key in image_keys:
-            filename = f"temp_{key}.jpg"
-            if os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
+            temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{key}.jpg")
+            if os.path.exists(temp_path):
                 new_filename = f"{serial}_{key}.jpg"
-                os.rename(os.path.join(app.config['UPLOAD_FOLDER'], filename),
-                          os.path.join(app.config['UPLOAD_FOLDER'], new_filename))
+                new_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+                os.rename(temp_path, new_path)
                 f.write(new_filename + '\n')
+                image_paths[key] = new_path
             else:
                 f.write('\n')
 
     pdf_path = f'static/{serial}_report.pdf'
     c = canvas.Canvas(pdf_path, pagesize=A4)
     c.setFont('THSarabunNew', 16)
-    try:
-        c.drawImage("static/logo_sas.png", 430, 770, width=120, height=50)
-    except:
-        pass
-
+    c.drawImage("static/logo_sas.png", 430, 770, width=120, height=50)
     c.setFont("THSarabunNew", 18)
     c.drawString(30, 800, "SAS QC Gear Motor")
     c.setFont("THSarabunNew", 16)
@@ -139,6 +115,20 @@ def generate_serial_and_qr():
     draw_line(f"7. รับประกันถึง: {warranty_end.strftime('%d-%m-%Y')}")
 
     c.drawImage(qr_path, 430, y - 100, width=100, height=100)
+
+    # เพิ่มรูปภาพที่แนบมาแต่ละขั้นตอน
+    y_img = y - 130
+    for label, key in zip([
+        "ภาพหลังการวัดค่ากระแส:",
+        "ภาพหลังตรวจเสียงหัวเกียร์:",
+        "ภาพหลังการประกอบ Motor + Gear:",
+        "ภาพหลังการตรวจสอบความครบถ้วน:"],
+        image_keys):
+        if key in image_paths:
+            draw_line(label)
+            c.drawImage(image_paths[key], 30, y_img - 180, width=200, height=150)
+            y_img -= 190
+
     c.save()
 
     return redirect(url_for('show_pdf_options', serial=serial))
@@ -147,66 +137,35 @@ def generate_serial_and_qr():
 def show_pdf_options(serial):
     return render_template('download_email.html', serial=serial)
 
-@app.route('/report/<serial>', methods=['GET'])
-def show_customer_report(serial):
-    info_path = f'static/{serial}_info.txt'
-    if not os.path.exists(info_path):
-        return f"ไม่พบข้อมูล Serial: {serial}", 404
-
-    with open(info_path, 'r') as f:
-        lines = f.read().splitlines()
-
-    warranty_start = datetime.strptime(lines[0], '%Y-%m-%d')
-    warranty_days = int(lines[1])
-    inspector = lines[2]
-    qc_date = lines[3]
-    images = lines[4:]
-
-    warranty_end = warranty_start + timedelta(days=warranty_days)
-    today = datetime.now().date()
-    remaining_days = (warranty_end.date() - today).days
-    status = "ยังอยู่ในระยะประกัน" if remaining_days > 0 else "สิ้นสุดการรับประกัน"
-
-    return render_template('customer_report.html',
-                           serial=serial,
-                           inspector=inspector,
-                           qc_date=qc_date,
-                           warranty_start=warranty_start.date(),
-                           warranty_end=warranty_end.date(),
-                           remaining_days=remaining_days,
-                           status=status,
-                           images=images)
-
 @app.route('/download/<serial>', methods=['GET'])
 def download_pdf(serial):
     pdf_path = f'static/{serial}_report.pdf'
     return send_file(pdf_path, as_attachment=True)
 
-@app.route('/download_qr/<serial>', methods=['GET'])
-def download_qr_pdf(serial):
-    pdf_path = f'static/{serial}_qr.pdf'
-    return send_file(pdf_path, as_attachment=True)
+@app.route('/download_qr/<serial>')
+def download_qr(serial):
+    qr_path = os.path.join(app.config['QR_FOLDER'], f'{serial}.png')
+    return send_file(qr_path, as_attachment=True)
 
 @app.route('/send_email/<serial>', methods=['POST'])
 def send_email(serial):
     recipient = request.form.get('email')
-    pdf1 = f'static/{serial}_report.pdf'
-    pdf2 = f'static/{serial}_qr.pdf'
-
+    pdf_path = f'static/{serial}_report.pdf'
     msg = EmailMessage()
     msg['Subject'] = f'SAS QC Report: {serial}'
     msg['From'] = EMAIL_ADDRESS
     msg['To'] = recipient
-    msg.set_content('แนบรายงานการตรวจสอบ SAS QC Gear Motor และ QR Code ครับ')
+    msg.set_content('แนบรายงานการตรวจสอบ SAS QC Gear Motor ครับ')
 
-    with open(pdf1, 'rb') as f1:
-        msg.add_attachment(f1.read(), maintype='application', subtype='pdf', filename=f'{serial}_report.pdf')
-
-    with open(pdf2, 'rb') as f2:
-        msg.add_attachment(f2.read(), maintype='application', subtype='pdf', filename=f'{serial}_qr.pdf')
+    with open(pdf_path, 'rb') as f:
+        msg.add_attachment(f.read(), maintype='application', subtype='pdf', filename=f'{serial}_report.pdf')
 
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         smtp.send_message(msg)
 
     return f"ส่งอีเมลไปยัง {recipient} สำเร็จแล้วครับ"
+
+@app.route('/customer_report/<serial>')
+def show_customer_report(serial):
+    return render_template('customer_report.html', serial=serial)
