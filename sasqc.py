@@ -13,20 +13,18 @@ import smtplib
 from email.message import EmailMessage
 
 app = Flask(__name__)
-app.secret_key = 'Hihitler888'  # สำหรับ session login
+app.secret_key = 'your_secret_key_here'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['QR_FOLDER'] = 'static/qr_codes'
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['QR_FOLDER'], exist_ok=True)
 
-EMAIL_ADDRESS = "Somyotsw442@gmail.com"
-EMAIL_PASSWORD = "dfwj earf bvuj jcrv"
+EMAIL_ADDRESS = "your_email@example.com"
+EMAIL_PASSWORD = "your_email_password"
 
-# พนักงานที่ได้รับอนุญาต
 AUTHORIZED_IDS = {'QC001', 'QC002', 'ST001'}
 
-# Register Thai font
 pdfmetrics.registerFont(TTFont('THSarabunNew', 'THSarabunNew.ttf'))
 
 def generate_serial():
@@ -170,6 +168,11 @@ def show_pdf_options(serial):
 def download_pdf(serial):
     pdf_path = f'static/{serial}_report.pdf'
     return send_file(pdf_path, as_attachment=True)
+
+@app.route('/download_qr/<serial>', methods=['GET'])
+def download_qr(serial):
+    qr_path = f'static/qr_codes/{serial}.png'
+    return send_file(qr_path, as_attachment=True)
 
 @app.route('/send_email/<serial>', methods=['POST'])
 def send_email(serial):
