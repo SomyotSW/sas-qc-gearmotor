@@ -18,7 +18,7 @@ app.config['QR_FOLDER'] = 'static/qr_codes'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['QR_FOLDER'], exist_ok=True)
 
-EMAIL_ADDRESS = "Somyotsw442@gmail.com"
+EMAIL_ADDRESS = "somyotsw442@gmail.com"
 EMAIL_PASSWORD = "dfwj earf bvuj jcrv"
 
 pdfmetrics.registerFont(TTFont('THSarabunNew', 'THSarabunNew.ttf'))
@@ -32,10 +32,22 @@ def generate_serial():
     return ''.join(random.choices(string.digits, k=10))
 
 def create_qr(serial):
-    img = qrcode.make(url_for('show_customer_report', serial=serial, _external=True))
+    url = url_for('show_customer_report', serial=serial, _external=True)
+    img = qrcode.make(url)
     qr_path = os.path.join(app.config['QR_FOLDER'], f'{serial}.png')
     img.save(qr_path)
-    return qr_path
+    return qr_path, url
+
+def generate_qr_pdf(serial, qr_path, url):
+    pdf_path = f'static/{serial}_qr.pdf'
+    c = canvas.Canvas(pdf_path, pagesize=A4)
+    c.setFont('THSarabunNew', 18)
+    c.drawString(30, 800, f"QR Code สำหรับ Serial No.: {serial}")
+    c.drawImage(qr_path, 200, 550, width=200, height=200)
+    c.setFont('THSarabunNew', 14)
+    c.drawString(30, 520, f"สแกนเพื่อดูผลการตรวจสอบ: {url}")
+    c.save()
+    return pdf_path
 
 @app.route('/', methods=['GET'])
 def index():
@@ -72,7 +84,8 @@ def submit_form():
 def generate_serial_and_qr():
     form = request.form
     serial = generate_serial()
-    qr_path = create_qr(serial)
+    qr_path, url = create_qr(serial)
+    qr_pdf_path = generate_qr_pdf(serial, qr_path, url)
     now = datetime.now()
 
     warranty_days = 18 * 30 if form.get('warranty') == '18' else 24 * 30
@@ -169,19 +182,28 @@ def download_pdf(serial):
     pdf_path = f'static/{serial}_report.pdf'
     return send_file(pdf_path, as_attachment=True)
 
+@app.route('/download_qr/<serial>', methods=['GET'])
+def download_qr_pdf(serial):
+    pdf_path = f'static/{serial}_qr.pdf'
+    return send_file(pdf_path, as_attachment=True)
+
 @app.route('/send_email/<serial>', methods=['POST'])
 def send_email(serial):
     recipient = request.form.get('email')
-    pdf_path = f'static/{serial}_report.pdf'
+    pdf1 = f'static/{serial}_report.pdf'
+    pdf2 = f'static/{serial}_qr.pdf'
 
     msg = EmailMessage()
     msg['Subject'] = f'SAS QC Report: {serial}'
     msg['From'] = EMAIL_ADDRESS
     msg['To'] = recipient
-    msg.set_content('แนบรายงานการตรวจสอบ SAS QC Gear Motor ครับ')
+    msg.set_content('แนบรายงานการตรวจสอบ SAS QC Gear Motor และ QR Code ครับ')
 
-    with open(pdf_path, 'rb') as f:
-        msg.add_attachment(f.read(), maintype='application', subtype='pdf', filename=f'{serial}_report.pdf')
+    with open(pdf1, 'rb') as f1:
+        msg.add_attachment(f1.read(), maintype='application', subtype='pdf', filename=f'{serial}_report.pdf')
+
+    with open(pdf2, 'rb') as f2:
+        msg.add_attachment(f2.read(), maintype='application', subtype='pdf', filename=f'{serial}_qr.pdf')
 
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)

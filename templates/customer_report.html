@@ -1,15 +1,17 @@
+""<!-- customer_report.html -->
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>ผลการตรวจสอบ QC</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ผลการตรวจสอบ</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: 'TH Sarabun New', sans-serif;
-            background-color: #f4f4f4;
+            font-family: 'Sarabun', sans-serif;
+            background-color: #f4f7f9;
             padding: 20px;
-            line-height: 1.8;
+            color: #333;
         }
         .container {
             max-width: 600px;
@@ -17,57 +19,42 @@
             background: white;
             padding: 30px;
             border-radius: 12px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            text-align: center;
         }
         h2 {
-            text-align: center;
-            color: #007bff;
+            color: #2c3e50;
         }
-        .footer {
+        .btn {
+            display: inline-block;
+            margin: 15px 10px;
+            padding: 12px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            text-decoration: none;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .footer-note {
             margin-top: 20px;
-            text-align: right;
-            font-size: 13px;
+            font-size: 14px;
+            color: #777;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>ผลการตรวจสอบ SAS QC Gear Motor</h2>
-        <p><strong>Serial No.:</strong> {{ serial }}</p>
-
-        <p><strong>วันหมดระยะประกัน:</strong> <span id="expire_date">กำลังคำนวณ...</span></p>
-        <p><strong>สถานะ:</strong> <span id="status">-</span></p>
-
-        <div class="footer">
-            <a href="https://www.motorsas.com" target="_blank">www.motorsas.com</a>
-        </div>
+        <h2>ตรวจสอบเรียบร้อยแล้ว</h2>
+        <p>กรุณาดาวน์โหลดเอกสารด้านล่าง</p>
+        <a class="btn" href="/download/{{ serial }}" target="_blank">📄 ดาวน์โหลดรายงาน QC</a>
+        <a class="btn" href="/download_qr/{{ serial }}" target="_blank">🔳 ดาวน์โหลด QR Code</a>
+        <p class="footer-note">SAS QC Gear Motor | www.motorsas.com</p>
     </div>
-
-    <script>
-        // โหลดวันจาก info.txt ถ้ามี API หรือ backend route เสริม
-        async function fetchWarranty(serial) {
-            try {
-                const res = await fetch(`/static/${serial}_info.txt`);
-                const data = await res.text();
-                const lines = data.trim().split('\\n');
-                const startDate = new Date(lines[0]);
-                const durationDays = parseInt(lines[1]);
-                const endDate = new Date(startDate);
-                endDate.setDate(startDate.getDate() + durationDays);
-
-                const now = new Date();
-                const expireText = endDate.toLocaleDateString('th-TH');
-                document.getElementById('expire_date').innerText = expireText;
-
-                const status = (now > endDate) ? '❌ สิ้นสุดการรับประกัน' : '✅ อยู่ในระยะรับประกัน';
-                document.getElementById('status').innerText = status;
-            } catch {
-                document.getElementById('expire_date').innerText = 'ไม่พบข้อมูล';
-                document.getElementById('status').innerText = 'ไม่สามารถตรวจสอบได้';
-            }
-        }
-
-        fetchWarranty("{{ serial }}");
-    </script>
 </body>
-</html>
+</html>""
