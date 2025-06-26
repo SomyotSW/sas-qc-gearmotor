@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ดาวน์โหลดและส่งอีเมล</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: #f5f7fa;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        h2 {
+            color: #007bff;
+            text-align: center;
+        }
+
+        .btn {
+            display: inline-block;
+            margin: 15px 5px 0;
+            padding: 12px 24px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 16px;
+        }
+
+        form {
+            margin-top: 20px;
+        }
+
+        input[type="email"] {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+
+        input[type="submit"] {
+            background-color: #28a745;
+            color: white;
+            font-size: 16px;
+            padding: 12px;
+            margin-top: 10px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        input[type="submit"]:hover {
+            background-color: #218838;
+        }
+
+        footer {
+            margin-top: 30px;
+            font-size: 13px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>ดาวน์โหลดหรือส่งไฟล์ PDF</h2>
+
+        <p>Serial No.: <strong>{{ serial }}</strong></p>
+
+        <a href="{{ url_for('download_pdf', serial=serial) }}" class="btn" target="_blank">📥 ดาวน์โหลด PDF</a>
+
+        <form action="{{ url_for('send_email', serial=serial) }}" method="post">
+            <label>📧 ส่งอีเมลถึง:</label>
+            <input type="email" name="email" placeholder="example@email.com" required>
+            <input type="submit" value="📨 ส่ง PDF ทางอีเมล">
+        </form>
+
+        <footer>
+            SAS QC Gear Motor | <a href="https://www.motorsas.com" target="_blank">motorsas.com</a>
+        </footer>
+    </div>
+</body>
+</html>
