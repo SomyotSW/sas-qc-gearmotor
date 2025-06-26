@@ -1,83 +1,88 @@
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, redirect, send_file
 from werkzeug.utils import secure_filename
 import os
-import io
-import datetime
 import firebase_admin
 from firebase_admin import credentials, db, storage
+import datetime
+import io
 from utils.generate_pdf import create_qc_pdf
-from utils.qr_generator import generate_qr_pdf
+from utils.qr_generator import generate_qr_code
+import json
 
-# ===== CONFIG =====
-UPLOAD_FOLDER = 'uploads'
-QR_FOLDER = 'qr'
-
-# ===== Flask Setup =====
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['UPLOAD_FOLDER'] = 'uploads'
 
-# ===== Firebase Setup =====
-cred = credentials.Certificate("sas-qc-gearmotor-app.json")
+# ==== Load Firebase Credential from Environment ====
+firebase_json = json.loads(os.environ.get("FIREBASE_CREDENTIAL_JSON"))
+cred = credentials.Certificate(firebase_json)
+
 firebase_admin.initialize_app(cred, {
     'databaseURL': 'https://sas-transmission.firebaseio.com/',
     'storageBucket': 'sas-transmission.appspot.com'
 })
 
-bucket = storage.bucket()
 ref = db.reference("/qc_reports")
+bucket = storage.bucket()
 
-# ===== Ensure folders exist =====
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(QR_FOLDER, exist_ok=True)
-
-# ===== Routes =====
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/submit', methods=['POST'])
 def submit():
-    data = request.form.to_dict()
-    files = request.files.getlist('images')
+    data = {
+        'serial_number': request.form['serial_number'],
+        'model': request.form['model'],
+        'inspection_date': request.form['inspection_date'],
+        'inspector': request.form['inspector'],
+        'remarks': request.form['remarks']
+    }
 
-    serial = f"SAS{datetime.datetime.now().strftime('%y%m%d%H%M%S')}"
-    data['serial'] = serial
-    data['date'] = datetime.datetime.now().strftime('%Y-%m-%d')
-
+    images = request.files.getlist('images')
     image_urls = []
-    for file in files:
-        if file:
-            filename = secure_filename(file.filename)
-            blob = bucket.blob(f"qc_images/{serial}/{filename}")
-            blob.upload_from_file(file.stream, content_type=file.content_type)
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    for image in images:
+        if image and image.filename != '':
+            filename = secure_filename(image.filename)
+            blob = bucket.blob(f"qc_images/{timestamp}_{filename}")
+            blob.upload_from_file(image.stream, content_type=image.content_type)
             blob.make_public()
             image_urls.append(blob.public_url)
 
-    data['images'] = image_urls
-    ref.child(serial).set(data)
+    data['image_urls'] = image_urls
 
-    # ===== Generate PDF QC Report =====
-    pdf_stream = create_qc_pdf(data, image_urls)
-    pdf_blob = bucket.blob(f"qc_reports/{serial}.pdf")
-    pdf_blob.upload_from_file(pdf_stream, content_type='application/pdf')
-    pdf_blob.make_public()
+    # บันทึกลง Firebase Realtime DB
+    ref.child(data['serial_number']).set(data)
 
-    # ===== Generate QR Code PDF =====
-    qr_stream = generate_qr_pdf(serial)
-    qr_blob = bucket.blob(f"qr/{serial}.pdf")
-    qr_blob.upload_from_file(qr_stream, content_type='application/pdf')
-    qr_blob.make_public()
+    return redirect('/success')
 
-    return render_template('success.html', serial=serial, qc_url=pdf_blob.public_url, qr_url=qr_blob.public_url)
+@app.route('/success')
+def success():
+    return render_template('success.html')
 
-@app.route('/check')
-def check_serial():
-    serial = request.args.get('serial', '')
-    record = ref.child(serial).get()
-    if not record:
-        return render_template('check_serial.html', not_found=True, serial=serial)
-    pdf_url = f"https://storage.googleapis.com/sas-transmission.appspot.com/qc_reports/{serial}.pdf"
-    return render_template('check_serial.html', not_found=False, serial=serial, data=record, pdf_url=pdf_url)
+@app.route('/download/<serial_number>')
+def download_pdf(serial_number):
+    report_data = ref.child(serial_number).get()
+    if not report_data:
+        return "Report not found", 404
 
-if __name__ != '__main__':
-    gunicorn_app = app  # For gunicorn compatibility
+    pdf_stream = create_qc_pdf(report_data)
+    return send_file(
+        pdf_stream,
+        as_attachment=True,
+        download_name=f"{serial_number}_QC_Report.pdf",
+        mimetype='application/pdf'
+    )
+
+@app.route('/qr/<serial_number>')
+def generate_qr(serial_number):
+    qr_stream = generate_qr_code(serial_number)
+    return send_file(
+        qr_stream,
+        mimetype='image/png'
+    )
+
+if __name__ == '__main__':
+    app.run(debug=True)
