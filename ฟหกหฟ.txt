@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: sas-qc-gearmotor
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python app.py"
+    envVars:
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: sas-qc-gearmotor-app.json
+    autoDeploy: true

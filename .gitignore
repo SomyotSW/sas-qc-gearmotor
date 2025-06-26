@@ -4,3 +4,4 @@ sas-qc-gearmotor-app.json
 .env
 uploads/
 *.log
+.vercel
