@@ -3,9 +3,4 @@ services:
     name: sas-qc-gearmotor
     env: docker
     plan: free
-    buildCommand: ""
-    startCommand: "gunicorn app:app"
-    envVars:
-      - key: GOOGLE_APPLICATION_CREDENTIALS
-        value: sas-qc-gearmotor-app.json
     autoDeploy: true
