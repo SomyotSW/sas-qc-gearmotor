@@ -1,7 +1,7 @@
 services:
   - type: web
     name: sas-qc-gearmotor
-    env: python
+    env: docker
     plan: free
     buildCommand: ""
     startCommand: "gunicorn app:app"
