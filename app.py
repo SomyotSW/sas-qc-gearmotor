@@ -30,7 +30,7 @@ def login():
     if request.method == 'POST':
         employee_id = request.form.get('employee_id')
 
-        # 🔐 ตรวจสอบรหัส (whitelist)
+        # 🔐 ตรวจสอบรหัส (ถ้ามี whitelist เช่น: 'QC001', 'QC002')
         allowed_ids = ['QC001', 'QC002', 'QC003']
         if employee_id not in allowed_ids:
             return "รหัสพนักงานไม่ถูกต้อง", 403
@@ -46,51 +46,53 @@ def index():
 # ✅ ฟอร์มกรอก QC
 @app.route('/submit', methods=['POST'])
 def submit():
-    data = {
-        'motor_nameplate': request.form.get('motor_nameplate'),
-        'motor_current': request.form.get('motor_current'),
-        'gear_ratio': request.form.get('gear_ratio'),
-        'gear_sound': request.form.get('gear_sound'),
-        'check_complete': request.form.get('check_complete'),
-        'incomplete_reason': request.form.get('incomplete_reason'),
-        'oil_liters': request.form.get('oil_liters'),
-        'oil_filled': request.form.get('oil_filled', 'ยังไม่เติม'),
-        'warranty': request.form.get('warranty'),
-        'inspector': request.form.get('inspector'),
-        'timestamp': datetime.datetime.now().isoformat()
-    }
+    try:
+        data = {
+            'motor_nameplate': request.form.get('motor_nameplate'),
+            'motor_current': request.form.get('motor_current'),
+            'gear_ratio': request.form.get('gear_ratio'),
+            'gear_sound': request.form.get('gear_sound'),
+            'check_complete': request.form.get('check_complete'),
+            'incomplete_reason': request.form.get('incomplete_reason'),
+            'warranty': request.form.get('warranty'),
+            'inspector': request.form.get('inspector'),
+            'oil_liters': request.form.get('oil_liters'),
+            'oil_filled': 'เติมแล้ว' if request.form.get('oil_filled') else 'ยังไม่เติม'
+        }
 
-    file_fields = [
-        'motor_current_img',
-        'gear_sound_img',
-        'assembly_img',
-        'check_complete_img'
-    ]
+        # อัปโหลดรูปภาพแต่ละรายการ (ตามชื่อ field ใน form.html)
+        image_fields = [
+            'motor_current_img', 'gear_sound_img',
+            'assembly_img', 'check_complete_img'
+        ]
 
-    image_urls = {}
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        image_urls = {}
 
-    for field in file_fields:
-        file = request.files.get(field)
-        if file and file.filename != '':
-            filename = secure_filename(file.filename)
-            blob = bucket.blob(f"qc_images/{timestamp}_{filename}")
-            blob.upload_from_file(file.stream, content_type=file.content_type)
-            blob.make_public()
-            image_urls[field] = blob.public_url
+        for field in image_fields:
+            file = request.files.get(field)
+            if file and file.filename != '':
+                filename = secure_filename(file.filename)
+                blob = bucket.blob(f"qc_images/{timestamp}_{filename}")
+                blob.upload_from_file(file.stream, content_type=file.content_type)
+                blob.make_public()
+                image_urls[field] = blob.public_url
 
-    data['images'] = image_urls
+        data['images'] = image_urls
 
-    # บันทึกลง Firebase
-    serial_number = f"SAS{datetime.datetime.now().strftime('%y%m%d%H%M%S')}"
-    ref.child(serial_number).set(data)
+        # สร้างหมายเลข Serial และบันทึกลง Firebase
+        serial_number = f"SAS{timestamp}"
+        ref.child(serial_number).set(data)
 
-    return redirect('/success')
+        return redirect(f"/success?serial={serial_number}")
+    except Exception as e:
+        return f"เกิดข้อผิดพลาด: {e}", 400
 
 # ✅ แสดงหน้าสำเร็จ
 @app.route('/success')
 def success():
-    return render_template('success.html')
+    serial = request.args.get('serial', '')
+    return render_template('success.html', serial_number=serial)
 
 # ✅ ให้ลูกค้าโหลด PDF QC ได้โดยตรง
 @app.route('/download/<serial_number>')
@@ -107,7 +109,7 @@ def download_pdf(serial_number):
         mimetype='application/pdf'
     )
 
-# ✅ สร้าง QR จาก Serial (QR สำหรับลูกค้า)
+# ✅ สร้าง QR จาก Serial (ใช้ภายใน)
 @app.route('/qr/<serial_number>')
 def generate_qr(serial_number):
     qr_stream = generate_qr_code(serial_number)
