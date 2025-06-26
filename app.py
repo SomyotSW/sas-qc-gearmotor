@@ -24,10 +24,18 @@ firebase_admin.initialize_app(cred, {
 ref = db.reference("/qc_reports")
 bucket = storage.bucket()
 
+# ✅ หน้าแรกพนักงาน QC กด Login
+@app.route('/login')
+def login():
+    return render_template('login.html')
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
+# ✅ เพิ่มหน้าล็อกอินสำหรับพนักงาน QC
+
+# ✅ ฟอร์มกรอก QC
 @app.route('/submit', methods=['POST'])
 def submit():
     data = {
@@ -53,15 +61,17 @@ def submit():
 
     data['image_urls'] = image_urls
 
-    # บันทึกลง Firebase Realtime DB
+    # บันทึกลง Firebase
     ref.child(data['serial_number']).set(data)
 
     return redirect('/success')
 
+# ✅ แสดงหน้าสำเร็จ
 @app.route('/success')
 def success():
     return render_template('success.html')
 
+# ✅ ให้ลูกค้าโหลด PDF QC ได้โดยตรง
 @app.route('/download/<serial_number>')
 def download_pdf(serial_number):
     report_data = ref.child(serial_number).get()
@@ -76,6 +86,7 @@ def download_pdf(serial_number):
         mimetype='application/pdf'
     )
 
+# ✅ สร้าง QR จาก Serial (ใช้ภายใน)
 @app.route('/qr/<serial_number>')
 def generate_qr(serial_number):
     qr_stream = generate_qr_code(serial_number)
