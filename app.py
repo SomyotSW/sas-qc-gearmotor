@@ -25,9 +25,26 @@ ref = db.reference("/qc_reports")
 bucket = storage.bucket()
 
 # ✅ หน้าแรกพนักงาน QC กด Login
-@app.route('/login')
+
+@app.route('/login', methods=['GET', 'POST'])
 def login():
+    if request.method == 'POST':
+        employee_id = request.form.get('employee_id')
+
+        # 🔐 ตรวจสอบรหัส (ถ้ามี whitelist เช่น: 'QC001', 'QC002')
+        allowed_ids = ['QC001', 'QC002', 'QC003']
+        if employee_id not in allowed_ids:
+            return "รหัสพนักงานไม่ถูกต้อง", 403
+
+        # ✅ ส่งต่อไปหน้า form พร้อมพารามิเตอร์
+        return render_template('form.html', employee_id=employee_id)
+
     return render_template('login.html')
+
+@app.route('/form', methods=['POST'])
+def form():
+    employee_id = request.form.get('employee_id')
+    return render_template('form.html', employee_id=employee_id)
 
 @app.route('/')
 def index():
