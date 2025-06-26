@@ -79,5 +79,5 @@ def check_serial():
     pdf_url = f"https://storage.googleapis.com/sas-transmission.appspot.com/qc_reports/{serial}.pdf"
     return render_template('check_serial.html', not_found=False, serial=serial, data=record, pdf_url=pdf_url)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ != '__main__':
+    gunicorn_app = app  # For gunicorn compatibility

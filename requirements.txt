@@ -4,3 +4,4 @@ reportlab==3.6.12
 qrcode==7.4.2
 Pillow==9.5.0
 requests==2.31.0
+gunicorn==21.2.0
