@@ -1,0 +1,89 @@
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f4f9ff;
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  max-width: 900px;
+  margin: auto;
+  padding: 30px;
+  background-color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  margin-top: 40px;
+}
+
+h1, h2, h3 {
+  color: #004080;
+}
+
+label {
+  font-weight: bold;
+  display: block;
+  margin-top: 20px;
+  color: #003366;
+}
+
+input[type="text"], input[type="file"], select, textarea {
+  width: 100%;
+  padding: 10px;
+  margin-top: 5px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+button {
+  margin-top: 20px;
+  background-color: #004080;
+  color: white;
+  padding: 10px 25px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #0066cc;
+}
+
+.success-message {
+  background-color: #e6f7ff;
+  padding: 15px;
+  border-left: 5px solid #1890ff;
+  margin-top: 20px;
+}
+
+a {
+  color: #0066cc;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+footer {
+  margin-top: 40px;
+  text-align: center;
+  font-size: 14px;
+  color: #999;
+}
+
+/* Background GIF placement */
+body::after {
+  content: "";
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  width: 180px;
+  height: 180px;
+  background-image: url('/static/rkfs-demo.gif');
+  background-size: contain;
+  background-repeat: no-repeat;
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: -1;
+}

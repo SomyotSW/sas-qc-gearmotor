@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ส่งข้อมูลเรียบร้อยแล้ว</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f0f8ff url('/static/rkfs-demo.gif') no-repeat bottom right;
+      background-size: 200px;
+    }
+    h1 {
+      color: #004080;
+    }
+    a {
+      display: block;
+      margin-top: 10px;
+      color: #0066cc;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      max-width: 500px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>✅ ส่งข้อมูล QC เรียบร้อยแล้ว</h1>
+    <p><strong>Serial Number:</strong> {{ serial }}</p>
+
+    <p><a href="{{ qc_url }}" target="_blank">🔍 ดูรายงาน QC (PDF)</a></p>
+    <p><a href="{{ qr_url }}" target="_blank">📎 ดาวน์โหลด QR Code (PDF)</a></p>
+
+    <a href="/">🔄 กลับไปหน้ากรอกข้อมูลใหม่</a>
+  </div>
+</body>
+</html>

@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+sas-qc-gearmotor-app.json
+.env
+uploads/
+*.log

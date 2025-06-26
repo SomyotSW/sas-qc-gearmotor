@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SAS QC Gear Motor</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f5f9ff url('/static/rkfs-demo.gif') no-repeat bottom right;
+      background-size: 200px;
+    }
+    h1 {
+      color: #004080;
+    }
+    label {
+      display: block;
+      margin-top: 15px;
+      font-weight: bold;
+    }
+    input, textarea, select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+    }
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background-color: #004080;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    button:hover {
+      background-color: #0066cc;
+    }
+  </style>
+</head>
+<body>
+  <h1>SAS QC Gear Motor - ตรวจสอบและบันทึกข้อมูล</h1>
+  <form method="POST" action="/submit" enctype="multipart/form-data">
+    <label for="inspector">ชื่อผู้ตรวจสอบ:</label>
+    <input type="text" name="inspector" required>
+
+    <label for="product_type">ประเภทสินค้า:</label>
+    <select name="product_type" required>
+      <option value="เกียร์มอเตอร์">เกียร์มอเตอร์</option>
+      <option value="มอเตอร์ AC">มอเตอร์ AC</option>
+      <option value="มอเตอร์ DC">มอเตอร์ DC</option>
+    </select>
+
+    <label for="model">รุ่นสินค้า:</label>
+    <input type="text" name="model" required>
+
+    <label for="test_result">ผลการทดสอบ:</label>
+    <textarea name="test_result" rows="3" required></textarea>
+
+    <label for="note">หมายเหตุเพิ่มเติม (ถ้ามี):</label>
+    <textarea name="note" rows="3"></textarea>
+
+    <label for="images">แนบรูปภาพการตรวจสอบ:</label>
+    <input type="file" name="images" multiple accept="image/*" required>
+
+    <button type="submit">บันทึกข้อมูล QC</button>
+  </form>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ตรวจสอบ Serial Number</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #eef6ff url('/static/rkfs-demo.gif') no-repeat bottom right;
+      background-size: 200px;
+    }
+    h1 {
+      color: #003366;
+    }
+    input[type="text"] {
+      width: 300px;
+      padding: 10px;
+      margin-right: 10px;
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #004080;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0059b3;
+    }
+    .result {
+      margin-top: 30px;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      max-width: 600px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔎 ตรวจสอบสถานะ Serial Number</h1>
+  <form method="GET" action="/check">
+    <input type="text" name="serial" placeholder="กรอก Serial Number เช่น SAS240626123000" required>
+    <button type="submit">ตรวจสอบ</button>
+  </form>
+
+  {% if serial %}
+    <div class="result">
+      <h2>ผลลัพธ์สำหรับ Serial: {{ serial }}</h2>
+      {% if not_found %}
+        <p style="color: red;">❌ ไม่พบข้อมูลของ Serial นี้ในระบบ</p>
+      {% else %}
+        <p><strong>ชื่อผู้ตรวจสอบ:</strong> {{ data.inspector }}</p>
+        <p><strong>ประเภทสินค้า:</strong> {{ data.product_type }}</p>
+        <p><strong>รุ่นสินค้า:</strong> {{ data.model }}</p>
+        <p><strong>วันที่ตรวจสอบ:</strong> {{ data.date }}</p>
+        <p><strong>ผลการทดสอบ:</strong> {{ data.test_result }}</p>
+        <p><a href="{{ pdf_url }}" target="_blank">📄 เปิดรายงาน QC (PDF)</a></p>
+      {% endif %}
+    </div>
+  {% endif %}
+</body>
+</html>
