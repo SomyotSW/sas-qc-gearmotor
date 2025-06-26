@@ -1,32 +1,32 @@
+# utils/qr_generator.py
+
 import qrcode
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
 from io import BytesIO
+from base64 import b64encode
 
-def generate_qr_pdf(serial):
-    # URL ที่จะฝังใน QR Code
-    check_url = f"https://sas-qc-gearmotor.vercel.app/check?serial={serial}"
+def generate_qr_code(data):
+    """
+    Generate a base64-encoded PNG QR code from the given data.
+    
+    Args:
+        data (str): The string to encode into a QR code.
 
-    # สร้าง QR Image
-    qr_img = qrcode.make(check_url)
-    qr_stream = BytesIO()
-    qr_img.save(qr_stream, format='PNG')
-    qr_stream.seek(0)
+    Returns:
+        str: Base64 string of the PNG image.
+    """
+    qr = qrcode.QRCode(
+        version=1,
+        box_size=10,
+        border=5
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
 
-    # สร้าง PDF พร้อม QR
+    img = qr.make_image(fill_color="black", back_color="white")
+    
     buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
-
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(2 * 72, height - 72, "SAS QC Gear Motor - QR Code")
-
-    c.drawImage(qr_stream, 2 * 72, height / 2, width=200, height=200)
-
-    c.setFont("Helvetica", 12)
-    c.drawString(2 * 72, height / 2 - 30, f"Serial: {serial}")
-    c.drawString(2 * 72, height / 2 - 50, f"Link: {check_url}")
-
-    c.save()
+    img.save(buffer, format="PNG")
     buffer.seek(0)
-    return buffer
+
+    img_base64 = b64encode(buffer.read()).decode('utf-8')
+    return img_base64
