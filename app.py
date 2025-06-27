@@ -18,7 +18,7 @@ cred = credentials.Certificate(firebase_json)
 
 firebase_admin.initialize_app(cred, {
     'databaseURL': 'https://sas-qc-gearmotor-app.firebaseio.com/',
-    'storageBucket': 'sas-qc-gearmotor-app.appspot.com'
+    'storageBucket': 'sas-qc-gearmotor-app.firebasestorage.app'  # ✅ เปลี่ยนตรงนี้
 })
 
 ref = db.reference("/qc_reports")
