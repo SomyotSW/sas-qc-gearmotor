@@ -17,8 +17,8 @@ firebase_json = json.loads(os.environ.get("FIREBASE_CREDENTIAL_JSON"))
 cred = credentials.Certificate(firebase_json)
 
 firebase_admin.initialize_app(cred, {
-    'databaseURL': 'https://sas-transmission.firebaseio.com/',
-    'storageBucket': 'sas-transmission.appspot.com'
+    'databaseURL': 'https://sas-qc-gearmotor-app.firebaseio.com/',
+    'storageBucket': 'sas-qc-gearmotor-app.appspot.com'
 })
 
 ref = db.reference("/qc_reports")
