@@ -24,6 +24,10 @@ firebase_admin.initialize_app(cred, {
 ref = db.reference("/qc_reports")
 bucket = storage.bucket()
 
+@app.route('/')
+def home():
+    return render_template('index.html')
+
 # ✅ หน้าแรกพนักงาน QC กด Login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -38,10 +42,6 @@ def login():
         return render_template('form.html', employee_id=employee_id)
 
     return render_template('login.html')
-
-@app.route('/')
-def index():
-    return render_template('index.html')
 
 # ✅ ฟอร์มกรอก QC
 @app.route('/submit', methods=['POST'])
