@@ -115,11 +115,17 @@ def submit():
         traceback.print_exc()
         return f"เกิดข้อผิดพลาด: {e}", 400
 
-# ✅ แสดงหน้าสำเร็จ
 @app.route('/success')
 def success():
     serial = request.args.get('serial', '')
-    return render_template('success.html', serial_number=serial)
+    
+    # แทนชื่อ Bucket จริงของคุณด้านล่างนี้
+    bucket_name = "sas-qc-gearmotor-app.appspot.com"
+
+    qc_url = f"https://storage.googleapis.com/{bucket_name}/qc_reports/{serial}.pdf"
+    qr_url = f"https://storage.googleapis.com/{bucket_name}/qr_codes/{serial}.pdf"
+
+    return render_template("success.html", serial_number=serial, qc_url=qc_url, qr_url=qr_url)
 
 # ✅ ให้ลูกค้าโหลด PDF QC ได้โดยตรง
 @app.route('/download/<serial_number>')
