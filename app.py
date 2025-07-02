@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, send_file
 from werkzeug.utils import secure_filename
 import os
 import firebase_admin
+import traceback
 from firebase_admin import credentials, db, storage
 import datetime
 import io
