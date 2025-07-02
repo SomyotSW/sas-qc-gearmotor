@@ -18,7 +18,7 @@ firebase_json = json.loads(os.environ.get("FIREBASE_CREDENTIAL_JSON"))
 cred = credentials.Certificate(firebase_json)
 
 firebase_admin.initialize_app(cred, {
-    'databaseURL': 'https://sas-qc-gearmotor-app.firebaseio.com/',
+    'databaseURL': 'https://sas-qc-gearmotor-app-default-rtdb.asia-southeast1.firebasedatabase.app/',
     'storageBucket': 'sas-qc-gearmotor-app.firebasestorage.app' # ✅ เปลี่ยนตรงนี้
 })
 
