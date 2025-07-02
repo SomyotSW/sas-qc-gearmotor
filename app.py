@@ -43,10 +43,12 @@ def login():
 
     return render_template('login.html')
 
-# ✅ ฟอร์มกรอก QC
 @app.route('/submit', methods=['POST'])
 def submit():
     try:
+        print("📥 เริ่มรับข้อมูลจากฟอร์ม QC")
+
+        # ==== ดึงข้อมูลจากฟอร์ม ====
         data = {
             'motor_nameplate': request.form.get('motor_nameplate'),
             'motor_current': request.form.get('motor_current'),
@@ -60,32 +62,56 @@ def submit():
             'oil_filled': 'เติมแล้ว' if request.form.get('oil_filled') else 'ยังไม่เติม'
         }
 
-        # อัปโหลดรูปภาพแต่ละรายการ (ตามชื่อ field ใน form.html)
+        print(f"📄 ข้อมูลฟอร์มที่ได้รับ: {data}")
+
+        # ==== ตรวจสอบค่าจำเป็น ====
+        required_fields = ['motor_nameplate', 'inspector']
+        for field in required_fields:
+            if not data[field]:
+                raise ValueError(f"❌ Missing required field: {field}")
+
+        # ==== สร้าง Serial Number ====
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        serial_number = f"SAS{timestamp}"
+        data['serial_number'] = serial_number
+
+        print(f"🔢 สร้าง Serial Number: {serial_number}")
+
+        # ==== เตรียมรูปภาพ ====
         image_fields = [
             'motor_current_img', 'gear_sound_img',
             'assembly_img', 'check_complete_img'
         ]
 
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         image_urls = {}
-
         for field in image_fields:
             file = request.files.get(field)
-            if file and file.filename != '':
+            if file and file.filename:
                 filename = secure_filename(file.filename)
-                blob = bucket.blob(f"qc_images/{timestamp}_{filename}")
+                storage_path = f"qc_images/{serial_number}_{filename}"
+
+                print(f"🖼️ Uploading {field} => {storage_path}")
+
+                blob = bucket.blob(storage_path)
                 blob.upload_from_file(file.stream, content_type=file.content_type)
                 blob.make_public()
                 image_urls[field] = blob.public_url
+            else:
+                print(f"⚠️ ไม่พบไฟล์แนบสำหรับ: {field}")
 
         data['images'] = image_urls
 
-        # สร้างหมายเลข Serial และบันทึกลง Firebase
-        serial_number = f"SAS{timestamp}"
+        # ==== บันทึกลง Firebase ====
+        print("📤 กำลังบันทึกข้อมูลลง Firebase Database...")
         ref.child(serial_number).set(data)
+        print("✅ บันทึกสำเร็จ")
 
+        # ==== Redirect ไปหน้า Success ====
         return redirect(f"/success?serial={serial_number}")
+
     except Exception as e:
+        print("❌ ERROR เกิดขึ้นใน /submit")
+        traceback.print_exc()
         return f"เกิดข้อผิดพลาด: {e}", 400
 
 # ✅ แสดงหน้าสำเร็จ
