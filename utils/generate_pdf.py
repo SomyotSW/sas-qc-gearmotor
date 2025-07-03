@@ -8,7 +8,7 @@ import datetime
 import requests
 
 # Path to logo in project
-LOGO_PATH = "static/sas_logo.png"
+LOGO_PATH = "static/logo_sas.png"
 
 # === Map image to header ===
 IMAGE_LABELS = {
@@ -77,9 +77,9 @@ def create_qc_pdf(data, image_urls):
                 img_io.seek(0)
 
                 label = IMAGE_LABELS.get(key, "รูปภาพประกอบ")
-                c.setFont("Helvetica-Bold", 13)
-                c.drawString(2 * cm, height - 2 * cm, label)
-                c.drawImage(ImageReader(img_io), 2 * cm, height / 2, width=15 * cm, preserveAspectRatio=True)
+                c.setFont("Helvetica-Bold", 14)
+                c.drawString(2 * cm, height - 2.5 * cm, label)
+                c.drawImage(ImageReader(img_io), 2 * cm, 4 * cm, width=15 * cm, preserveAspectRatio=True)
                 c.showPage()
             except Exception as e:
                 print(f"Error loading image: {e}")

@@ -2,14 +2,12 @@ from flask import Flask, render_template, request, redirect, send_file, url_for
 from werkzeug.utils import secure_filename
 import os
 import firebase_admin
-import traceback
 from firebase_admin import credentials, db, storage
 import datetime
 import io
 from utils.generate_pdf import create_qc_pdf
-from utils.qr_generator import generate_qr_code
 import json
-import uuid
+import qrcode
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -78,7 +76,6 @@ def submit():
             "assembly_img": upload_image(assembly_img, "assembly")
         }
 
-        qr_stream = generate_qr_code(serial)
         pdf_stream = create_qc_pdf({
             "serial": serial,
             "product_type": product_type,
@@ -93,17 +90,14 @@ def submit():
             "images": images,
             "date": datetime.datetime.now().strftime("%Y-%m-%d")
         }, image_urls=list(images.values()))
-
-        qr_stream.seek(0)
         pdf_stream.seek(0)
-
-        qr_blob = bucket.blob(f"qr_codes/{serial}.pdf")
-        qr_blob.upload_from_file(qr_stream, content_type="application/pdf")
-        qr_blob.make_public()
 
         report_blob = bucket.blob(f"qc_reports/{serial}.pdf")
         report_blob.upload_from_file(pdf_stream, content_type="application/pdf")
         report_blob.make_public()
+
+        # ✅ Save QR PNG URL
+        qr_url = url_for('generate_qr', serial_number=serial, _external=True)
 
         ref.child(serial).set({
             "serial": serial,
@@ -118,7 +112,7 @@ def submit():
             "oil_filled": oil_filled,
             "images": images,
             "qc_pdf_url": report_blob.public_url,
-            "qr_pdf_url": qr_blob.public_url,
+            "qr_image_url": qr_url,
             "date": datetime.datetime.now().strftime("%Y-%m-%d")
         })
 
@@ -134,7 +128,7 @@ def success():
     return render_template('success.html',
                            serial_number=serial,
                            qc_url=data.get("qc_pdf_url", "#"),
-                           qr_url=data.get("qr_pdf_url", "#"))
+                           qr_url=data.get("qr_image_url", "#"))  # ✅ ใช้ PNG link
 
 @app.route('/download/<serial_number>')
 def download_pdf(serial_number):
@@ -152,8 +146,6 @@ def download_pdf(serial_number):
 
 @app.route('/qr/<serial_number>')
 def generate_qr(serial_number):
-    import io
-    import qrcode
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
     qr.add_data(serial_number)
     qr.make(fit=True)
