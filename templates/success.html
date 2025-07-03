@@ -1,21 +1,106 @@
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
     <meta charset="UTF-8">
-    <title>ส่งข้อมูลเรียบร้อย</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ส่งข้อมูล QC เรียบร้อยแล้ว</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: url('/static/bg_blur.jpg') center center / cover no-repeat;
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            padding: 30px;
+            width: 90%;
+            max-width: 450px;
+            text-align: center;
+            position: relative;
+        }
+
+        h2 {
+            color: #2c7be5;
+        }
+
+        .logo {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 100px;
+        }
+
+        .serial {
+            font-size: 18px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            margin: 10px 0;
+            padding: 12px;
+            background: #2c7be5;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            text-decoration: none;
+            transition: background 0.3s ease;
+        }
+
+        .btn:hover {
+            background: #1a5fbd;
+        }
+
+        .qr-preview {
+            margin: 20px auto;
+            max-width: 200px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background: white;
+            padding: 10px;
+        }
+
+        .note {
+            font-size: 13px;
+            color: gray;
+        }
+
+        @media screen and (max-width: 768px) {
+            .logo {
+                width: 80px;
+            }
+        }
+    </style>
 </head>
+
 <body>
-    <h2>✅ ส่งข้อมูล QC เรียบร้อยแล้ว</h2>
-    <p><strong>Serial Number:</strong> {{ serial_number }}</p>
+    <div class="container">
+        <img src="/static/logo_sas.png" alt="SAS Logo" class="logo">
+        <h2>✅ ส่งข้อมูล QC เรียบร้อยแล้ว</h2>
+        <div class="serial">Serial Number: {{ serial_number }}</div>
 
-    <ul>
-        <li><a href="{{ qc_url }}" target="_blank">📄 ดูรายงาน QC (PDF)</a></li>
-        <li><a href="/qr/{{ serial_number }}" download>📥 ดาวน์โหลด QR Code (PNG)</a></li>
-    </ul>
+        <div class="qr-preview">
+            <img src="{{ qr_url }}" alt="QR Code" style="width: 100%; height: auto;">
+            <div class="note">สแกนเพื่อดูรายงาน QC</div>
+        </div>
 
-    <h3>🔍 ตัวอย่าง QR Code:</h3>
-    <img src="/qr/{{ serial_number }}" alt="QR Code" width="200">
-
-    <p><a href="{{ url_for('login') }}">🔁 กลับไปกรอกข้อมูลใหม่</a></p>
+        <a class="btn" href="{{ qc_url }}" target="_blank">📄 ดูรายงาน QC (PDF)</a>
+        <a class="btn" href="{{ qr_url }}" download>📥 ดาวน์โหลด QR Code</a>
+        <a class="btn" href="/login">🔄 กลับไปหน้ากรอกข้อมูลใหม่</a>
+    </div>
 </body>
+
 </html>

@@ -6,6 +6,7 @@ from firebase_admin import credentials, db, storage
 import datetime
 import io
 from utils.generate_pdf import create_qc_pdf
+from utils.qr_generator import generate_qr_code
 import json
 import qrcode
 
@@ -18,7 +19,7 @@ cred = credentials.Certificate(firebase_json)
 
 firebase_admin.initialize_app(cred, {
     'databaseURL': 'https://sas-qc-gearmotor-app-default-rtdb.asia-southeast1.firebasedatabase.app/',
-    'storageBucket': 'sas-qc-gearmotor-app.firebasestorage.app'
+    'storageBucket': 'sas-qc-gearmotor-app.appspot.com'
 })
 
 ref = db.reference("/qc_data")
@@ -44,6 +45,7 @@ def submit():
         if not request.content_type.startswith('multipart/form-data'):
             return "Invalid Content-Type", 400
 
+        # === Extract Form Fields ===
         product_type = request.form.get('product_type')
         motor_nameplate = request.form.get('motor_nameplate')
         motor_current = request.form.get('motor_current')
@@ -76,6 +78,8 @@ def submit():
             "assembly_img": upload_image(assembly_img, "assembly")
         }
 
+        # === Create Files ===
+        qr_stream = generate_qr_code(serial)
         pdf_stream = create_qc_pdf({
             "serial": serial,
             "product_type": product_type,
@@ -90,15 +94,18 @@ def submit():
             "images": images,
             "date": datetime.datetime.now().strftime("%Y-%m-%d")
         }, image_urls=list(images.values()))
-        pdf_stream.seek(0)
+
+        # === Upload to Firebase ===
+        qr_blob = bucket.blob(f"qr_codes/{serial}.png")
+        qr_blob.upload_from_file(qr_stream, content_type="image/png")
+        qr_blob.make_public()
 
         report_blob = bucket.blob(f"qc_reports/{serial}.pdf")
+        pdf_stream.seek(0)
         report_blob.upload_from_file(pdf_stream, content_type="application/pdf")
         report_blob.make_public()
 
-        # ✅ Save QR PNG URL
-        qr_url = url_for('generate_qr', serial_number=serial, _external=True)
-
+        # === Save to Realtime DB ===
         ref.child(serial).set({
             "serial": serial,
             "product_type": product_type,
@@ -112,7 +119,7 @@ def submit():
             "oil_filled": oil_filled,
             "images": images,
             "qc_pdf_url": report_blob.public_url,
-            "qr_image_url": qr_url,
+            "qr_png_url": qr_blob.public_url,
             "date": datetime.datetime.now().strftime("%Y-%m-%d")
         })
 
@@ -128,32 +135,43 @@ def success():
     return render_template('success.html',
                            serial_number=serial,
                            qc_url=data.get("qc_pdf_url", "#"),
-                           qr_url=data.get("qr_image_url", "#"))  # ✅ ใช้ PNG link
+                           qr_url=data.get("qr_png_url", "#"))
 
 @app.route('/download/<serial_number>')
 def download_pdf(serial_number):
     report_data = ref.child(serial_number).get()
     if not report_data:
-        return "Report not found", 404
+        return "ไม่พบรายงาน", 404
     pdf_stream = create_qc_pdf(report_data, image_urls=list(report_data.get("images", {}).values()))
     pdf_stream.seek(0)
-    return send_file(
-        pdf_stream,
-        as_attachment=True,
-        download_name=f"{serial_number}_QC_Report.pdf",
-        mimetype='application/pdf'
-    )
+    return send_file(pdf_stream,
+                     as_attachment=True,
+                     download_name=f"{serial_number}_QC_Report.pdf",
+                     mimetype='application/pdf')
 
 @app.route('/qr/<serial_number>')
 def generate_qr(serial_number):
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
-    qr.add_data(f"https://sas-qc-gearmotor-app.web.app/download/{serial_number}")  # ✅ พาไปลิงก์ PDF
+    link = f"https://sas-qc-gearmotor.onrender.com/autodownload/{serial_number}"
+    qr.add_data(link)
     qr.make(fit=True)
-    img = qr.make_image(fill='black', back_color='white')
+    img = qr.make_image(fill_color='black', back_color='white')
     qr_stream = io.BytesIO()
-    img.save(qr_stream, 'PNG')
+    img.save(qr_stream, format='PNG')
     qr_stream.seek(0)
-    return send_file(qr_stream, mimetype='image/png', download_name=f'{serial_number}.png')
+    return send_file(qr_stream, mimetype='image/png', download_name=f"{serial_number}_QR.png")
+
+@app.route('/autodownload/<serial_number>')
+def autodownload(serial_number):
+    report_data = ref.child(serial_number).get()
+    if not report_data:
+        return "ไม่พบรายงาน", 404
+    pdf_stream = create_qc_pdf(report_data, image_urls=list(report_data.get("images", {}).values()))
+    pdf_stream.seek(0)
+    return send_file(pdf_stream,
+                     as_attachment=True,
+                     download_name=f"{serial_number}_QC_Report.pdf",
+                     mimetype='application/pdf')
 
 if __name__ == '__main__':
     app.run(debug=True)
