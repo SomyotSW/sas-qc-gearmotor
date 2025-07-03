@@ -94,6 +94,9 @@ def submit():
             "date": datetime.datetime.now().strftime("%Y-%m-%d")
         }, image_urls=list(images.values()))
 
+        qr_stream.seek(0)
+        pdf_stream.seek(0)
+
         qr_blob = bucket.blob(f"qr_codes/{serial}.pdf")
         qr_blob.upload_from_file(qr_stream, content_type="application/pdf")
         qr_blob.make_public()
@@ -139,6 +142,7 @@ def download_pdf(serial_number):
     if not report_data:
         return "Report not found", 404
     pdf_stream = create_qc_pdf(report_data, image_urls=list(report_data.get("images", {}).values()))
+    pdf_stream.seek(0)
     return send_file(
         pdf_stream,
         as_attachment=True,
