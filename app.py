@@ -118,10 +118,11 @@ def submit():
 @app.route('/success')
 def success():
     serial = request.args.get('serial', '')
-    
-    # แทนชื่อ Bucket จริงของคุณด้านล่างนี้
-    bucket_name = "sas-qc-gearmotor-app.appspot.com"
 
+    # ✅ ชื่อ bucket ที่ถูกต้อง
+    bucket_name = "sas-qc-gearmotor-app.firebasestorage.app"
+
+    # ✅ ลิงก์ต้องใช้กับ bucket นี้
     qc_url = f"https://storage.googleapis.com/{bucket_name}/qc_reports/{serial}.pdf"
     qr_url = f"https://storage.googleapis.com/{bucket_name}/qr_codes/{serial}.pdf"
 
