@@ -15,31 +15,18 @@ def create_qc_pdf(data, image_urls):
     c.drawString(2 * cm, height - 2 * cm, "SAS QC Gear Motor Report")
 
     c.setFont("Helvetica", 12)
-    y = height - 3 * cm
-    line_height = 1 * cm
-
-    # Helper function to draw line safely
-    def draw_safe_line(label, value):
-        nonlocal y
-        value = value if value not in [None, ""] else "-"
-        c.drawString(2 * cm, y, f"{label}: {value}")
-        y -= line_height
-
-    draw_safe_line("Serial Number", data.get("serial"))
-    draw_safe_line("Inspector", data.get("inspector"))
-    draw_safe_line("Product Type", data.get("product_type"))
-    draw_safe_line("Motor Nameplate", data.get("motor_nameplate"))
-    draw_safe_line("Motor Current (A)", data.get("motor_current"))
-    draw_safe_line("Gear Ratio", f"1:{data.get('gear_ratio', '-')}")
-    draw_safe_line("Gear Sound", data.get("gear_sound"))
-    draw_safe_line("Oil Filled", data.get("oil_filled"))
-    draw_safe_line("Oil Liters", data.get("oil_liters"))
-    draw_safe_line("Warranty (months)", data.get("warranty"))
-    draw_safe_line("Date", data.get("date"))
+    c.drawString(2 * cm, height - 3 * cm, f"Serial Number: {data.get('serial', '-')}")
+    c.drawString(2 * cm, height - 4 * cm, f"Inspector: {data.get('inspector', '-')}")
+    c.drawString(2 * cm, height - 5 * cm, f"Product Type: {data.get('product_type', '-')}")
+    c.drawString(2 * cm, height - 6 * cm, f"Motor Nameplate: {data.get('motor_nameplate', '-')}")
+    c.drawString(2 * cm, height - 7 * cm, f"Gear Ratio: {data.get('gear_ratio', '-')}")
+    c.drawString(2 * cm, height - 8 * cm, f"Gear Sound: {data.get('gear_sound', '-')}")
+    c.drawString(2 * cm, height - 9 * cm, f"Current: {data.get('motor_current', '-')}")
+    c.drawString(2 * cm, height - 10 * cm, f"Oil: {data.get('oil_liters', '-')} L - {data.get('oil_filled', '-')}")
+    c.drawString(2 * cm, height - 11 * cm, f"Warranty: {data.get('warranty', '-')} months")
 
     c.showPage()
 
-    # Add images
     for url in image_urls:
         try:
             response = requests.get(url)
