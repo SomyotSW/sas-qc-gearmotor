@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, send_file
+from flask import Flask, render_template, request, redirect, send_file, url_for
 from werkzeug.utils import secure_filename
 import os
 import firebase_admin
@@ -9,6 +9,7 @@ import io
 from utils.generate_pdf import create_qc_pdf
 from utils.qr_generator import generate_qr_code
 import json
+import uuid
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -19,118 +20,132 @@ cred = credentials.Certificate(firebase_json)
 
 firebase_admin.initialize_app(cred, {
     'databaseURL': 'https://sas-qc-gearmotor-app-default-rtdb.asia-southeast1.firebasedatabase.app/',
-    'storageBucket': 'sas-qc-gearmotor-app.firebasestorage.app' # ✅ เปลี่ยนตรงนี้
+    'storageBucket': 'sas-qc-gearmotor-app.firebasestorage.app'
 })
 
-ref = db.reference("/qc_reports")
+ref = db.reference("/qc_data")
 bucket = storage.bucket()
 
 @app.route('/')
 def home():
     return render_template('index.html')
 
-# ✅ หน้าแรกพนักงาน QC กด Login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         employee_id = request.form.get('employee_id')
-
-        # 🔐 ตรวจสอบรหัส (ถ้ามี whitelist เช่น: 'QC001', 'QC002')
         allowed_ids = ['QC001', 'QC002', 'QC003']
         if employee_id not in allowed_ids:
             return "รหัสพนักงานไม่ถูกต้อง", 403
-
         return render_template('form.html', employee_id=employee_id)
-
     return render_template('login.html')
 
 @app.route('/submit', methods=['POST'])
 def submit():
     try:
-        # ===== 1. รับค่าจากฟอร์ม =====
-        serial_number = request.form['serial_number']
-        customer_name = request.form['customer_name']
-        inspector = request.form['inspector']
-        install_date = request.form['install_date']
-        motor_type = request.form['motor_type']
-        note = request.form['note']
-        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if not request.content_type.startswith('multipart/form-data'):
+            return "Invalid Content-Type", 400
 
-        # ===== 2. สร้างไฟล์ PDF รายงาน QC และ QR Code =====
-        pdf_path, qr_path, pdf_success, qr_success = generate_pdf_and_qr(
-            serial_number,
-            motor_type,
-            customer_name,
-            inspector,
-            install_date,
-            note
-        )
+        motor_nameplate = request.form.get('motor_nameplate')
+        motor_current = request.form.get('motor_current')
+        gear_ratio = request.form.get('gear_ratio')
+        gear_sound = request.form.get('gear_sound')
+        check_complete = request.form.get('check_complete')
+        incomplete_reason = request.form.get('incomplete_reason')
+        warranty = request.form.get('warranty')
+        inspector = request.form.get('inspector')
+        oil_liters = request.form.get('oil_liters')
+        oil_filled = 'เติมแล้ว' if request.form.get('oil_filled') else 'ยังไม่เติม'
 
-        # ===== 3. อัปโหลดไฟล์ขึ้น Firebase Storage และรับ URL =====
-        qc_pdf_url = upload_file_to_firebase(pdf_path, folder_name="qc_reports")
-        qr_pdf_url = upload_file_to_firebase(qr_path, folder_name="qr_codes")
+        motor_current_img = request.files.get('motor_current_img')
+        gear_sound_img = request.files.get('gear_sound_img')
+        assembly_img = request.files.get('assembly_img')
+        check_complete_img = request.files.get('check_complete_img')
 
-        # ===== 4. เก็บข้อมูลลง Firebase Database =====
-        data = {
-            "serial_number": serial_number,
-            "customer_name": customer_name,
-            "motor_type": motor_type,
-            "inspector": inspector,
-            "install_date": install_date,
-            "note": note,
-            "timestamp": now,
-            "qc_pdf_url": qc_pdf_url,
-            "qr_pdf_url": qr_pdf_url,
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        serial = f"SAS{timestamp}"
+
+        def upload_image(file, field_name):
+            if file and file.filename:
+                filename = secure_filename(file.filename)
+                blob = bucket.blob(f"qc_images/{serial}_{field_name}_{filename}")
+                blob.upload_from_file(file.stream, content_type=file.content_type)
+                blob.make_public()
+                return blob.public_url
+            return None
+
+        images = {
+            "motor_current_img": upload_image(motor_current_img, "motor_current"),
+            "gear_sound_img": upload_image(gear_sound_img, "gear_sound"),
+            "assembly_img": upload_image(assembly_img, "assembly"),
+            "check_complete_img": upload_image(check_complete_img, "check_complete")
         }
-        ref = db.reference(f"/qc_reports/{serial_number}")
-        ref.set(data)
 
-        # ===== 5. ส่งอีเมล (ถ้าต้องการเปิดใช้งาน) =====
-        # send_email(serial_number, qc_pdf_url, qr_pdf_url)
+        # ✅ สร้าง QR และ PDF Report
+        qr_stream = generate_qr_code(serial)
+        pdf_stream = create_qc_pdf({
+            "serial": serial,
+            "motor_nameplate": motor_nameplate,
+            "motor_current": motor_current,
+            "gear_ratio": gear_ratio,
+            "gear_sound": gear_sound,
+            "check_complete": check_complete,
+            "incomplete_reason": incomplete_reason,
+            "warranty": warranty,
+            "inspector": inspector,
+            "oil_liters": oil_liters,
+            "oil_filled": oil_filled,
+            "images": images,
+            "date": datetime.datetime.now().strftime("%Y-%m-%d")
+        })
 
-        # ===== 6. กลับไปหน้า success พร้อม Serial =====
-        return redirect(url_for('success', serial=serial_number))
+        # ✅ อัปโหลด QR และ PDF ขึ้น Firebase
+        qr_blob = bucket.blob(f"qr_codes/{serial}.pdf")
+        qr_blob.upload_from_file(qr_stream, content_type="application/pdf")
+        qr_blob.make_public()
+
+        report_blob = bucket.blob(f"qc_reports/{serial}.pdf")
+        report_blob.upload_from_file(pdf_stream, content_type="application/pdf")
+        report_blob.make_public()
+
+        # ✅ เขียนข้อมูลลง Firebase
+        ref.child(serial).set({
+            "serial": serial,
+            "motor_nameplate": motor_nameplate,
+            "motor_current": motor_current,
+            "gear_ratio": gear_ratio,
+            "gear_sound": gear_sound,
+            "check_complete": check_complete,
+            "incomplete_reason": incomplete_reason,
+            "warranty": warranty,
+            "inspector": inspector,
+            "oil_liters": oil_liters,
+            "oil_filled": oil_filled,
+            "images": images,
+            "qc_pdf_url": report_blob.public_url,
+            "qr_pdf_url": qr_blob.public_url,
+            "date": datetime.datetime.now().strftime("%Y-%m-%d")
+        })
+
+        return redirect(url_for('success', serial=serial))
 
     except Exception as e:
-        return f"❌ เกิดข้อผิดพลาด: {e}", 500
-
+        return f"เกิดข้อผิดพลาด: {e}", 400
 
 @app.route('/success')
 def success():
     serial = request.args.get('serial', '')
-    ref = db.reference(f"/qc_reports/{serial}")
-    data = ref.get()
-
-    # ✅ ชื่อ bucket ที่ถูกต้อง
-    bucket_name = "sas-qc-gearmotor-app.firebasestorage.app"
-
-    # ✅ ลิงก์ต้องใช้กับ bucket นี้
-    qc_url = f"https://storage.googleapis.com/{bucket_name}/qc_reports/{serial}.pdf"
-    qr_url = f"https://storage.googleapis.com/{bucket_name}/qr_codes/{serial}.pdf"
-
+    data = ref.child(serial).get()
     return render_template('success.html',
                            serial_number=serial,
                            qc_url=data.get("qc_pdf_url", "#"),
                            qr_url=data.get("qr_pdf_url", "#"))
 
-def upload_file_to_firebase(file_path, folder_name="uploads"):
-    from firebase_admin import storage
-    import os
-
-    bucket = storage.bucket()
-    file_name = os.path.basename(file_path)
-    blob = bucket.blob(f"{folder_name}/{file_name}")
-    blob.upload_from_filename(file_path)
-    blob.make_public()  # ทำให้ลิงก์เปิดดูได้จากภายนอก
-    return blob.public_url
-
-# ✅ ให้ลูกค้าโหลด PDF QC ได้โดยตรง
 @app.route('/download/<serial_number>')
 def download_pdf(serial_number):
     report_data = ref.child(serial_number).get()
     if not report_data:
         return "Report not found", 404
-
     pdf_stream = create_qc_pdf(report_data)
     return send_file(
         pdf_stream,
@@ -143,23 +158,17 @@ def download_pdf(serial_number):
 def generate_qr(serial_number):
     import io
     import qrcode
-
-    # สร้าง QR Code
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
     qr.add_data(serial_number)
     qr.make(fit=True)
-
     img = qr.make_image(fill='black', back_color='white')
-
-    # บันทึกภาพลงหน่วยความจำ
     qr_stream = io.BytesIO()
     img.save(qr_stream, 'PNG')
     qr_stream.seek(0)
-
     return send_file(
         qr_stream,
         mimetype='image/png',
-        download_name=f'{serial_number}.png'  # ให้ชื่อไฟล์เวลาโหลด
+        download_name=f'{serial_number}.png'
     )
 
 if __name__ == '__main__':
