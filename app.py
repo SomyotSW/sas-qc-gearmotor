@@ -167,6 +167,5 @@ def generate_qr(serial_number):
     qr_stream.seek(0)
     return send_file(qr_stream, mimetype='image/png', download_name=f'{serial_number}.png')
 
-
 if __name__ == '__main__':
     app.run(debug=True)
