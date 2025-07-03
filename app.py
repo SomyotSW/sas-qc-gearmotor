@@ -56,6 +56,7 @@ def submit():
         inspector = request.form.get('inspector')
         oil_liters = request.form.get('oil_liters')
         oil_filled = 'เติมแล้ว' if request.form.get('oil_filled') else 'ยังไม่เติม'
+        product_type = request.form.get('product_type')
 
         motor_current_img = request.files.get('motor_current_img')
         gear_sound_img = request.files.get('gear_sound_img')
@@ -95,6 +96,7 @@ def submit():
             "inspector": inspector,
             "oil_liters": oil_liters,
             "oil_filled": oil_filled,
+            "product_type": product_type,
             "images": images,
             "date": datetime.datetime.now().strftime("%Y-%m-%d")
         }, image_urls=list(images.values()))
@@ -121,6 +123,7 @@ def submit():
             "inspector": inspector,
             "oil_liters": oil_liters,
             "oil_filled": oil_filled,
+            "product_type": product_type,
             "images": images,
             "qc_pdf_url": report_blob.public_url,
             "qr_pdf_url": qr_blob.public_url,

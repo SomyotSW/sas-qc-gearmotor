@@ -40,6 +40,18 @@
   <h2>แบบฟอร์มตรวจสอบ QC Gear Motor</h2>
   <form method="post" action="/submit" enctype="multipart/form-data">
 
+    <!-- ข้อ 0: ประเภทสินค้า -->
+    <div class="mb-3">
+      <label class="form-label">0. ประเภทสินค้า:</label>
+      <select name="product_type" class="form-select" required>
+        <option value="">-- กรุณาเลือก --</option>
+        <option value="AC Motor">AC Motor</option>
+        <option value="DC Motor">DC Motor</option>
+        <option value="BLDC Motor">BLDC Motor</option>
+        <option value="Gearbox">Gearbox</option>
+      </select>
+    </div>
+
     <!-- ข้อ 1: ชื่อเนมเพลท -->
     <div class="mb-3">
       <label class="form-label">1. ชื่อเนมเพลทของ Motor:</label>
