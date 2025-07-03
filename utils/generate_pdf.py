@@ -4,12 +4,11 @@ from reportlab.lib.units import cm
 from reportlab.lib.utils import ImageReader
 from io import BytesIO
 from PIL import Image
-import requests
 import datetime
+import requests
 
-
-logo_path = "static/sas_logo.png"
-logo_img = Image.open(logo_path)
+# Path to logo in project
+LOGO_PATH = "static/sas_logo.png"
 
 # === Map image to header ===
 IMAGE_LABELS = {
@@ -32,13 +31,13 @@ def create_qc_pdf(data, image_urls):
 
     # === Logo ===
     try:
-        logo_img = Image.open(logo_path)
-    	logo_io = BytesIO()
-    	logo_img.save(logo_io, format='PNG')
-    	logo_io.seek(0)
-    	c.drawImage(ImageReader(logo_io), 1.5 * cm, height - 3 * cm, width=3 * cm, preserveAspectRatio=True)
+        logo_img = Image.open(LOGO_PATH)
+        logo_io = BytesIO()
+        logo_img.save(logo_io, format='PNG')
+        logo_io.seek(0)
+        c.drawImage(ImageReader(logo_io), 1.5 * cm, height - 3 * cm, width=3 * cm, preserveAspectRatio=True)
     except Exception as e:
-        print(f"Error loading logo: {e}")
+        print(f"Logo Error: {e}")
 
     # === Header ===
     c.setFont("Helvetica-Bold", 16)
