@@ -46,22 +46,19 @@ def submit():
         if not request.content_type.startswith('multipart/form-data'):
             return "Invalid Content-Type", 400
 
+        product_type = request.form.get('product_type')
         motor_nameplate = request.form.get('motor_nameplate')
         motor_current = request.form.get('motor_current')
         gear_ratio = request.form.get('gear_ratio')
         gear_sound = request.form.get('gear_sound')
-        check_complete = request.form.get('check_complete')
-        incomplete_reason = request.form.get('incomplete_reason')
         warranty = request.form.get('warranty')
         inspector = request.form.get('inspector')
         oil_liters = request.form.get('oil_liters')
         oil_filled = 'เติมแล้ว' if request.form.get('oil_filled') else 'ยังไม่เติม'
-        product_type = request.form.get('product_type')
 
         motor_current_img = request.files.get('motor_current_img')
         gear_sound_img = request.files.get('gear_sound_img')
         assembly_img = request.files.get('assembly_img')
-        check_complete_img = request.files.get('check_complete_img')
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         serial = f"SAS{timestamp}"
@@ -78,30 +75,25 @@ def submit():
         images = {
             "motor_current_img": upload_image(motor_current_img, "motor_current"),
             "gear_sound_img": upload_image(gear_sound_img, "gear_sound"),
-            "assembly_img": upload_image(assembly_img, "assembly"),
-            "check_complete_img": upload_image(check_complete_img, "check_complete")
+            "assembly_img": upload_image(assembly_img, "assembly")
         }
 
-        # ✅ สร้าง QR และ PDF Report
         qr_stream = generate_qr_code(serial)
         pdf_stream = create_qc_pdf({
             "serial": serial,
+            "product_type": product_type,
             "motor_nameplate": motor_nameplate,
             "motor_current": motor_current,
             "gear_ratio": gear_ratio,
             "gear_sound": gear_sound,
-            "check_complete": check_complete,
-            "incomplete_reason": incomplete_reason,
             "warranty": warranty,
             "inspector": inspector,
             "oil_liters": oil_liters,
             "oil_filled": oil_filled,
-            "product_type": product_type,
             "images": images,
             "date": datetime.datetime.now().strftime("%Y-%m-%d")
         }, image_urls=list(images.values()))
 
-        # ✅ อัปโหลด QR และ PDF ขึ้น Firebase
         qr_blob = bucket.blob(f"qr_codes/{serial}.pdf")
         qr_blob.upload_from_file(qr_stream, content_type="application/pdf")
         qr_blob.make_public()
@@ -110,20 +102,17 @@ def submit():
         report_blob.upload_from_file(pdf_stream, content_type="application/pdf")
         report_blob.make_public()
 
-        # ✅ เขียนข้อมูลลง Firebase
         ref.child(serial).set({
             "serial": serial,
+            "product_type": product_type,
             "motor_nameplate": motor_nameplate,
             "motor_current": motor_current,
             "gear_ratio": gear_ratio,
             "gear_sound": gear_sound,
-            "check_complete": check_complete,
-            "incomplete_reason": incomplete_reason,
             "warranty": warranty,
             "inspector": inspector,
             "oil_liters": oil_liters,
             "oil_filled": oil_filled,
-            "product_type": product_type,
             "images": images,
             "qc_pdf_url": report_blob.public_url,
             "qr_pdf_url": qr_blob.public_url,
