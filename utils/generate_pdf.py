@@ -2,10 +2,15 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import cm
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from io import BytesIO
 from PIL import Image
 import datetime
 import requests
+
+# Register Thai font
+pdfmetrics.registerFont(TTFont('THSarabun', 'static/fonts/THSarabunNew.ttf'))
 
 # Path to logo in project
 LOGO_PATH = "static/logo_sas.png"
@@ -40,28 +45,28 @@ def create_qc_pdf(data, image_urls):
         print(f"Logo Error: {e}")
 
     # === Header ===
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(5 * cm, height - 2.5 * cm, "SAS QC Gear Motor Report")
+    c.setFont("THSarabun", 24)
+    c.drawString(5 * cm, height - 2.5 * cm, "รายงานการตรวจสอบ QC มอเตอร์เกียร์ (SAS)")
 
-    c.setFont("Helvetica", 12)
-    c.drawString(2 * cm, height - 4.5 * cm, f"Serial Number: {data.get('serial', '-')}")
-    c.drawString(2 * cm, height - 5.2 * cm, f"Inspector: {data.get('inspector', '-')}")
-    c.drawString(2 * cm, height - 5.9 * cm, f"Product Type: {data.get('product_type', '-')}")
-    c.drawString(2 * cm, height - 6.6 * cm, f"Motor Nameplate: {data.get('motor_nameplate', '-')}")
-    c.drawString(2 * cm, height - 7.3 * cm, f"Gear Ratio: {data.get('gear_ratio', '-')}")
-    c.drawString(2 * cm, height - 8.0 * cm, f"Gear Sound: {data.get('gear_sound', '-')}")
-    c.drawString(2 * cm, height - 8.7 * cm, f"Current: {data.get('motor_current', '-')}")
-    c.drawString(2 * cm, height - 9.4 * cm, f"Oil: {data.get('oil_liters', '-')} L - {data.get('oil_filled', '-')}")
-    c.drawString(2 * cm, height - 10.1 * cm, f"Warranty: {data.get('warranty', '-')} months")
+    c.setFont("THSarabun", 20)
+    c.drawString(2 * cm, height - 4.5 * cm, f"หมายเลขซีเรียล: {data.get('serial', '-')}")
+    c.drawString(2 * cm, height - 5.2 * cm, f"ผู้ตรวจสอบ: {data.get('inspector', '-')}")
+    c.drawString(2 * cm, height - 5.9 * cm, f"ประเภทสินค้า: {data.get('product_type', '-')}")
+    c.drawString(2 * cm, height - 6.6 * cm, f"ชื่อมอเตอร์: {data.get('motor_nameplate', '-')}")
+    c.drawString(2 * cm, height - 7.3 * cm, f"อัตราทดเกียร์: {data.get('gear_ratio', '-')}")
+    c.drawString(2 * cm, height - 8.0 * cm, f"เสียงเกียร์: {data.get('gear_sound', '-')}")
+    c.drawString(2 * cm, height - 8.7 * cm, f"ค่ากระแส: {data.get('motor_current', '-')}")
+    c.drawString(2 * cm, height - 9.4 * cm, f"น้ำมันเกียร์: {data.get('oil_liters', '-')} ลิตร - {data.get('oil_filled', '-')}")
+    c.drawString(2 * cm, height - 10.1 * cm, f"รับประกัน: {data.get('warranty', '-')} เดือน")
 
     today = datetime.date.today().strftime("%Y-%m-%d")
-    c.drawString(2 * cm, height - 10.8 * cm, f"Generated Date: {today}")
+    c.drawString(2 * cm, height - 10.8 * cm, f"วันที่จัดทำ: {today}")
 
     # === Calculate Warranty Expiry ===
     warranty_months = int(data.get('warranty', '0'))
     start_date = data.get('date', today)
     expiry_date = calculate_warranty_expiry(start_date, warranty_months)
-    c.drawString(2 * cm, height - 11.5 * cm, f"Warranty Expires: {expiry_date.strftime('%Y-%m-%d')}")
+    c.drawString(2 * cm, height - 11.5 * cm, f"หมดระยะรับประกัน: {expiry_date.strftime('%Y-%m-%d')}")
 
     c.showPage()
 
@@ -77,7 +82,7 @@ def create_qc_pdf(data, image_urls):
                 img_io.seek(0)
 
                 label = IMAGE_LABELS.get(key, "รูปภาพประกอบ")
-                c.setFont("Helvetica-Bold", 14)
+                c.setFont("THSarabun", 22)
                 c.drawString(2 * cm, height - 2.5 * cm, label)
                 c.drawImage(ImageReader(img_io), 2 * cm, 4 * cm, width=15 * cm, preserveAspectRatio=True)
                 c.showPage()
@@ -86,9 +91,9 @@ def create_qc_pdf(data, image_urls):
                 continue
 
     # === Footer ===
-    c.setFont("Helvetica", 10)
-    c.drawString(2 * cm, 1 * cm, "📞 SAS Service: 081-921622")
-    c.drawRightString(width - 2 * cm, 1 * cm, "📞 SAS Sales: 081-921622")
+    c.setFont("THSarabun", 18)
+    c.drawString(2 * cm, 1 * cm, "📞 SAS Service: 081-9216225")
+    c.drawRightString(width - 2 * cm, 1 * cm, "📞 SAS Sales: 081-9216225 คุณสมยศ")
 
     c.save()
     buffer.seek(0)

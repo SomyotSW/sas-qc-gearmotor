@@ -147,7 +147,7 @@ def download_pdf(serial_number):
 @app.route('/qr/<serial_number>')
 def generate_qr(serial_number):
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
-    qr.add_data(serial_number)
+    qr.add_data(f"https://sas-qc-gearmotor-app.web.app/download/{serial_number}")  # ✅ พาไปลิงก์ PDF
     qr.make(fit=True)
     img = qr.make_image(fill='black', back_color='white')
     qr_stream = io.BytesIO()
