@@ -97,7 +97,7 @@ def submit():
             "oil_filled": oil_filled,
             "images": images,
             "date": datetime.datetime.now().strftime("%Y-%m-%d")
-        })
+        }, image_urls=list(images.values()))
 
         # ✅ อัปโหลด QR และ PDF ขึ้น Firebase
         qr_blob = bucket.blob(f"qr_codes/{serial}.pdf")
@@ -146,7 +146,7 @@ def download_pdf(serial_number):
     report_data = ref.child(serial_number).get()
     if not report_data:
         return "Report not found", 404
-    pdf_stream = create_qc_pdf(report_data)
+    pdf_stream = create_qc_pdf(report_data, image_urls=list(report_data.get("images", {}).values()))
     return send_file(
         pdf_stream,
         as_attachment=True,
@@ -165,11 +165,8 @@ def generate_qr(serial_number):
     qr_stream = io.BytesIO()
     img.save(qr_stream, 'PNG')
     qr_stream.seek(0)
-    return send_file(
-        qr_stream,
-        mimetype='image/png',
-        download_name=f'{serial_number}.png'
-    )
+    return send_file(qr_stream, mimetype='image/png', download_name=f'{serial_number}.png')
+
 
 if __name__ == '__main__':
     app.run(debug=True)
