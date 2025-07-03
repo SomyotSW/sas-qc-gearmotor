@@ -11,31 +11,31 @@ def create_qc_pdf(data, image_urls):
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    # Header
     c.setFont("Helvetica-Bold", 16)
     c.drawString(2 * cm, height - 2 * cm, "SAS QC Gear Motor Report")
 
     c.setFont("Helvetica", 12)
-    c.drawString(2 * cm, height - 3 * cm, f"Serial Number: {data['serial']}")
-    c.drawString(2 * cm, height - 4 * cm, f"Inspector: {data['inspector']}")
-    c.drawString(2 * cm, height - 5 * cm, f"Product Type: {data['product_type']}")
-    c.drawString(2 * cm, height - 6 * cm, f"Motor Nameplate: {data['motor_nameplate']}")
-    c.drawString(2 * cm, height - 7 * cm, f"Date: {data['date']}")
+    y = height - 3 * cm
+    line_height = 1 * cm
 
-    c.drawString(2 * cm, height - 8 * cm, "Test Result:")
-    text_obj = c.beginText(2.5 * cm, height - 8.7 * cm)
-    text_obj.setFont("Helvetica", 11)
-    for line in data.get('test_result', '-').splitlines():
-        text_obj.textLine(line)
-    c.drawText(text_obj)
+    # Helper function to draw line safely
+    def draw_safe_line(label, value):
+        nonlocal y
+        value = value if value not in [None, ""] else "-"
+        c.drawString(2 * cm, y, f"{label}: {value}")
+        y -= line_height
 
-    if data.get('note'):
-        c.drawString(2 * cm, height - 10.5 * cm, "Note:")
-        text_obj = c.beginText(2.5 * cm, height - 11.2 * cm)
-        text_obj.setFont("Helvetica", 11)
-        for line in data['note'].splitlines():
-            text_obj.textLine(line)
-        c.drawText(text_obj)
+    draw_safe_line("Serial Number", data.get("serial"))
+    draw_safe_line("Inspector", data.get("inspector"))
+    draw_safe_line("Product Type", data.get("product_type"))
+    draw_safe_line("Motor Nameplate", data.get("motor_nameplate"))
+    draw_safe_line("Motor Current (A)", data.get("motor_current"))
+    draw_safe_line("Gear Ratio", f"1:{data.get('gear_ratio', '-')}")
+    draw_safe_line("Gear Sound", data.get("gear_sound"))
+    draw_safe_line("Oil Filled", data.get("oil_filled"))
+    draw_safe_line("Oil Liters", data.get("oil_liters"))
+    draw_safe_line("Warranty (months)", data.get("warranty"))
+    draw_safe_line("Date", data.get("date"))
 
     c.showPage()
 
