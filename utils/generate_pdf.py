@@ -4,6 +4,7 @@ from reportlab.lib.units import cm
 from io import BytesIO
 from PIL import Image
 import requests
+from reportlab.lib.utils import ImageReader
 
 def create_qc_pdf(data, image_urls):
     buffer = BytesIO()
@@ -18,13 +19,13 @@ def create_qc_pdf(data, image_urls):
     c.drawString(2 * cm, height - 3 * cm, f"Serial Number: {data['serial']}")
     c.drawString(2 * cm, height - 4 * cm, f"Inspector: {data['inspector']}")
     c.drawString(2 * cm, height - 5 * cm, f"Product Type: {data['product_type']}")
-    c.drawString(2 * cm, height - 6 * cm, f"Model: {data['model']}")
+    c.drawString(2 * cm, height - 6 * cm, f"Motor Nameplate: {data['motor_nameplate']}")
     c.drawString(2 * cm, height - 7 * cm, f"Date: {data['date']}")
 
     c.drawString(2 * cm, height - 8 * cm, "Test Result:")
     text_obj = c.beginText(2.5 * cm, height - 8.7 * cm)
     text_obj.setFont("Helvetica", 11)
-    for line in data['test_result'].splitlines():
+    for line in data.get('test_result', '-').splitlines():
         text_obj.textLine(line)
     c.drawText(text_obj)
 
@@ -56,5 +57,3 @@ def create_qc_pdf(data, image_urls):
     c.save()
     buffer.seek(0)
     return buffer
-
-from reportlab.lib.utils import ImageReader
