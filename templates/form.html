@@ -1,158 +1,187 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ฟอร์มตรวจสอบ QC มอเตอร์เกียร์</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            background: url('/static/bg.jpg') no-repeat center center fixed;
-            background-size: cover;
-        }
-        .backdrop {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 20px;
-            padding: 30px;
-            max-width: 800px;
-            margin: auto;
-        }
-        .logo {
-            position: absolute;
-            top: 20px;
-            right: 30px;
-            width: 120px;
-        }
-        label {
-            font-weight: bold;
-        }
-        .form-control, .form-select {
-            margin-bottom: 15px;
-        }
-        .submit-btn {
-            margin-top: 20px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ฟอร์มตรวจสอบ QC มอเตอร์เกียร์</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: url('/static/BG.png') no-repeat center center fixed;
+      background-size: cover;
+    }
+    .backdrop {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 20px;
+      padding: 30px;
+      max-width: 800px;
+      margin: auto;
+      position: relative;
+      z-index: 1;
+    }
+    .logo {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      width: 120px;
+    }
+    .form-control, .form-select {
+      margin-bottom: 15px;
+    }
+    #overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(255, 255, 255, 0.6);
+      backdrop-filter: blur(5px);
+      z-index: 9999;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+    .spinner-border {
+      width: 4rem;
+      height: 4rem;
+    }
+    .waiting-text {
+      margin-top: 1rem;
+      font-size: 1.5rem;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
-    <img src="/static/logo_sas.png" alt="SAS Logo" class="logo">
-    <div class="container mt-5">
-        <div class="backdrop shadow">
-            <h2 class="text-center mb-4">แบบฟอร์มตรวจสอบ QC มอเตอร์เกียร์</h2>
-            <form action="/submit" method="POST" enctype="multipart/form-data">
-                <input type="hidden" name="inspector" value="{{ employee_id }}">
+  <img src="/static/logo_sas.png" alt="SAS Logo" class="logo">
+  <div id="overlay">
+    <div class="spinner-border text-primary" role="status"></div>
+    <div class="waiting-text">⏳ กรุณารอสักครู่...</div>
+  </div>
 
-                <div class="row">
-                    <div class="col-md-6">
-                        <label>ประเภทสินค้า</label>
-                        <select name="product_type" id="product_type" class="form-select" required onchange="handleProductChange()">
-                            <option value="">-- เลือกประเภทสินค้า --</option>
-                            <option value="AC/DC Gear Motor">AC/DC Gear Motor</option>
-                            <option value="BLDC Gear Motor">BLDC Gear Motor</option>
-                            <option value="Servo Motor">Servo Motor</option>
-                            <option value="Planetary Gear">Planetary Gear</option>
-                            <option value="RFKS Series">RFKS Series</option>
-                            <option value="MTH/MTB Gearbox">MTH/MTB Gearbox</option>
-                            <option value="SAS Motor">SAS Motor</option>
-                        </select>
-                    </div>
-                    <div class="col-md-6">
-                        <label>ชื่อมอเตอร์</label>
-                        <input type="text" name="motor_nameplate" class="form-control" required>
-                    </div>
-                </div>
+  <div class="container mt-5">
+    <div class="backdrop shadow">
+      <h2 class="text-center mb-4">แบบฟอร์มตรวจสอบ QC มอเตอร์เกียร์</h2>
+      <form action="/submit" method="POST" enctype="multipart/form-data" onsubmit="return showLoading()">
+        <input type="hidden" name="inspector" value="{{ employee_id }}">
 
-                <div class="row" id="acdc_options" style="display: none;">
-                    <div class="col-12">
-                        <label>เลือกส่วนประกอบที่ตรวจสอบ</label><br>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" name="acdc_parts" value="Motor" id="motor_part">
-                            <label class="form-check-label" for="motor_part">Motor</label>
-                        </div>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" name="acdc_parts" value="Gear Head" id="gear_part">
-                            <label class="form-check-label" for="gear_part">Gear head</label>
-                        </div>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" name="acdc_parts" value="Controller" id="controller_part">
-                            <label class="form-check-label" for="controller_part">Controller</label>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6">
-                        <label>อัตราทดเกียร์</label>
-                        <input type="text" name="gear_ratio" class="form-control" required>
-                    </div>
-                    <div class="col-md-6">
-                        <label>เสียงเกียร์</label>
-                        <input type="text" name="gear_sound" class="form-control" required>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6">
-                        <label>ค่ากระแส</label>
-                        <input type="text" name="motor_current" class="form-control" required>
-                    </div>
-                    <div class="col-md-6">
-                        <label>จำนวนเดือนรับประกัน</label>
-                        <input type="number" name="warranty" class="form-control" required>
-                    </div>
-                </div>
-
-                <div class="row" id="oil_section">
-                    <div class="col-md-6">
-                        <label>น้ำมันเกียร์ (ลิตร)</label>
-                        <input type="text" name="oil_liters" class="form-control">
-                    </div>
-                    <div class="col-md-6">
-                        <label>เติมน้ำมันเกียร์แล้ว</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="oil_filled" id="oil_filled">
-                            <label class="form-check-label" for="oil_filled">ใช่</label>
-                        </div>
-                    </div>
-                </div>
-
-                <hr>
-                <div class="row">
-                    <div class="col-md-4">
-                        <label>ภาพการวัดค่ากระแส</label>
-                        <input type="file" name="motor_current_img" accept="image/*" class="form-control">
-                    </div>
-                    <div class="col-md-4">
-                        <label>ภาพการวัดเสียงเกียร์</label>
-                        <input type="file" name="gear_sound_img" accept="image/*" class="form-control">
-                    </div>
-                    <div class="col-md-4">
-                        <label>ภาพประกอบหน้างาน</label>
-                        <input type="file" name="assembly_img" accept="image/*" class="form-control">
-                    </div>
-                </div>
-
-                <div class="text-center submit-btn">
-                    <button type="submit" class="btn btn-primary btn-lg px-5">✅ ส่งข้อมูล QC</button>
-                </div>
-            </form>
+        <div class="row">
+          <div class="col-md-6">
+            <label>ประเภทสินค้า</label>
+            <select name="product_type" id="product_type" class="form-select" required onchange="handleProductChange()">
+              <option value="">-- เลือกประเภทสินค้า --</option>
+              <option value="AC/DC Gear Motor">AC/DC Gear Motor</option>
+              <option value="BLDC Gear Motor">BLDC Gear Motor</option>
+              <option value="Servo Motor">Servo Motor</option>
+              <option value="Planetary Gear">Planetary Gear</option>
+              <option value="RFKS Series">RFKS Series</option>
+              <option value="MTH/MTB Gearbox">MTH/MTB Gearbox</option>
+              <option value="SAS Motor">SAS Motor</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label>ชื่อมอเตอร์</label>
+            <input type="text" name="motor_nameplate" class="form-control" required>
+          </div>
         </div>
+
+        <div class="row" id="acdc_options" style="display: none;">
+          <div class="col-12">
+            <label>เลือกส่วนประกอบที่ตรวจสอบ</label><br>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" name="acdc_parts" value="Motor" id="motor_part">
+              <label class="form-check-label" for="motor_part">Motor</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" name="acdc_parts" value="Gear Head" id="gear_part">
+              <label class="form-check-label" for="gear_part">Gear head</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" name="acdc_parts" value="Controller" id="controller_part">
+              <label class="form-check-label" for="controller_part">Controller</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6">
+            <label>อัตราทดเกียร์</label>
+            <input type="text" name="gear_ratio" class="form-control" required>
+          </div>
+          <div class="col-md-6">
+            <label>เสียงเกียร์</label>
+            <input type="text" name="gear_sound" class="form-control" required>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6">
+            <label>ค่ากระแส</label>
+            <input type="text" name="motor_current" class="form-control" required>
+          </div>
+          <div class="col-md-6">
+            <label>จำนวนเดือนรับประกัน</label>
+            <input type="number" name="warranty" class="form-control" required>
+          </div>
+        </div>
+
+        <div class="row" id="oil_section">
+          <div class="col-md-6">
+            <label>น้ำมันเกียร์ (ลิตร)</label>
+            <input type="text" name="oil_liters" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label>เติมน้ำมันเกียร์แล้ว</label>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="oil_filled" id="oil_filled">
+              <label class="form-check-label" for="oil_filled">ใช่</label>
+            </div>
+          </div>
+        </div>
+
+        <hr>
+        <div class="row">
+          <div class="col-md-4">
+            <label>ภาพการวัดค่ากระแส</label>
+            <input type="file" name="motor_current_img" accept="image/*" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label>ภาพการวัดเสียงเกียร์</label>
+            <input type="file" name="gear_sound_img" accept="image/*" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label>ภาพประกอบหน้างาน</label>
+            <input type="file" name="assembly_img" accept="image/*" class="form-control">
+          </div>
+        </div>
+
+        <div class="text-center mt-4">
+          <button type="submit" class="btn btn-primary btn-lg px-5">✅ ส่งข้อมูล QC</button>
+        </div>
+      </form>
     </div>
+  </div>
 
-    <script>
+  <audio id="voice" src="/static/waiting_voice.mp3"></audio>
+
+  <script>
     function handleProductChange() {
-        const product = document.getElementById("product_type").value;
-        const acdcSection = document.getElementById("acdc_options");
-        const oilSection = document.getElementById("oil_section");
+      const product = document.getElementById("product_type").value;
+      const acdcSection = document.getElementById("acdc_options");
+      const oilSection = document.getElementById("oil_section");
 
-        if (product === "AC/DC Gear Motor") {
-            acdcSection.style.display = "block";
-            oilSection.style.display = "none";
-        } else {
-            acdcSection.style.display = "none";
-            oilSection.style.display = "flex";
-        }
+      if (product === "AC/DC Gear Motor") {
+        acdcSection.style.display = "block";
+        oilSection.style.display = "none";
+      } else {
+        acdcSection.style.display = "none";
+        oilSection.style.display = "flex";
+      }
     }
-    </script>
+
+    function showLoading() {
+      document.getElementById("overlay").style.display = "flex";
+      document.getElementById("voice").play();
+      return true;
+    }
+  </script>
 </body>
 </html>

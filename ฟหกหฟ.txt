@@ -9,3 +9,6 @@ services:
       - key: GOOGLE_APPLICATION_CREDENTIALS
         value: sas-qc-gearmotor-app.json
     autoDeploy: true
+
+
+'storageBucket': 'sas-qc-gearmotor-app.firebasestorage.app'

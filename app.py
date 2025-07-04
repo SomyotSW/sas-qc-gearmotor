@@ -45,7 +45,6 @@ def submit():
         if not request.content_type.startswith('multipart/form-data'):
             return "Invalid Content-Type", 400
 
-        # === Extract Form Fields ===
         product_type = request.form.get('product_type')
         motor_nameplate = request.form.get('motor_nameplate')
         motor_current = request.form.get('motor_current')
@@ -78,34 +77,7 @@ def submit():
             "assembly_img": upload_image(assembly_img, "assembly")
         }
 
-        # === Create Files ===
-        qr_stream = generate_qr_code(serial)
-        pdf_stream = create_qc_pdf({
-            "serial": serial,
-            "product_type": product_type,
-            "motor_nameplate": motor_nameplate,
-            "motor_current": motor_current,
-            "gear_ratio": gear_ratio,
-            "gear_sound": gear_sound,
-            "warranty": warranty,
-            "inspector": inspector,
-            "oil_liters": oil_liters,
-            "oil_filled": oil_filled,
-            "images": images,
-            "date": datetime.datetime.now().strftime("%Y-%m-%d")
-        }, image_urls=list(images.values()))
-
-        # === Upload to Firebase ===
-        qr_blob = bucket.blob(f"qr_codes/{serial}.png")
-        qr_blob.upload_from_file(qr_stream, content_type="image/png")
-        qr_blob.make_public()
-
-        report_blob = bucket.blob(f"qc_reports/{serial}.pdf")
-        pdf_stream.seek(0)
-        report_blob.upload_from_file(pdf_stream, content_type="application/pdf")
-        report_blob.make_public()
-
-        # === Save to Realtime DB ===
+        # ✅ บันทึกข้อมูลเบื้องต้นก่อน Redirect ไป finalize
         ref.child(serial).set({
             "serial": serial,
             "product_type": product_type,
@@ -118,15 +90,42 @@ def submit():
             "oil_liters": oil_liters,
             "oil_filled": oil_filled,
             "images": images,
-            "qc_pdf_url": report_blob.public_url,
-            "qr_png_url": qr_blob.public_url,
             "date": datetime.datetime.now().strftime("%Y-%m-%d")
+        })
+
+        return redirect(url_for('finalize', serial=serial))
+
+    except Exception as e:
+        return f"เกิดข้อผิดพลาด: {e}", 400
+
+@app.route('/finalize/<serial>')
+def finalize(serial):
+    try:
+        data = ref.child(serial).get()
+        if not data:
+            return "ไม่พบข้อมูล", 404
+
+        # ✅ สร้าง PDF และ QR แยก route
+        pdf_stream = create_qc_pdf(data, image_urls=list(data.get("images", {}).values()))
+        pdf_stream.seek(0)
+        report_blob = bucket.blob(f"qc_reports/{serial}.pdf")
+        report_blob.upload_from_file(pdf_stream, content_type="application/pdf")
+        report_blob.make_public()
+
+        qr_stream = generate_qr_code(serial)
+        qr_blob = bucket.blob(f"qr_codes/{serial}.png")
+        qr_blob.upload_from_file(qr_stream, content_type="image/png")
+        qr_blob.make_public()
+
+        ref.child(serial).update({
+            "qc_pdf_url": report_blob.public_url,
+            "qr_png_url": qr_blob.public_url
         })
 
         return redirect(url_for('success', serial=serial))
 
     except Exception as e:
-        return f"เกิดข้อผิดพลาด: {e}", 400
+        return f"เกิดข้อผิดพลาดตอน finalize: {e}", 500
 
 @app.route('/success')
 def success():
@@ -152,7 +151,7 @@ def download_pdf(serial_number):
 @app.route('/qr/<serial_number>')
 def generate_qr(serial_number):
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
-    link = f"https://sas-qc-gearmotor.onrender.com/autodownload/{serial_number}"  # ✅ ต้องใช้ Render
+    link = f"https://sas-qc-gearmotor.onrender.com/autodownload/{serial_number}"
     qr.add_data(link)
     qr.make(fit=True)
     img = qr.make_image(fill_color='black', back_color='white')
@@ -173,5 +172,6 @@ def autodownload(serial_number):
                      download_name=f"{serial_number}_QC_Report.pdf",
                      mimetype='application/pdf')
 
+# ✅ สำหรับรัน local
 if __name__ == '__main__':
     app.run(debug=True)
