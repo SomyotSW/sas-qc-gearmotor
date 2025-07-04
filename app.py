@@ -172,6 +172,7 @@ def autodownload(serial_number):
                      as_attachment=True,
                      download_name=f"{serial_number}_QC_Report.pdf",
                      mimetype='application/pdf')
+app = Flask(__name__)
 
 if __name__ == '__main__':
     app.run(debug=True)
