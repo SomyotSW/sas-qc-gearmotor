@@ -1,100 +1,126 @@
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import cm
-from reportlab.lib.utils import ImageReader
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from io import BytesIO
-from PIL import Image
-import datetime
+from reportlab.lib.colors import red
+import io
 import requests
+from PIL import Image
 
-# Register Thai font
-pdfmetrics.registerFont(TTFont('THSarabun', 'static/fonts/THSarabunNew.ttf'))
 
-# Path to logo in project
-LOGO_PATH = "static/logo_sas.png"
+def draw_image(c, image_url, x, y, width):
+    try:
+        img_data = requests.get(image_url).content
+        img = Image.open(io.BytesIO(img_data))
+        aspect = img.height / img.width
+        height = width * aspect
+        img_io = io.BytesIO()
+        img.save(img_io, format='PNG')
+        img_io.seek(0)
+        c.drawImage(ImageReader(img_io), x, y - height, width, height)
+    except Exception as e:
+        print(f"Error loading image {image_url}: {e}")
 
-# === Map image to header ===
-IMAGE_LABELS = {
-    "motor_current_img": "ภาพการวัดค่ากระแส (Motor Current)",
-    "gear_sound_img": "ภาพการวัดเสียงเกียร์ (Gear Sound)",
-    "assembly_img": "ภาพประกอบหน้างาน (Assembly)"
-}
 
-def calculate_warranty_expiry(start_date_str, months):
-    start_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d")
-    year = start_date.year + ((start_date.month + months - 1) // 12)
-    month = (start_date.month + months - 1) % 12 + 1
-    day = min(start_date.day, 28)
-    return datetime.date(year, month, day)
-
-def create_qc_pdf(data, image_urls):
-    buffer = BytesIO()
+def create_qc_pdf(data, image_urls=[]):
+    buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
+    margin = 2 * cm
+    line = height - margin
 
-    # === Logo ===
-    try:
-        logo_img = Image.open(LOGO_PATH)
-        logo_io = BytesIO()
-        logo_img.save(logo_io, format='PNG')
-        logo_io.seek(0)
-        c.drawImage(ImageReader(logo_io), 1.5 * cm, height - 3 * cm, width=3 * cm, preserveAspectRatio=True)
-    except Exception as e:
-        print(f"Logo Error: {e}")
+    def draw_text(text, bold=False, color=None):
+        nonlocal line
+        if bold:
+            c.setFont("Helvetica-Bold", 12)
+        else:
+            c.setFont("Helvetica", 12)
+        if color:
+            c.setFillColor(color)
+        else:
+            c.setFillColorRGB(0, 0, 0)
+        c.drawString(margin, line, text)
+        line -= 18
 
-    # === Header ===
-    c.setFont("THSarabun", 24)
-    c.drawString(5 * cm, height - 2.5 * cm, "รายงานการตรวจสอบ QC มอเตอร์เกียร์ (SAS)")
+    # Title
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(width / 2, line, "รายงานการตรวจสอบ QC มอเตอร์เกียร์")
+    line -= 30
 
-    c.setFont("THSarabun", 20)
-    c.drawString(2 * cm, height - 4.5 * cm, f"หมายเลขซีเรียล: {data.get('serial', '-')}")
-    c.drawString(2 * cm, height - 5.2 * cm, f"ผู้ตรวจสอบ: {data.get('inspector', '-')}")
-    c.drawString(2 * cm, height - 5.9 * cm, f"ประเภทสินค้า: {data.get('product_type', '-')}")
-    c.drawString(2 * cm, height - 6.6 * cm, f"ชื่อมอเตอร์: {data.get('motor_nameplate', '-')}")
-    c.drawString(2 * cm, height - 7.3 * cm, f"อัตราทดเกียร์: {data.get('gear_ratio', '-')}")
-    c.drawString(2 * cm, height - 8.0 * cm, f"เสียงเกียร์: {data.get('gear_sound', '-')}")
-    c.drawString(2 * cm, height - 8.7 * cm, f"ค่ากระแส: {data.get('motor_current', '-')}")
-    c.drawString(2 * cm, height - 9.4 * cm, f"น้ำมันเกียร์: {data.get('oil_liters', '-')} ลิตร - {data.get('oil_filled', '-')}")
-    c.drawString(2 * cm, height - 10.1 * cm, f"รับประกัน: {data.get('warranty', '-')} เดือน")
+    # ข้อมูลทั่วไป
+    draw_text(f"Serial Number: {data.get('serial', '-')}", bold=True)
+    draw_text(f"วันที่ตรวจสอบ: {data.get('date', '-')}")
+    draw_text(f"ประเภทสินค้า: {data.get('product_type', '-')}")
+    draw_text(f"ชื่อมอเตอร์: {data.get('motor_nameplate', '-')}")
 
-    today = datetime.date.today().strftime("%Y-%m-%d")
-    c.drawString(2 * cm, height - 10.8 * cm, f"วันที่จัดทำ: {today}")
+    # เงื่อนไขการแสดงผล
+    product_type = data.get("product_type", "").lower()
+    is_acdc_or_bldc = "ac/dc" in product_type or "bldc" in product_type
+    is_servo = "servo" in product_type
+    is_other = not is_acdc_or_bldc and not is_servo
 
-    # === Calculate Warranty Expiry ===
-    warranty_months = int(data.get('warranty', '0'))
-    start_date = data.get('date', today)
-    expiry_date = calculate_warranty_expiry(start_date, warranty_months)
-    c.drawString(2 * cm, height - 11.5 * cm, f"หมดระยะรับประกัน: {expiry_date.strftime('%Y-%m-%d')}")
+    # เฉพาะ Servo
+    if is_servo:
+        draw_text("**ไม่ประกอบสินค้า", bold=True, color=red)
+        draw_text("**ไม่เติมน้ำมันเกียร์", bold=True, color=red)
 
-    c.showPage()
+    draw_text("")
 
-    # === Images with labels ===
-    for key, url in data.get("images", {}).items():
-        if url:
-            try:
-                response = requests.get(url)
-                img = Image.open(BytesIO(response.content))
-                img.thumbnail((500, 500))
-                img_io = BytesIO()
-                img.save(img_io, format='PNG')
-                img_io.seek(0)
+    # รายละเอียดการตรวจสอบ
+    if data.get("motor_current"):
+        draw_text(f"ค่ากระแสมอเตอร์: {data['motor_current']} A")
+    if data.get("gear_ratio"):
+        draw_text(f"อัตราทดเกียร์: {data['gear_ratio']}")
+    if data.get("gear_sound"):
+        draw_text(f"เสียงเกียร์: {data['gear_sound']} dB")
 
-                label = IMAGE_LABELS.get(key, "รูปภาพประกอบ")
-                c.setFont("THSarabun", 22)
-                c.drawString(2 * cm, height - 2.5 * cm, label)
-                c.drawImage(ImageReader(img_io), 2 * cm, 4 * cm, width=15 * cm, preserveAspectRatio=True)
-                c.showPage()
-            except Exception as e:
-                print(f"Error loading image: {e}")
-                continue
+    # เงื่อนไขเติมน้ำมัน
+    if not is_acdc_or_bldc and not is_servo:
+        draw_text(f"น้ำมันเกียร์ (ลิตร): {data.get('oil_liters', '-') or '-'} ลิตร")
+        draw_text(f"สถานะการเติมน้ำมัน: {data.get('oil_filled', '-')}")
+    elif is_acdc_or_bldc:
+        draw_text("*ไม่ต้องเติมน้ำมันเกียร์", bold=True, color=red)
+
+    # Warranty
+    draw_text(f"ระยะเวลารับประกัน: {data.get('warranty', '-')} เดือน", bold=True, color=red)
+
+    # Inspector
+    draw_text(f"ผู้ตรวจสอบ: {data.get('inspector', '-')}")
+
+    # หมายเหตุอื่น ๆ
+    if is_servo:
+        draw_text("")
+        draw_text("**การรับประกันสินค้า 18 เดือน", bold=True, color=red)
+
+    # รูปภาพ
+    line -= 20
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(margin, line, "ภาพประกอบ:")
+    line -= 20
+
+    img_x = margin
+    img_y = line
+    img_width = 6 * cm
+
+    for url in image_urls:
+        if line < 5 * cm:
+            c.showPage()
+            line = height - margin
+            img_y = line
+        draw_image(c, url, img_x, img_y, img_width)
+        img_x += img_width + 1 * cm
+        if img_x + img_width > width - margin:
+            img_x = margin
+            img_y -= 6 * cm
+
 
     # === Footer ===
+        c.showPage()
     c.setFont("THSarabun", 18)
     c.drawString(2 * cm, 1 * cm, "📞 SAS Service: 081-9216225")
     c.drawRightString(width - 2 * cm, 1 * cm, "📞 SAS Sales: 081-9216225 คุณสมยศ")
-
     c.save()
     buffer.seek(0)
     return buffer
+
+# รองรับรูปภาพด้วย ImageReader
+from reportlab.lib.utils import ImageReader

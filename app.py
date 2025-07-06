@@ -11,7 +11,7 @@ import json
 import qrcode
 
 app = Flask(__name__)
-app.secret_key = "sas_qc_secret_key"
+app.secret_key = 'your_secret_key_here'  # ใช้สำหรับ session
 app.config['UPLOAD_FOLDER'] = 'uploads'
 
 # ==== Load Firebase Credential from Environment ====
@@ -26,37 +26,26 @@ firebase_admin.initialize_app(cred, {
 ref = db.reference("/qc_data")
 bucket = storage.bucket()
 
-# ====== ROUTES ======
-
 @app.route('/')
 def home():
     return render_template('index.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    allowed_ids = ['QC001', 'QC002', 'QC003']
-
     if request.method == 'POST':
         employee_id = request.form.get('employee_id')
-
+        allowed_ids = ['QC001', 'QC002', 'QC003']
         if employee_id not in allowed_ids:
-            return render_template('login.html', error="รหัสพนักงานไม่ถูกต้อง")
-
+            return "รหัสพนักงานไม่ถูกต้อง", 403
         session['employee_id'] = employee_id
-        return redirect('/login?welcome=1')  # ✅ redirect พร้อมสัญญาณว่ารหัสถูก
-
+        return redirect(url_for('form'))
     return render_template('login.html')
-
-@app.route('/logout')
-def logout():
-    session.pop('employee_id', None)
-    return redirect('/login')
 
 @app.route('/form')
 def form():
     if 'employee_id' not in session:
-        return redirect('/login')
-    return render_template('form.html', employee_id=session.get('employee_id'))
+        return redirect(url_for('login'))
+    return render_template('form.html', employee_id=session['employee_id'])
 
 @app.route('/submit', methods=['POST'])
 def submit():
@@ -64,6 +53,7 @@ def submit():
         if not request.content_type.startswith('multipart/form-data'):
             return "Invalid Content-Type", 400
 
+        # === Extract Form Fields ===
         product_type = request.form.get('product_type')
         motor_nameplate = request.form.get('motor_nameplate')
         motor_current = request.form.get('motor_current')
@@ -73,14 +63,13 @@ def submit():
         inspector = request.form.get('inspector')
         oil_liters = request.form.get('oil_liters')
         oil_filled = 'เติมแล้ว' if request.form.get('oil_filled') else 'ยังไม่เติม'
+        acdc_parts = request.form.getlist('acdc_parts')
 
-        motor_current_img = request.files.get('motor_current_img')
-        gear_sound_img = request.files.get('gear_sound_img')
-        assembly_img = request.files.get('assembly_img')
+        # Servo ข้อมูลพิเศษ
+        servo_motor_model = request.form.get('servo_motor_model')
+        servo_drive_model = request.form.get('servo_drive_model')
 
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        serial = f"SAS{timestamp}"
-
+        # === Image Upload ===
         def upload_image(file, field_name):
             if file and file.filename:
                 filename = secure_filename(file.filename)
@@ -90,12 +79,28 @@ def submit():
                 return blob.public_url
             return None
 
+        motor_current_img = request.files.get('motor_current_img')
+        gear_sound_img = request.files.get('gear_sound_img')
+        assembly_img = request.files.get('assembly_img')
+        controller_img = request.files.get('controller_img')
+        servo_motor_img = request.files.get('servo_motor_img')
+        servo_drive_img = request.files.get('servo_drive_img')
+        cable_wire_img = request.files.get('cable_wire_img')
+
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        serial = f"SAS{timestamp}"
+
         images = {
             "motor_current_img": upload_image(motor_current_img, "motor_current"),
             "gear_sound_img": upload_image(gear_sound_img, "gear_sound"),
-            "assembly_img": upload_image(assembly_img, "assembly")
+            "assembly_img": upload_image(assembly_img, "assembly"),
+            "controller_img": upload_image(controller_img, "controller"),
+            "servo_motor_img": upload_image(servo_motor_img, "servo_motor"),
+            "servo_drive_img": upload_image(servo_drive_img, "servo_drive"),
+            "cable_wire_img": upload_image(cable_wire_img, "cable_wire")
         }
 
+        # === Save Partial Data ===
         ref.child(serial).set({
             "serial": serial,
             "product_type": product_type,
@@ -107,6 +112,9 @@ def submit():
             "inspector": inspector,
             "oil_liters": oil_liters,
             "oil_filled": oil_filled,
+            "acdc_parts": acdc_parts,
+            "servo_motor_model": servo_motor_model,
+            "servo_drive_model": servo_drive_model,
             "images": images,
             "date": datetime.datetime.now().strftime("%Y-%m-%d")
         })
@@ -120,20 +128,20 @@ def submit():
 def finalize(serial):
     try:
         data = ref.child(serial).get()
-        if not data:
-            return "ไม่พบข้อมูล", 404
-
         pdf_stream = create_qc_pdf(data, image_urls=list(data.get("images", {}).values()))
-        pdf_stream.seek(0)
-        report_blob = bucket.blob(f"qc_reports/{serial}.pdf")
-        report_blob.upload_from_file(pdf_stream, content_type="application/pdf")
-        report_blob.make_public()
-
         qr_stream = generate_qr_code(serial)
+
+        # === Upload ===
         qr_blob = bucket.blob(f"qr_codes/{serial}.png")
         qr_blob.upload_from_file(qr_stream, content_type="image/png")
         qr_blob.make_public()
 
+        report_blob = bucket.blob(f"qc_reports/{serial}.pdf")
+        pdf_stream.seek(0)
+        report_blob.upload_from_file(pdf_stream, content_type="application/pdf")
+        report_blob.make_public()
+
+        # === Update DB ===
         ref.child(serial).update({
             "qc_pdf_url": report_blob.public_url,
             "qr_png_url": qr_blob.public_url
@@ -142,7 +150,7 @@ def finalize(serial):
         return redirect(url_for('success', serial=serial))
 
     except Exception as e:
-        return f"เกิดข้อผิดพลาดตอน finalize: {e}", 500
+        return f"เกิดข้อผิดพลาดในการ finalize: {e}", 500
 
 @app.route('/success')
 def success():
