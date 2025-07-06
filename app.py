@@ -45,9 +45,8 @@ def login():
         session['employee_id'] = employee_id
         return redirect('/form')
 
-    if 'employee_id' in session:
-        return redirect('/form')
-
+    # ❌ ห้าม redirect ไป form อัตโนมัติเด็ดขาด
+    # ✅ ให้แสดง login.html เสมอ
     return render_template('login.html')
 
 @app.route('/logout')
