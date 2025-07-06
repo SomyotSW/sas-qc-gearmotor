@@ -11,8 +11,8 @@ import json
 import qrcode
 
 app = Flask(__name__)
+app.secret_key = "sas_qc_secret_key"
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.secret_key = "sas_qc_secret_key"  # สำหรับใช้ session
 
 # ==== Load Firebase Credential from Environment ====
 firebase_json = json.loads(os.environ.get("FIREBASE_CREDENTIAL_JSON"))
@@ -26,13 +26,11 @@ firebase_admin.initialize_app(cred, {
 ref = db.reference("/qc_data")
 bucket = storage.bucket()
 
+# ====== ROUTES ======
+
 @app.route('/')
 def home():
-    # ถ้าล็อกอินแล้ว ให้เข้า form ได้เลย
-    if 'employee_id' in session:
-        return redirect('/form')
-    return redirect('/login')
-
+    return render_template('index.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -42,29 +40,26 @@ def login():
         employee_id = request.form.get('employee_id')
 
         if employee_id not in allowed_ids:
-            # แสดงหน้า login.html พร้อม error
             return render_template('login.html', error="รหัสพนักงานไม่ถูกต้อง")
 
-        # เก็บ session
         session['employee_id'] = employee_id
         return redirect('/form')
 
-    # ถ้าล็อกอินอยู่แล้ว ให้ข้ามไป form.html
     if 'employee_id' in session:
         return redirect('/form')
-    
+
     return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('employee_id', None)
+    return redirect('/login')
 
 @app.route('/form')
 def form():
     if 'employee_id' not in session:
         return redirect('/login')
     return render_template('form.html', employee_id=session.get('employee_id'))
-
-@app.route('/logout')
-def logout():
-    session.pop('employee_id', None)
-    return redirect('/login')
 
 @app.route('/submit', methods=['POST'])
 def submit():
@@ -104,7 +99,6 @@ def submit():
             "assembly_img": upload_image(assembly_img, "assembly")
         }
 
-        # ✅ บันทึกข้อมูลเบื้องต้นก่อน Redirect ไป finalize
         ref.child(serial).set({
             "serial": serial,
             "product_type": product_type,
@@ -132,7 +126,6 @@ def finalize(serial):
         if not data:
             return "ไม่พบข้อมูล", 404
 
-        # ✅ สร้าง PDF และ QR แยก route
         pdf_stream = create_qc_pdf(data, image_urls=list(data.get("images", {}).values()))
         pdf_stream.seek(0)
         report_blob = bucket.blob(f"qc_reports/{serial}.pdf")
@@ -199,6 +192,5 @@ def autodownload(serial_number):
                      download_name=f"{serial_number}_QC_Report.pdf",
                      mimetype='application/pdf')
 
-# ✅ สำหรับรัน local
 if __name__ == '__main__':
     app.run(debug=True)
