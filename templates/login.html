@@ -70,17 +70,24 @@
     </div>
   </div>
 
-  <!-- ✅ เสียงต้อนรับทันทีเมื่อกดเข้าสู่ระบบ -->
+  <!-- ✅ เล่น welcome.mp3 เฉพาะเมื่อรหัสถูกต้อง -->
+  {% if request.args.get('welcome') == '1' %}
+  <audio autoplay>
+    <source src="{{ url_for('static', filename='welcome.mp3') }}" type="audio/mpeg">
+  </audio>
+  <script>
+    alert("ยินดีต้อนรับเข้าสู่ระบบ ขอให้วันนี้เป็นวันที่ดีนะคะ");
+    setTimeout(() => {
+      window.location.href = "/form";
+    }, 1500);
+  </script>
+  {% endif %}
+
   <script>
     document.querySelector("form").addEventListener("submit", function () {
       const btn = document.getElementById("loginBtn");
       btn.innerText = "กำลังเข้าสู่ระบบ...";
       btn.disabled = true;
-
-      const welcomeAudio = new Audio("{{ url_for('static', filename='welcome.mp3') }}");
-      welcomeAudio.play();
-
-      alert("ยินดีต้อนรับเข้าสู่ระบบ ขอให้วันนี้เป็นวันที่ดีนะคะ");
     });
   </script>
 </body>
