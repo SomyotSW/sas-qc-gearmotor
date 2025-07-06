@@ -43,7 +43,7 @@ def login():
             return render_template('login.html', error="รหัสพนักงานไม่ถูกต้อง")
 
         session['employee_id'] = employee_id
-        return redirect('/form')
+        return redirect('/login?welcome=1')
 
     # ❌ ห้าม redirect ไป form อัตโนมัติเด็ดขาด
     # ✅ ให้แสดง login.html เสมอ
