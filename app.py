@@ -12,6 +12,7 @@ import qrcode
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
+app.secret_key = "sas_qc_secret_key"  # สำหรับใช้ session
 
 # ==== Load Firebase Credential from Environment ====
 firebase_json = json.loads(os.environ.get("FIREBASE_CREDENTIAL_JSON"))
@@ -27,17 +28,43 @@ bucket = storage.bucket()
 
 @app.route('/')
 def home():
-    return render_template('index.html')
+    # ถ้าล็อกอินแล้ว ให้เข้า form ได้เลย
+    if 'employee_id' in session:
+        return redirect('/form')
+    return redirect('/login')
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    allowed_ids = ['QC001', 'QC002', 'QC003']
+
     if request.method == 'POST':
         employee_id = request.form.get('employee_id')
-        allowed_ids = ['QC001', 'QC002', 'QC003']
+
         if employee_id not in allowed_ids:
-            return "รหัสพนักงานไม่ถูกต้อง", 403
-        return render_template('form.html', employee_id=employee_id)
+            # แสดงหน้า login.html พร้อม error
+            return render_template('login.html', error="รหัสพนักงานไม่ถูกต้อง")
+
+        # เก็บ session
+        session['employee_id'] = employee_id
+        return redirect('/form')
+
+    # ถ้าล็อกอินอยู่แล้ว ให้ข้ามไป form.html
+    if 'employee_id' in session:
+        return redirect('/form')
+    
     return render_template('login.html')
+
+@app.route('/form')
+def form():
+    if 'employee_id' not in session:
+        return redirect('/login')
+    return render_template('form.html', employee_id=session.get('employee_id'))
+
+@app.route('/logout')
+def logout():
+    session.pop('employee_id', None)
+    return redirect('/login')
 
 @app.route('/submit', methods=['POST'])
 def submit():

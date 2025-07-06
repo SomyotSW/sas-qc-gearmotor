@@ -7,7 +7,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     body {
-      background: url("{{ url_for('static', filename='BG.jpg') }}") no-repeat center center fixed;
+      background: url("{{ url_for('static', filename='BG.png') }}") no-repeat center center fixed;
       background-size: cover;
       font-family: 'Segoe UI', sans-serif;
     }
@@ -51,10 +51,31 @@
           <input type="text" name="employee_id" class="form-control" placeholder="เช่น QC001" required>
         </div>
         <div class="d-grid">
-          <button type="submit" class="btn btn-primary">เข้าสู่ระบบ</button>
+          <button id="loginBtn" type="submit" class="btn btn-primary">เข้าสู่ระบบ</button>
         </div>
+        {% if error %}
+        <div class="alert alert-danger mt-3 text-center" role="alert">
+          {{ error }}
+        </div>
+        <!-- เสียงแจ้งเตือน -->
+        <audio id="errorSound" autoplay>
+          <source src="{{ url_for('static', filename='error.mp3') }}" type="audio/mpeg">
+        </audio>
+        <script>
+          const msg = new SpeechSynthesisUtterance("รหัสผิดพลาด โปรดใส่รหัสที่ถูกต้องอีกครั้งค่ะ");
+          window.speechSynthesis.speak(msg);
+        </script>
+        {% endif %}
       </form>
     </div>
   </div>
+
+  <script>
+    document.querySelector("form").addEventListener("submit", function () {
+      const btn = document.getElementById("loginBtn");
+      btn.innerText = "กำลังเข้าสู่ระบบ...";
+      btn.disabled = true;
+    });
+  </script>
 </body>
 </html>
