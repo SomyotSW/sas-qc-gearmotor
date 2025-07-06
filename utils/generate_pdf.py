@@ -1,3 +1,4 @@
+from reportlab.lib.utils import ImageReader
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import cm
@@ -8,21 +9,25 @@ import io
 import requests
 from PIL import Image
 
-pdfmetrics.registerFont(TTFont('THSarabun', 'static/fonts/THSarabun.ttf'))
+pdfmetrics.registerFont(TTFont('THSarabunNew', 'static/fonts/THSarabunNew.ttf'))
 
-def draw_image(c, image_url, x, y, width):
+# Path ของโลโก้ SAS
+sas_logo_path = 'static/logo_sas.png'
+
+def draw_image(c, image_url, center_x, y_top, width):
     try:
         img_data = requests.get(image_url).content
         img = Image.open(io.BytesIO(img_data))
-        aspect = img.height / img.width
-        height = width * aspect
+        height = width * (4/3)  # aspect ratio 3:4
+        x = center_x - (width / 2)
         img_io = io.BytesIO()
         img.save(img_io, format='PNG')
         img_io.seek(0)
-        c.drawImage(ImageReader(img_io), x, y - height, width, height)
+        c.drawImage(ImageReader(img_io), x, y_top - height, width, height)
+        return y_top - height - 10  # เว้นระยะด้านล่างรูปภาพ
     except Exception as e:
         print(f"Error loading image {image_url}: {e}")
-
+        return y_top - 10
 
 def create_qc_pdf(data, image_urls=[]):
     buffer = io.BytesIO()
@@ -33,21 +38,23 @@ def create_qc_pdf(data, image_urls=[]):
 
     def draw_text(text, bold=False, color=None):
         nonlocal line
-        if bold:
-            c.setFont("Helvetica-Bold", 12)
-        else:
-            c.setFont("Helvetica", 12)
+        font_name = 'THSarabunNew'
+        font_size = 16
+        c.setFont(font_name, font_size)
         if color:
             c.setFillColor(color)
         else:
             c.setFillColorRGB(0, 0, 0)
         c.drawString(margin, line, text)
-        line -= 18
+        line -= 22
+
+    # ใส่โลโก้ SAS หน้าแรก
+    c.drawImage(sas_logo_path, 1.5 * cm, height - 3 * cm, width=2.5*cm, preserveAspectRatio=True)
 
     # Title
-    c.setFont("Helvetica-Bold", 16)
+    c.setFont("THSarabunNew", 22)
     c.drawCentredString(width / 2, line, "รายงานการตรวจสอบ QC มอเตอร์เกียร์")
-    line -= 30
+    line -= 40
 
     # ข้อมูลทั่วไป
     draw_text(f"Serial Number: {data.get('serial', '-')}", bold=True)
@@ -61,7 +68,6 @@ def create_qc_pdf(data, image_urls=[]):
     is_servo = "servo" in product_type
     is_other = not is_acdc_or_bldc and not is_servo
 
-    # เฉพาะ Servo
     if is_servo:
         draw_text("**ไม่ประกอบสินค้า", bold=True, color=red)
         draw_text("**ไม่เติมน้ำมันเกียร์", bold=True, color=red)
@@ -76,54 +82,49 @@ def create_qc_pdf(data, image_urls=[]):
     if data.get("gear_sound"):
         draw_text(f"เสียงเกียร์: {data['gear_sound']} dB")
 
-    # เงื่อนไขเติมน้ำมัน
     if not is_acdc_or_bldc and not is_servo:
         draw_text(f"น้ำมันเกียร์ (ลิตร): {data.get('oil_liters', '-') or '-'} ลิตร")
         draw_text(f"สถานะการเติมน้ำมัน: {data.get('oil_filled', '-')}")
     elif is_acdc_or_bldc:
         draw_text("*ไม่ต้องเติมน้ำมันเกียร์", bold=True, color=red)
 
-    # Warranty
     draw_text(f"ระยะเวลารับประกัน: {data.get('warranty', '-')} เดือน", bold=True, color=red)
-
-    # Inspector
     draw_text(f"ผู้ตรวจสอบ: {data.get('inspector', '-')}")
 
-    # หมายเหตุอื่น ๆ
     if is_servo:
         draw_text("")
         draw_text("**การรับประกันสินค้า 18 เดือน", bold=True, color=red)
 
-    # รูปภาพ
-    line -= 20
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(margin, line, "ภาพประกอบ:")
-    line -= 20
+    c.showPage()
 
-    img_x = margin
-    img_y = line
-    img_width = 6 * cm
+    # ใส่โลโก้ SAS ทุกหน้าใหม่
+    c.drawImage(sas_logo_path, 1.5 * cm, height - 3 * cm, width=2.5*cm, preserveAspectRatio=True)
 
-    for url in image_urls:
-        if line < 5 * cm:
+    c.setFont("THSarabunNew", 18)
+    c.drawString(margin, height - margin - 20, "ภาพประกอบ:")
+    y_top = height - margin - 60
+    center_x = width / 2
+    img_width = 8 * cm
+
+    for idx, url in enumerate(image_urls):
+        label = f"ภาพที่ {idx + 1}"
+        c.setFont("THSarabunNew", 16)
+        c.drawCentredString(center_x, y_top, label)
+        y_top -= 20
+
+        y_top = draw_image(c, url, center_x, y_top, img_width)
+
+        if y_top < 6 * cm:
             c.showPage()
-            line = height - margin
-            img_y = line
-        draw_image(c, url, img_x, img_y, img_width)
-        img_x += img_width + 1 * cm
-        if img_x + img_width > width - margin:
-            img_x = margin
-            img_y -= 6 * cm
+            c.drawImage(sas_logo_path, 1.5 * cm, height - 3 * cm, width=2.5*cm, preserveAspectRatio=True)
+            c.setFont("THSarabunNew", 18)
+            c.drawString(margin, height - margin - 20, "ภาพประกอบ (ต่อ):")
+            y_top = height - margin - 60
 
-
-    # === Footer ===
-        c.showPage()
-    c.setFont("THSarabun", 18)
+    # Footer
+    c.setFont("THSarabunNew", 18)
     c.drawString(2 * cm, 1 * cm, "📞 SAS Service: 081-9216225")
     c.drawRightString(width - 2 * cm, 1 * cm, "📞 SAS Sales: 081-9216225 คุณสมยศ")
     c.save()
     buffer.seek(0)
     return buffer
-
-# รองรับรูปภาพด้วย ImageReader
-from reportlab.lib.utils import ImageReader
