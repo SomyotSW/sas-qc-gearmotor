@@ -58,7 +58,7 @@
         <div class="alert alert-danger mt-3 text-center" role="alert">
           {{ error }}
         </div>
-        <audio id="errorSound" autoplay>
+        <audio autoplay>
           <source src="{{ url_for('static', filename='error.mp3') }}" type="audio/mpeg">
         </audio>
         <script>
@@ -70,28 +70,25 @@
     </div>
   </div>
 
+  <!-- ✅ เมื่อ login สำเร็จ -->
+  {% if request.args.get('welcome') == '1' %}
+  <audio autoplay>
+    <source src="{{ url_for('static', filename='welcome.mp3') }}" type="audio/mpeg">
+  </audio>
+  <script>
+    alert("ยินดีต้อนรับเข้าสู่ระบบ ขอให้วันนี้เป็นวันที่ดีนะคะ");
+    setTimeout(() => {
+      window.location.href = "/form";
+    }, 1500);
+  </script>
+  {% endif %}
+
   <script>
     document.querySelector("form").addEventListener("submit", function () {
       const btn = document.getElementById("loginBtn");
       btn.innerText = "กำลังเข้าสู่ระบบ...";
       btn.disabled = true;
     });
-
-    // ✅ กรณีรหัสผ่านถูกต้อง → เล่นเสียง & alert ก่อน redirect
-    function welcomeMessage() {
-      alert("ยินดีต้อนรับเข้าสู่ระบบ ขอให้วันนี้เป็นวันที่ดีนะคะ");
-      const msg = new SpeechSynthesisUtterance("ยินดีต้อนรับเข้าสู่ระบบ ขอให้วันนี้เป็นวันที่ดีนะคะ");
-      msg.lang = "th-TH";
-      window.speechSynthesis.speak(msg);
-    }
-
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('welcome') === '1') {
-      welcomeMessage();
-      setTimeout(() => {
-        window.location.href = "/form";
-      }, 300); // รอแป๊บให้เสียงเริ่มพูดก่อนเปลี่ยนหน้า
-    }
   </script>
 </body>
 </html>
