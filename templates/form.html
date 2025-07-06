@@ -32,9 +32,29 @@
         .submit-btn {
             margin-top: 20px;
         }
-        .warning-text {
-            color: red;
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.7);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2rem;
             font-weight: bold;
+            display: none;
+            flex-direction: column;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            margin-top: 1rem;
+        }
+        .text-red {
+            color: red;
         }
     </style>
 </head>
@@ -43,7 +63,7 @@
     <div class="container mt-5">
         <div class="backdrop shadow">
             <h2 class="text-center mb-4">แบบฟอร์มตรวจสอบ QC มอเตอร์เกียร์</h2>
-            <form action="/submit" method="POST" enctype="multipart/form-data">
+            <form action="/submit" method="POST" enctype="multipart/form-data" onsubmit="showLoading()">
                 <input type="hidden" name="inspector" value="{{ employee_id }}">
 
                 <div class="row">
@@ -61,8 +81,8 @@
                         </select>
                     </div>
                     <div class="col-md-6">
-                        <label id="model_label">ชื่อมอเตอร์</label>
-                        <input type="text" name="motor_nameplate" id="motor_nameplate" class="form-control" required>
+                        <label>ชื่อมอเตอร์</label>
+                        <input type="text" name="motor_nameplate" class="form-control" required>
                     </div>
                 </div>
 
@@ -78,72 +98,77 @@
                             <label class="form-check-label" for="gear_part">Gear head</label>
                         </div>
                         <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" name="acdc_parts" value="Controller" id="controller_part" onchange="toggleControllerUpload()">
+                            <input class="form-check-input" type="checkbox" name="acdc_parts" value="Controller" id="controller_part" onchange="handleControllerCheck()">
                             <label class="form-check-label" for="controller_part">Controller</label>
                         </div>
                     </div>
-                    <div class="col-md-12" id="controller_upload" style="display: none;">
-                        <label>แนบรูปถ่าย Controller</label>
+                </div>
+
+                <div class="row" id="controller_img_section" style="display: none;">
+                    <div class="col-md-6">
+                        <label>แนบรูป Controller</label>
                         <input type="file" name="controller_img" accept="image/*" class="form-control">
                     </div>
                 </div>
 
-                <div id="standard_section">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <label>อัตราทดเกียร์</label>
-                            <input type="text" name="gear_ratio" class="form-control">
-                        </div>
-                        <div class="col-md-6">
-                            <label>เสียงเกียร์</label>
-                            <input type="text" name="gear_sound" class="form-control">
-                        </div>
+                <div class="row" id="servo_section" style="display: none;">
+                    <div class="col-md-6">
+                        <label>Model Servo Motor</label>
+                        <input type="text" name="servo_motor_model" class="form-control">
                     </div>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <label>ค่ากระแส</label>
-                            <input type="text" name="motor_current" class="form-control">
-                        </div>
-                        <div class="col-md-6">
-                            <label>จำนวนเดือนรับประกัน</label>
-                            <input type="number" name="warranty" class="form-control">
-                        </div>
+                    <div class="col-md-6">
+                        <label>แนบรูป Servo Motor</label>
+                        <input type="file" name="servo_motor_img" accept="image/*" class="form-control">
                     </div>
-
-                    <div class="row" id="oil_section">
-                        <div class="col-md-6">
-                            <label>น้ำมันเกียร์ (ลิตร)</label>
-                            <input type="text" name="oil_liters" class="form-control">
-                        </div>
-                        <div class="col-md-6">
-                            <label>เติมน้ำมันเกียร์แล้ว</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="oil_filled" id="oil_filled">
-                                <label class="form-check-label" for="oil_filled">ใช่</label>
-                            </div>
-                        </div>
+                    <div class="col-md-6">
+                        <label>Model Servo Drive</label>
+                        <input type="text" name="servo_drive_model" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label>แนบรูป Servo Drive</label>
+                        <input type="file" name="servo_drive_img" accept="image/*" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label>แนบรูป Wire Cable</label>
+                        <input type="file" name="wire_cable_img" accept="image/*" class="form-control">
+                    </div>
+                    <div class="col-12 text-red mt-3">
+                        <p>**ไม่ประกอบสินค้า<br>**ไม่เติมน้ำมันเกียร์<br>**การรับประกันสินค้า 18 เดือน</p>
                     </div>
                 </div>
 
-                <div id="servo_section" style="display: none;">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <label>Model Servo Motor</label>
-                            <input type="text" name="servo_motor_model" class="form-control">
-                            <label>แนบรูปถ่าย Servo Motor</label>
-                            <input type="file" name="servo_motor_img" accept="image/*" class="form-control">
-                        </div>
-                        <div class="col-md-6">
-                            <label>Model Servo Drive</label>
-                            <input type="text" name="servo_drive_model" class="form-control">
-                            <label>แนบรูปถ่าย Servo Drive</label>
-                            <input type="file" name="servo_drive_img" accept="image/*" class="form-control">
-                        </div>
-                        <div class="col-md-12">
-                            <label>แนบรูปถ่าย Wire Cable</label>
-                            <input type="file" name="wire_cable_img" accept="image/*" class="form-control">
-                            <p class="warning-text mt-2">**ไม่ประกอบสินค้า<br>**ไม่เติมน้ำมันเกียร์<br>**การรับประกันสินค้า 18 เดือน</p>
+                <div class="row" id="gear_fields">
+                    <div class="col-md-6">
+                        <label>อัตราทดเกียร์</label>
+                        <input type="text" name="gear_ratio" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label>เสียงเกียร์</label>
+                        <input type="text" name="gear_sound" class="form-control">
+                    </div>
+                </div>
+
+                <div class="row" id="current_and_warranty">
+                    <div class="col-md-6">
+                        <label>ค่ากระแส</label>
+                        <input type="text" name="motor_current" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label>จำนวนเดือนรับประกัน</label>
+                        <input type="number" name="warranty" class="form-control">
+                    </div>
+                </div>
+
+                <div class="row" id="oil_section">
+                    <div class="col-md-6">
+                        <label>น้ำมันเกียร์ (ลิตร)</label>
+                        <input type="text" name="oil_liters" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label>เติมน้ำมันเกียร์แล้ว</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="oil_filled" id="oil_filled">
+                            <label class="form-check-label" for="oil_filled">ใช่</label>
                         </div>
                     </div>
                 </div>
@@ -165,43 +190,61 @@
                 </div>
 
                 <div class="text-center submit-btn">
-                    <button type="submit" class="btn btn-primary btn-lg px-5">✅ ส่งข้อมูล QC</button>
+                    <button type="submit" class="btn btn-primary btn-lg px-5">✅ ส่งข้อมูล QC Report </button>
                 </div>
             </form>
         </div>
     </div>
 
+    <div class="loading-overlay" id="loading">
+        ⏳ รอสักครู่...เดี๋ยวจัดไฟล์PDFให้แจ่มๆ<br>
+        <div class="spinner-border text-primary" role="status"></div>
+    </div>
+    <audio id="submitSound" src="/static/waiting.mp3"></audio>
+
     <script>
-    function handleProductChange() {
-        const product = document.getElementById("product_type").value;
-        const acdcSection = document.getElementById("acdc_options");
-        const controllerUpload = document.getElementById("controller_upload");
-        const standardSection = document.getElementById("standard_section");
-        const servoSection = document.getElementById("servo_section");
+        function handleProductChange() {
+            const product = document.getElementById("product_type").value;
+            const acdc = document.getElementById("acdc_options");
+            const controllerImg = document.getElementById("controller_img_section");
+            const servo = document.getElementById("servo_section");
+            const oil = document.getElementById("oil_section");
+            const gear = document.getElementById("gear_fields");
+            const current = document.getElementById("current_and_warranty");
 
-        if (product === "AC/DC Gear Motor" || product === "BLDC Gear Motor") {
-            acdcSection.style.display = "block";
-            controllerUpload.style.display = document.getElementById("controller_part").checked ? "block" : "none";
-            standardSection.style.display = "block";
-            servoSection.style.display = "none";
-        } else if (product === "Servo Motor") {
-            acdcSection.style.display = "none";
-            controllerUpload.style.display = "none";
-            standardSection.style.display = "none";
-            servoSection.style.display = "block";
-        } else {
-            acdcSection.style.display = "none";
-            controllerUpload.style.display = "none";
-            standardSection.style.display = "block";
-            servoSection.style.display = "none";
+            if (product === "AC/DC Gear Motor" || product === "BLDC Gear Motor") {
+                acdc.style.display = "block";
+                controllerImg.style.display = document.getElementById("controller_part").checked ? "block" : "none";
+                servo.style.display = "none";
+                oil.innerHTML = `<div class='text-red mt-3'>*ไม่ต้องเติมน้ำมันเกียร์</div>`;
+                gear.style.display = "flex";
+                current.style.display = "flex";
+            } else if (product === "Servo Motor") {
+                acdc.style.display = "none";
+                controllerImg.style.display = "none";
+                servo.style.display = "block";
+                oil.style.display = "none";
+                gear.style.display = "none";
+                current.style.display = "none";
+            } else {
+                acdc.style.display = "none";
+                controllerImg.style.display = "none";
+                servo.style.display = "none";
+                oil.style.display = "flex";
+                gear.style.display = "flex";
+                current.style.display = "flex";
+            }
         }
-    }
 
-    function toggleControllerUpload() {
-        const controllerCheckbox = document.getElementById("controller_part");
-        const controllerUpload = document.getElementById("controller_upload");
-        controllerUpload.style.display = controllerCheckbox.checked ? "block" : "none";
-    }
+        function handleControllerCheck() {
+            const checked = document.getElementById("controller_part").checked;
+            document.getElementById("controller_img_section").style.display = checked ? "block" : "none";
+        }
+
+        function showLoading() {
+            document.getElementById("loading").style.display = "flex";
+            document.getElementById("submitSound").play();
+        }
     </script>
 </body>
 </html>
