@@ -2,10 +2,13 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import cm
 from reportlab.lib.colors import red
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase import pdfmetrics
 import io
 import requests
 from PIL import Image
 
+pdfmetrics.registerFont(TTFont('THSarabun', 'static/fonts/THSarabun.ttf'))
 
 def draw_image(c, image_url, x, y, width):
     try:

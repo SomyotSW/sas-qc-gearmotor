@@ -56,29 +56,25 @@
 
         {% if error %}
         <div class="alert alert-danger mt-3 text-center" role="alert">
-          {{ error }}
+          รหัสผิด โปรดใส่รหัสให้ถูกต้องอีกครั้ง
         </div>
         <audio autoplay>
           <source src="{{ url_for('static', filename='error.mp3') }}" type="audio/mpeg">
         </audio>
-        <script>
-          const errorMsg = new SpeechSynthesisUtterance("รหัสผิด โปรดใส่รหัสที่ถูกต้องอีกครั้ง");
-          window.speechSynthesis.speak(errorMsg);
-        </script>
         {% endif %}
       </form>
     </div>
   </div>
 
-  <!-- ✅ เล่นเสียงและแสดงข้อความพร้อมกัน เมื่อ login สำเร็จ -->
+  <!-- ✅ เล่นเสียงเมื่อ login สำเร็จ -->
   {% if request.args.get('welcome') == '1' %}
   <script>
     const audio = new Audio("{{ url_for('static', filename='welcome.mp3') }}");
     audio.play().then(() => {
-      alert("ยินดีต้อนรับเข้าสู่ระบบ ขอให้วันนี้เป็นวันที่ดีนะคะ");
+      alert("✅ ยินดีต้อนรับเข้าสู่ระบบ QC Report");
       window.location.href = "/form";
     }).catch(() => {
-      alert("ยินดีต้อนรับเข้าสู่ระบบ ขอให้วันนี้เป็นวันที่ดีนะคะ");
+      alert("✅ ยินดีต้อนรับเข้าสู่ระบบ QC Report");
       window.location.href = "/form";
     });
   </script>

@@ -36,16 +36,19 @@ def login():
         employee_id = request.form.get('employee_id')
         allowed_ids = ['QC001', 'QC002', 'QC003']
         if employee_id not in allowed_ids:
-            return "รหัสพนักงานไม่ถูกต้อง", 403
+            return render_template('login.html', error=True)
         session['employee_id'] = employee_id
+        session['just_logged_in'] = True
         return redirect(url_for('form'))
     return render_template('login.html')
+
 
 @app.route('/form')
 def form():
     if 'employee_id' not in session:
         return redirect(url_for('login'))
-    return render_template('form.html', employee_id=session['employee_id'])
+    just_logged_in = session.pop('just_logged_in', False)
+    return render_template('form.html', employee_id=session['employee_id'], welcome=just_logged_in)
 
 @app.route('/submit', methods=['POST'])
 def submit():
