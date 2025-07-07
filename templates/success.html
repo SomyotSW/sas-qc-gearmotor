@@ -1,17 +1,16 @@
 <!DOCTYPE html>
 <html lang="th">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ส่งข้อมูล QC เรียบร้อยแล้ว</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Sarabun', sans-serif;
             margin: 0;
             padding: 0;
-            background: url('/static/bg_blur.jpg') center center / cover no-repeat;
+            background: url('/static/BG.png') center center / cover no-repeat;
             backdrop-filter: blur(4px);
             display: flex;
             align-items: center;
@@ -20,17 +19,14 @@
         }
 
         .container {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.92);
+            border-radius: 16px;
             padding: 30px;
             width: 90%;
-            max-width: 450px;
+            max-width: 480px;
             text-align: center;
             position: relative;
-        }
-
-        h2 {
-            color: #2c7be5;
+            box-shadow: 0 0 12px rgba(0, 0, 0, 0.2);
         }
 
         .logo {
@@ -40,10 +36,15 @@
             width: 100px;
         }
 
+        h2 {
+            color: #2c7be5;
+            margin-top: 0;
+        }
+
         .serial {
             font-size: 18px;
-            margin: 10px 0;
             font-weight: bold;
+            margin: 10px 0 20px;
         }
 
         .btn {
@@ -76,12 +77,15 @@
         .note {
             font-size: 13px;
             color: gray;
+            margin-top: 5px;
         }
 
-        @media screen and (max-width: 768px) {
-            .logo {
-                width: 80px;
-            }
+        .alert-error {
+            background-color: #ffe0e0;
+            color: #cc0000;
+            padding: 10px;
+            margin: 15px 0;
+            border-radius: 6px;
         }
     </style>
 </head>
@@ -93,14 +97,25 @@
         <div class="serial">Serial Number: {{ serial_number }}</div>
 
         <div class="qr-preview">
-            <img src="{{ qr_url }}" alt="QR Code" style="width: 100%; height: auto;">
-            <div class="note">สแกนเพื่อดูรายงาน QC</div>
+            {% if qr_url and qr_url != "#" %}
+                <img src="{{ qr_url }}" alt="QR Code" style="width: 100%; height: auto;">
+                <div class="note">สแกนเพื่อดูรายงาน QC</div>
+            {% else %}
+                <div class="alert-error">ไม่พบ QR Code</div>
+            {% endif %}
         </div>
 
-        <a class="btn" href="{{ qc_url }}" target="_blank">📄 ดูรายงาน QC (PDF)</a>
-        <a class="btn" href="{{ qr_url }}" download>📥 ดาวน์โหลด QR Code</a>
+        {% if qc_url and qc_url != "#" %}
+            <a class="btn" href="{{ qc_url }}" target="_blank">📄 ดูรายงาน QC (PDF)</a>
+        {% else %}
+            <div class="alert-error">⚠️ ไม่พบไฟล์รายงาน QC</div>
+        {% endif %}
+
+        {% if qr_url and qr_url != "#" %}
+            <a class="btn" href="{{ qr_url }}" download>📥 ดาวน์โหลด QR Code</a>
+        {% endif %}
+
         <a class="btn" href="/login">🔄 กลับไปหน้ากรอกข้อมูลใหม่</a>
     </div>
 </body>
-
 </html>
