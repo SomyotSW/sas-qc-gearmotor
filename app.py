@@ -9,6 +9,7 @@ from utils.generate_pdf import create_qc_pdf
 from utils.qr_generator import generate_qr_code
 import json
 import qrcode
+import threading  # เพิ่ม threading
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # ใช้สำหรับ session
@@ -42,7 +43,6 @@ def login():
         return redirect(url_for('form'))
     return render_template('login.html')
 
-
 @app.route('/form')
 def form():
     if 'employee_id' not in session:
@@ -56,7 +56,6 @@ def submit():
         if not request.content_type.startswith('multipart/form-data'):
             return "Invalid Content-Type", 400
 
-        # === Extract Form Fields ===
         product_type = request.form.get('product_type')
         motor_nameplate = request.form.get('motor_nameplate')
         motor_current = request.form.get('motor_current')
@@ -67,12 +66,9 @@ def submit():
         oil_liters = request.form.get('oil_liters')
         oil_filled = 'เติมแล้ว' if request.form.get('oil_filled') else 'ยังไม่เติม'
         acdc_parts = request.form.getlist('acdc_parts')
-
-        # Servo ข้อมูลพิเศษ
         servo_motor_model = request.form.get('servo_motor_model')
         servo_drive_model = request.form.get('servo_drive_model')
 
-        # === Image Upload ===
         def upload_image(file, field_name):
             if file and file.filename:
                 filename = secure_filename(file.filename)
@@ -103,7 +99,6 @@ def submit():
             "cable_wire_img": upload_image(cable_wire_img, "cable_wire")
         }
 
-        # === Save Partial Data ===
         ref.child(serial).set({
             "serial": serial,
             "product_type": product_type,
@@ -122,38 +117,35 @@ def submit():
             "date": datetime.datetime.now().strftime("%Y-%m-%d")
         })
 
-        return redirect(url_for('finalize', serial=serial))
+        def background_finalize():
+            try:
+                data = ref.child(serial).get()
+                pdf_stream = create_qc_pdf(data, image_urls=list(data.get("images", {}).values()))
+                qr_stream = generate_qr_code(serial)
 
-    except Exception as e:
-        return f"เกิดข้อผิดพลาด: {e}", 400
+                qr_blob = bucket.blob(f"qr_codes/{serial}.png")
+                qr_blob.upload_from_file(qr_stream, content_type="image/png")
+                qr_blob.make_public()
 
-@app.route('/finalize/<serial>')
-def finalize(serial):
-    try:
-        data = ref.child(serial).get()
-        pdf_stream = create_qc_pdf(data, image_urls=list(data.get("images", {}).values()))
-        qr_stream = generate_qr_code(serial)
+                report_blob = bucket.blob(f"qc_reports/{serial}.pdf")
+                pdf_stream.seek(0)
+                report_blob.upload_from_file(pdf_stream, content_type="application/pdf")
+                report_blob.make_public()
 
-        # === Upload ===
-        qr_blob = bucket.blob(f"qr_codes/{serial}.png")
-        qr_blob.upload_from_file(qr_stream, content_type="image/png")
-        qr_blob.make_public()
+                ref.child(serial).update({
+                    "qc_pdf_url": report_blob.public_url,
+                    "qr_png_url": qr_blob.public_url
+                })
 
-        report_blob = bucket.blob(f"qc_reports/{serial}.pdf")
-        pdf_stream.seek(0)
-        report_blob.upload_from_file(pdf_stream, content_type="application/pdf")
-        report_blob.make_public()
+            except Exception as e:
+                print(f"Error in background finalize: {e}")
 
-        # === Update DB ===
-        ref.child(serial).update({
-            "qc_pdf_url": report_blob.public_url,
-            "qr_png_url": qr_blob.public_url
-        })
+        threading.Thread(target=background_finalize).start()
 
         return redirect(url_for('success', serial=serial))
 
     except Exception as e:
-        return f"เกิดข้อผิดพลาดในการ finalize: {e}", 500
+        return f"เกิดข้อผิดพลาด: {e}", 400
 
 @app.route('/success')
 def success():
