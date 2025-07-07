@@ -2,8 +2,8 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>ส่งข้อมูล QC เรียบร้อยแล้ว</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ส่งข้อมูล QC เรียบร้อยแล้ว</title>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -17,36 +17,29 @@
             justify-content: center;
             min-height: 100vh;
         }
-
         .container {
-            background: rgba(255, 255, 255, 0.92);
-            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
             padding: 30px;
             width: 90%;
             max-width: 480px;
             text-align: center;
             position: relative;
-            box-shadow: 0 0 12px rgba(0, 0, 0, 0.2);
         }
-
+        h2 {
+            color: #2c7be5;
+        }
         .logo {
             position: absolute;
             top: 15px;
             right: 15px;
             width: 100px;
         }
-
-        h2 {
-            color: #2c7be5;
-            margin-top: 0;
-        }
-
         .serial {
             font-size: 18px;
+            margin: 10px 0;
             font-weight: bold;
-            margin: 10px 0 20px;
         }
-
         .btn {
             display: block;
             width: 100%;
@@ -60,11 +53,9 @@
             text-decoration: none;
             transition: background 0.3s ease;
         }
-
         .btn:hover {
             background: #1a5fbd;
         }
-
         .qr-preview {
             margin: 20px auto;
             max-width: 200px;
@@ -73,19 +64,16 @@
             background: white;
             padding: 10px;
         }
-
         .note {
             font-size: 13px;
             color: gray;
-            margin-top: 5px;
         }
-
-        .alert-error {
-            background-color: #ffe0e0;
-            color: #cc0000;
+        .warning {
+            background: #fdd;
+            color: red;
             padding: 10px;
-            margin: 15px 0;
-            border-radius: 6px;
+            border-radius: 8px;
+            margin: 10px 0;
         }
     </style>
 </head>
@@ -96,23 +84,19 @@
         <h2>✅ ส่งข้อมูล QC เรียบร้อยแล้ว</h2>
         <div class="serial">Serial Number: {{ serial_number }}</div>
 
-        <div class="qr-preview">
-            {% if qr_url and qr_url != "#" %}
+        {% if qr_url != "#" and qc_url != "#" %}
+            <div class="qr-preview">
                 <img src="{{ qr_url }}" alt="QR Code" style="width: 100%; height: auto;">
                 <div class="note">สแกนเพื่อดูรายงาน QC</div>
-            {% else %}
-                <div class="alert-error">ไม่พบ QR Code</div>
-            {% endif %}
-        </div>
+            </div>
 
-        {% if qc_url and qc_url != "#" %}
             <a class="btn" href="{{ qc_url }}" target="_blank">📄 ดูรายงาน QC (PDF)</a>
+            <a class="btn" href="{{ qr_url }}" download>📥 ดาวน์โหลด QR Code (.PNG)</a>
         {% else %}
-            <div class="alert-error">⚠️ ไม่พบไฟล์รายงาน QC</div>
-        {% endif %}
-
-        {% if qr_url and qr_url != "#" %}
-            <a class="btn" href="{{ qr_url }}" download>📥 ดาวน์โหลด QR Code</a>
+            <div class="warning">⚠️ กำลังประมวลผลไฟล์ QR และรายงาน QC โปรดรอสักครู่...</div>
+            <script>
+                setTimeout(() => window.location.reload(), 3000);
+            </script>
         {% endif %}
 
         <a class="btn" href="/login">🔄 กลับไปหน้ากรอกข้อมูลใหม่</a>
