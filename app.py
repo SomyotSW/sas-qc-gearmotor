@@ -121,7 +121,7 @@ def submit():
             try:
                 data = ref.child(serial).get()
                 pdf_stream = create_qc_pdf(data, image_urls=list(data.get("images", {}).values()))
-                qr_stream = generate_qr_code(serial)
+                qr_stream = generate_qr_code(serial, report_blob.public_url)
 
                 qr_blob = bucket.blob(f"qr_codes/{serial}.png")
                 qr_blob.upload_from_file(qr_stream, content_type="image/png")
