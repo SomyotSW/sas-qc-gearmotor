@@ -12,7 +12,7 @@ from PIL import Image
 pdfmetrics.registerFont(TTFont('THSarabunNew', 'static/fonts/THSarabunNew.ttf'))
 
 # Path ของโลโก้ SAS
-sas_logo_path = 'static/logo_sas.png'
+sas_logo_path = 'static/logos_sas.png'
 
 
 def draw_image(c, image_url, center_x, y_top, width):
@@ -66,7 +66,7 @@ def create_qc_pdf(data, image_urls=[], image_labels=[]):
     draw_text(f"Serial Number: {data.get('serial', '-')}", bold=True)
     draw_text(f"วันที่ตรวจสอบ: {data.get('date', '-')}")
     draw_text(f"ประเภทสินค้า: {data.get('product_type', '-')}")
-    draw_text(f"ชื่อมอเตอร์: {data.get('motor_nameplate', '-')}")
+    draw_text(f"Nameplate: {data.get('motor_nameplate', '-')}")
 
     product_type = data.get("product_type", "").lower()
     is_acdc_or_bldc = "ac/dc" in product_type or "bldc" in product_type

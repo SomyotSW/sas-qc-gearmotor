@@ -87,11 +87,31 @@
         {% if qr_url != "#" and qc_url != "#" %}
             <div class="qr-preview">
                 <img src="{{ qr_url }}" alt="QR Code" style="width: 100%; height: auto;">
-                <div class="note">สแกนเพื่อดูรายงาน QC</div>
+                <div class="note">สแกนเพื่อดูรายงาน QC Report</div>
             </div>
 
-            <a class="btn" href="{{ qc_url }}" target="_blank">📄 ดูรายงาน QC (PDF)</a>
+            <a class="btn" href="{{ qc_url }}" target="_blank">📄 ดูรายงาน QC Report (PDF)</a>
             <a class="btn" href="{{ qr_url }}" download>📥 ดาวน์โหลด QR Code (.PNG)</a>
+
+            <!-- ✅ เสียงแจ้งเตือน -->
+            <audio id="doneSound" autoplay>
+                <source src="{{ url_for('static', filename='audio/qrcodedone.mp3') }}" type="audio/mpeg">
+                Browser ของคุณไม่รองรับเสียง
+            </audio>
+
+            <button class="btn" onclick="document.getElementById('doneSound').play()">🔊 ฟังอีกครั้ง</button>
+
+            <script>
+                window.onload = function () {
+                    const audio = document.getElementById("doneSound");
+                    if (audio) {
+                        audio.play().catch(e => {
+                            console.log("Autoplay blocked:", e);
+                        });
+                    }
+                };
+            </script>
+
         {% else %}
             <div class="warning">⚠️ กำลังประมวลผลไฟล์ QR และรายงาน QC โปรดรอสักครู่...</div>
             <script>
