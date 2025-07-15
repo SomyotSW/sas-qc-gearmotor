@@ -9,10 +9,10 @@ from utils.generate_pdf import create_qc_pdf
 from utils.qr_generator import generate_qr_code
 import json
 import qrcode
-import threading  # เพิ่ม threading
+import threading
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_here'  # ใช้สำหรับ session
+app.secret_key = 'your_secret_key_here'
 app.config['UPLOAD_FOLDER'] = 'uploads'
 
 # ==== Load Firebase Credential from Environment ====
@@ -27,9 +27,11 @@ firebase_admin.initialize_app(cred, {
 ref = db.reference("/qc_data")
 bucket = storage.bucket()
 
+
 @app.route('/')
 def home():
     return render_template('index.html')
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -43,12 +45,14 @@ def login():
         return redirect(url_for('form'))
     return render_template('login.html')
 
+
 @app.route('/form')
 def form():
     if 'employee_id' not in session:
         return redirect(url_for('login'))
     just_logged_in = session.pop('just_logged_in', False)
     return render_template('form.html', employee_id=session['employee_id'], welcome=just_logged_in)
+
 
 @app.route('/submit', methods=['POST'])
 def submit():
@@ -69,6 +73,9 @@ def submit():
         servo_motor_model = request.form.get('servo_motor_model')
         servo_drive_model = request.form.get('servo_drive_model')
 
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        serial = f"SAS{timestamp}"
+
         def upload_image(file, field_name):
             if file and file.filename:
                 filename = secure_filename(file.filename)
@@ -85,9 +92,6 @@ def submit():
         servo_motor_img = request.files.get('servo_motor_img')
         servo_drive_img = request.files.get('servo_drive_img')
         cable_wire_img = request.files.get('cable_wire_img')
-
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        serial = f"SAS{timestamp}"
 
         images = {
             "motor_current_img": upload_image(motor_current_img, "motor_current"),
@@ -119,35 +123,38 @@ def submit():
 
         def background_finalize():
             try:
-		data = ref.child(serial).get()
-                # ✅ สร้าง PDF ก่อน
+                data = ref.child(serial).get()
+
+                # ✅ สร้าง PDF และอัปโหลดก่อน
                 pdf_stream = create_qc_pdf(data, image_urls=list(data.get("images", {}).values()))
                 report_blob = bucket.blob(f"qc_reports/{serial}.pdf")
                 pdf_stream.seek(0)
                 report_blob.upload_from_file(pdf_stream, content_type="application/pdf")
                 report_blob.make_public()
 
-                # ✅ สร้าง QR code หลังจากได้ URL จริง
+                # ✅ สร้าง QR จาก public_url จริง
                 qr_stream = generate_qr_code(serial, report_blob.public_url)
                 qr_blob = bucket.blob(f"qr_codes/{serial}.png")
                 qr_blob.upload_from_file(qr_stream, content_type="image/png")
                 qr_blob.make_public()
 
-                 # ✅ อัปเดต Firebase
+                # ✅ บันทึกลิงก์ลง Firebase
                 ref.child(serial).update({
                     "qc_pdf_url": report_blob.public_url,
                     "qr_png_url": qr_blob.public_url
                 })
 
+                print(f"✅ PDF + QR สำหรับ {serial} สร้างเสร็จ", flush=True)
+
             except Exception as e:
-                print(f"Error in background finalize: {e}")
+                print(f"❌ Error in background finalize: {e}", flush=True)
 
         threading.Thread(target=background_finalize).start()
-
         return redirect(url_for('success', serial=serial))
 
     except Exception as e:
         return f"เกิดข้อผิดพลาด: {e}", 400
+
 
 @app.route('/success')
 def success():
@@ -157,6 +164,7 @@ def success():
                            serial_number=serial,
                            qc_url=data.get("qc_pdf_url", "#"),
                            qr_url=data.get("qr_png_url", "#"))
+
 
 @app.route('/download/<serial_number>')
 def download_pdf(serial_number):
@@ -170,6 +178,7 @@ def download_pdf(serial_number):
                      download_name=f"{serial_number}_QC_Report.pdf",
                      mimetype='application/pdf')
 
+
 @app.route('/qr/<serial_number>')
 def generate_qr(serial_number):
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
@@ -182,6 +191,7 @@ def generate_qr(serial_number):
     qr_stream.seek(0)
     return send_file(qr_stream, mimetype='image/png', download_name=f"{serial_number}_QR.png")
 
+
 @app.route('/autodownload/<serial_number>')
 def autodownload(serial_number):
     report_data = ref.child(serial_number).get()
@@ -193,6 +203,7 @@ def autodownload(serial_number):
                      as_attachment=True,
                      download_name=f"{serial_number}_QC_Report.pdf",
                      mimetype='application/pdf')
+
 
 if __name__ == '__main__':
     app.run(debug=True)
