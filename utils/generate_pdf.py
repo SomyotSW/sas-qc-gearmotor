@@ -14,23 +14,27 @@ pdfmetrics.registerFont(TTFont('THSarabunNew', 'static/fonts/THSarabunNew.ttf'))
 # Path ของโลโก้ SAS
 sas_logo_path = 'static/logo_sas.png'
 
+
 def draw_image(c, image_url, center_x, y_top, width):
     try:
         img_data = requests.get(image_url).content
         img = Image.open(io.BytesIO(img_data))
-	img = img.convert("RGB")
-	img.thumbnail((600, 800))  # ✅ บีบขนาดภาพเพื่อเร่งความเร็ว
+        img = img.convert("RGB")
+        img.thumbnail((800, 600))  # Resize เพื่อความเร็วในการแสดงผล
+
         img_width = width
-        img_height = img_width * (4 / 3)  # บังคับเป็นอัตราส่วน 3:4
+        img_height = img_width * (4 / 3)
         x = center_x - (img_width / 2)
+
         img_io = io.BytesIO()
         img.save(img_io, format='PNG')
         img_io.seek(0)
         c.drawImage(ImageReader(img_io), x, y_top - img_height, img_width, img_height)
-        return y_top - img_height - 10  # เว้นระยะด้านล่างรูปภาพ
+        return y_top - img_height - 10
     except Exception as e:
-        print(f"Error loading image {image_url}: {e}")
+        print(f"Error loading image {image_url}: {e}", flush=True)
         return y_top - 10
+
 
 def create_qc_pdf(data, image_urls=[], image_labels=[]):
     buffer = io.BytesIO()
@@ -137,4 +141,4 @@ def create_qc_pdf(data, image_urls=[], image_labels=[]):
 
     c.save()
     buffer.seek(0)
-    return b
+    return buffer
