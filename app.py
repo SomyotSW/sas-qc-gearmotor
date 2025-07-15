@@ -119,19 +119,21 @@ def submit():
 
         def background_finalize():
             try:
-                data = ref.child(serial).get()
+		data = ref.child(serial).get()
+                # ✅ สร้าง PDF ก่อน
                 pdf_stream = create_qc_pdf(data, image_urls=list(data.get("images", {}).values()))
-                qr_stream = generate_qr_code(serial, report_blob.public_url)
-
-                qr_blob = bucket.blob(f"qr_codes/{serial}.png")
-                qr_blob.upload_from_file(qr_stream, content_type="image/png")
-                qr_blob.make_public()
-
                 report_blob = bucket.blob(f"qc_reports/{serial}.pdf")
                 pdf_stream.seek(0)
                 report_blob.upload_from_file(pdf_stream, content_type="application/pdf")
                 report_blob.make_public()
 
+                # ✅ สร้าง QR code หลังจากได้ URL จริง
+                qr_stream = generate_qr_code(serial, report_blob.public_url)
+                qr_blob = bucket.blob(f"qr_codes/{serial}.png")
+                qr_blob.upload_from_file(qr_stream, content_type="image/png")
+                qr_blob.make_public()
+
+                 # ✅ อัปเดต Firebase
                 ref.child(serial).update({
                     "qc_pdf_url": report_blob.public_url,
                     "qr_png_url": qr_blob.public_url

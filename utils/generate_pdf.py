@@ -18,6 +18,8 @@ def draw_image(c, image_url, center_x, y_top, width):
     try:
         img_data = requests.get(image_url).content
         img = Image.open(io.BytesIO(img_data))
+	img = img.convert("RGB")
+	img.thumbnail((600, 800))  # ✅ บีบขนาดภาพเพื่อเร่งความเร็ว
         img_width = width
         img_height = img_width * (4 / 3)  # บังคับเป็นอัตราส่วน 3:4
         x = center_x - (img_width / 2)
