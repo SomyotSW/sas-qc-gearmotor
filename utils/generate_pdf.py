@@ -20,7 +20,7 @@ def draw_image(c, image_url, center_x, y_top, width):
         img_data = requests.get(image_url).content
         img = Image.open(io.BytesIO(img_data))
         img = img.convert("RGB")
-        img.thumbnail((800, 600))  # Resize เพื่อความเร็วในการแสดงผล
+        img.thumbnail((800, 600))
 
         img_width = width
         img_height = img_width * (4 / 3)
@@ -48,15 +48,15 @@ def create_qc_pdf(data, image_urls=[], image_labels=[]):
         font_name = 'THSarabunNew'
         font_size = 16
         c.setFont(font_name, font_size)
-        if color:
-            c.setFillColor(color)
-        else:
-            c.setFillColorRGB(0, 0, 0)
+        c.setFillColor(color if color else black)
         c.drawString(margin, line, text)
         line -= 22
 
     def draw_header():
-        c.drawImage(sas_logo_path, 1.5 * cm, height - 3 * cm, width=3 * cm, preserveAspectRatio=True)
+        logo_width = 3 * cm
+        x = width - logo_width - 1.5 * cm
+        y = height - 3 * cm
+        c.drawImage(sas_logo_path, x, y, width=logo_width, preserveAspectRatio=True)
 
     draw_header()
     c.setFont("THSarabunNew", 22)
