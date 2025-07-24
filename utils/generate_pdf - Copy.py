@@ -7,85 +7,36 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.lib.colors import red, black, gray
 import io
 import requests
-from PIL import Image, ExifTags
+from PIL import Image
 
-# Register Thai font
 pdfmetrics.registerFont(TTFont('THSarabunNew', 'static/fonts/THSarabunNew.ttf'))
 
-# Path to SAS logo
-sas_logo_path = 'static/sas_logo.png'
+# Path ของโลโก้ SAS
+sas_logo_path = 'static/logos_sas.png'
 
 
-def draw_image(c, image_url, center_x, y_top, max_width):
-    """
-    Downloads the image, fixes EXIF orientation, and scales it so that:
-      - width ≤ max_width
-      - height ≤ (y_top - bottom_margin)
-    while preserving aspect ratio, then draws it centered at (center_x, y_top).
-    Returns the new y_top after drawing.
-    """
-    BOTTOM_MARGIN = 3 * cm  # space for footer
-
+def draw_image(c, image_url, center_x, y_top, width):
     try:
-        # Fetch and open image
         img_data = requests.get(image_url).content
         img = Image.open(io.BytesIO(img_data))
+        img = img.convert("RGB")
+        img.thumbnail((800, 600))
 
-        # Fix orientation via EXIF
-        try:
-            exif = img._getexif() or {}
-            orient_tag = next(k for k, v in ExifTags.TAGS.items() if v == "Orientation")
-            orientation = exif.get(orient_tag)
-            if orientation == 3:
-                img = img.rotate(180, expand=True)
-            elif orientation == 6:
-                img = img.rotate(270, expand=True)
-            elif orientation == 8:
-                img = img.rotate(90, expand=True)
-        except Exception:
-            pass  # ignore if no EXIF or orientation tag
+        img_width = width
+        img_height = img_width * (4 / 3)
+        x = center_x - (img_width / 2)
 
-        # Compute target size preserving aspect ratio
-        orig_w, orig_h = img.size
-        aspect = orig_h / orig_w
-
-        # Start by fitting width
-        img_w = max_width
-        img_h = img_w * aspect
-
-        # If too tall, fit height instead
-        available_h = y_top - BOTTOM_MARGIN
-        if img_h > available_h:
-            img_h = available_h
-            img_w = img_h / aspect
-
-        # Center horizontally
-        x = center_x - img_w / 2
-        y = y_top - img_h
-
-        # Draw image
         img_io = io.BytesIO()
         img.save(img_io, format='PNG')
         img_io.seek(0)
-        c.drawImage(ImageReader(img_io), x, y, width=img_w, height=img_h)
-
-        return y - 10  # new y_top for next content
-
+        c.drawImage(ImageReader(img_io), x, y_top - img_height, img_width, img_height)
+        return y_top - img_height - 10
     except Exception as e:
         print(f"Error loading image {image_url}: {e}", flush=True)
         return y_top - 10
 
 
-def create_qc_pdf(data, image_urls=None, image_labels=None):
-    """
-    Builds a two‑page QC report PDF:
-     - Page 1: header + textual QC data
-     - Page 2: header + images laid out neatly
-    Returns an io.BytesIO buffer ready for writing.
-    """
-    image_urls = image_urls or []
-    image_labels = image_labels or []
-
+def create_qc_pdf(data, image_urls=[], image_labels=[]):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
@@ -102,18 +53,17 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
         line -= 22
 
     def draw_header():
-        logo_w = 3 * cm
-        x = width - logo_w - 1.5 * cm
+        logo_width = 3 * cm
+        x = width - logo_width - 1.5 * cm
         y = height - 3 * cm
-        c.drawImage(sas_logo_path, x, y, width=logo_w, preserveAspectRatio=True)
+        c.drawImage(sas_logo_path, x, y, width=logo_width, preserveAspectRatio=True)
 
-    # --- Page 1 ---
     draw_header()
     c.setFont("THSarabunNew", 22)
     c.drawCentredString(width / 2, line, "รายงานการตรวจสอบ QC มอเตอร์เกียร์")
     line -= 40
 
-    draw_text(f"Serial Number: {data.get('serial', '-')}")
+    draw_text(f"Serial Number: {data.get('serial', '-')}", bold=True)
     draw_text(f"วันที่ตรวจสอบ: {data.get('date', '-')}")
     draw_text(f"ประเภทสินค้า: {data.get('product_type', '-')}")
     draw_text(f"Nameplate: {data.get('motor_nameplate', '-')}")
@@ -121,12 +71,13 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     product_type = data.get("product_type", "").lower()
     is_acdc_or_bldc = "ac/dc" in product_type or "bldc" in product_type
     is_servo = "servo" in product_type
+    is_other = not is_acdc_or_bldc and not is_servo
 
     if is_servo:
         draw_text("**ไม่ประกอบสินค้า", bold=True, color=red)
         draw_text("**ไม่เติมน้ำมันเกียร์", bold=True, color=red)
 
-    draw_text("")  # spacer
+    draw_text("")
 
     if data.get("motor_current"):
         draw_text(f"ค่ากระแสมอเตอร์: {data['motor_current']} A")
@@ -148,9 +99,9 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
         draw_text("")
         draw_text("**การรับประกันสินค้า 18 เดือน", bold=True, color=red)
 
-    # Footer line and contacts
     c.setFillColor(gray)
     c.line(1.5 * cm, 3.5 * cm, width - 1.5 * cm, 3.5 * cm)
+
     c.setFont("THSarabunNew", 18)
     c.setFillColor(black)
     c.drawString(2 * cm, 1 * cm, "📞 SAS Service: 081-9216225")
@@ -158,34 +109,30 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
 
     c.showPage()
 
-    # --- Page 2: Images ---
     draw_header()
     c.setFont("THSarabunNew", 18)
     c.drawString(margin, height - margin - 20, "ภาพประกอบ:")
     y_top = height - margin - 60
     center_x = width / 2
-    max_img_w = 8 * cm
+    img_width = 8 * cm
 
     for idx, url in enumerate(image_urls):
         label = image_labels[idx] if idx < len(image_labels) else f"ภาพที่ {idx + 1}"
 
-        # New page if not enough space
-        if y_top - max_img_w * 1.2 < 3 * cm:
+        if y_top - (img_width * 4 / 3) < 3 * cm:
             c.showPage()
             draw_header()
             c.setFont("THSarabunNew", 18)
             c.drawString(margin, height - margin - 20, "ภาพประกอบ (ต่อ):")
             y_top = height - margin - 60
 
-        # Draw label
         c.setFont("THSarabunNew", 16)
         c.drawCentredString(center_x, y_top, label)
         y_top -= 20
 
-        # Draw the image itself
-        y_top = draw_image(c, url, center_x, y_top, max_img_w)
+        y_top = draw_image(c, url, center_x, y_top, img_width)
 
-    # Final footer on last page
+    c.setFont("THSarabunNew", 18)
     c.setFillColor(gray)
     c.line(1.5 * cm, 3.5 * cm, width - 1.5 * cm, 3.5 * cm)
     c.setFillColor(black)
