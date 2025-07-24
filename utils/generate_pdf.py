@@ -12,26 +12,25 @@ from PIL import Image, ExifTags
 # Register Thai font
 pdfmetrics.registerFont(TTFont('THSarabunNew', 'static/fonts/THSarabunNew.ttf'))
 
-# Path to SAS logo
-sas_logo_path = 'static/sas_logo.png'
-
+# Paths to static assets
+sas_logo_path   = 'static/sas_logo.png'
+qc_passed_path  = 'static/qc_passed.png'  # small “QC Passed” sticker
 
 def draw_image(c, image_url, center_x, y_top, max_width):
     """
-    Downloads the image, fixes EXIF orientation, and scales it so that:
-      - width ≤ max_width
-      - height ≤ (y_top - bottom_margin)
-    while preserving aspect ratio, then draws it centered at (center_x, y_top).
+    Downloads the image, fixes EXIF orientation, scales it to fit,
+    draws it centered at (center_x, y_top), then overlays a small
+    qc_passed sticker at its bottom-right corner.
     Returns the new y_top after drawing.
     """
-    BOTTOM_MARGIN = 3 * cm  # space for footer
+    BOTTOM_MARGIN = 3 * cm  # for footer
 
     try:
-        # Fetch and open image
-        img_data = requests.get(image_url).content
+        # --- Load main image ---
+        img_data = requests.get(image_url, timeout=5).content
         img = Image.open(io.BytesIO(img_data))
 
-        # Fix orientation via EXIF
+        # Fix EXIF orientation
         try:
             exif = img._getexif() or {}
             orient_tag = next(k for k, v in ExifTags.TAGS.items() if v == "Orientation")
@@ -43,33 +42,45 @@ def draw_image(c, image_url, center_x, y_top, max_width):
             elif orientation == 8:
                 img = img.rotate(90, expand=True)
         except Exception:
-            pass  # ignore if no EXIF or orientation tag
+            pass
 
-        # Compute target size preserving aspect ratio
+        # Compute scaled size
         orig_w, orig_h = img.size
         aspect = orig_h / orig_w
-
-        # Start by fitting width
         img_w = max_width
         img_h = img_w * aspect
-
-        # If too tall, fit height instead
-        available_h = y_top - BOTTOM_MARGIN
-        if img_h > available_h:
-            img_h = available_h
+        avail_h = y_top - BOTTOM_MARGIN
+        if img_h > avail_h:
+            img_h = avail_h
             img_w = img_h / aspect
 
-        # Center horizontally
         x = center_x - img_w / 2
         y = y_top - img_h
 
-        # Draw image
-        img_io = io.BytesIO()
-        img.save(img_io, format='PNG')
-        img_io.seek(0)
-        c.drawImage(ImageReader(img_io), x, y, width=img_w, height=img_h)
+        # Draw main image
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        buf.seek(0)
+        c.drawImage(ImageReader(buf), x, y, width=img_w, height=img_h)
 
-        return y - 10  # new y_top for next content
+        # --- Overlay QC Passed sticker ---
+        # Load sticker once
+        sticker = Image.open(qc_passed_path)
+        ow, oh = sticker.size
+        sticker_w = 2 * cm
+        sticker_h = sticker_w * (oh / ow)
+        # position: bottom-right corner with small padding
+        pad = 0.2 * cm
+        sx = x + img_w - sticker_w - pad
+        sy = y + pad
+
+        # draw sticker
+        stick_buf = io.BytesIO()
+        sticker.save(stick_buf, format='PNG')
+        stick_buf.seek(0)
+        c.drawImage(ImageReader(stick_buf), sx, sy, width=sticker_w, height=sticker_h, mask='auto')
+
+        return y - 10
 
     except Exception as e:
         print(f"Error loading image {image_url}: {e}", flush=True)
@@ -78,12 +89,12 @@ def draw_image(c, image_url, center_x, y_top, max_width):
 
 def create_qc_pdf(data, image_urls=None, image_labels=None):
     """
-    Builds a two‑page QC report PDF:
-     - Page 1: header + textual QC data
-     - Page 2: header + images laid out neatly
-    Returns an io.BytesIO buffer ready for writing.
+    Builds a two‑page QC report PDF with:
+      • Page 1: textual QC details
+      • Page 2: photos each overlaid with QC Passed sticker
+    Returns a BytesIO buffer.
     """
-    image_urls = image_urls or []
+    image_urls   = image_urls or []
     image_labels = image_labels or []
 
     buffer = io.BytesIO()
@@ -92,105 +103,97 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     margin = 2 * cm
     line = height - margin
 
-    def draw_text(text, bold=False, color=None):
+    def draw_text(txt, bold=False, color=None):
         nonlocal line
-        font_name = 'THSarabunNew'
-        font_size = 16
-        c.setFont(font_name, font_size)
-        c.setFillColor(color if color else black)
-        c.drawString(margin, line, text)
+        c.setFont('THSarabunNew', 16)
+        c.setFillColor(color or black)
+        c.drawString(margin, line, txt)
         line -= 22
 
     def draw_header():
-        logo_w = 3 * cm
-        x = width - logo_w - 1.5 * cm
-        y = height - 3 * cm
-        c.drawImage(sas_logo_path, x, y, width=logo_w, preserveAspectRatio=True)
+        lw = 3 * cm
+        c.drawImage(sas_logo_path,
+                    width - lw - 1.5 * cm,
+                    height - 3 * cm,
+                    width=lw,
+                    preserveAspectRatio=True)
 
-    # --- Page 1 ---
+    # --- Page 1 ---
     draw_header()
-    c.setFont("THSarabunNew", 22)
-    c.drawCentredString(width / 2, line, "รายงานการตรวจสอบ QC มอเตอร์เกียร์")
+    c.setFont('THSarabunNew', 22)
+    c.drawCentredString(width/2, line, 'รายงานการตรวจสอบ QC มอเตอร์เกียร์')
     line -= 40
 
-    draw_text(f"Serial Number: {data.get('serial', '-')}")
-    draw_text(f"วันที่ตรวจสอบ: {data.get('date', '-')}")
-    draw_text(f"ประเภทสินค้า: {data.get('product_type', '-')}")
-    draw_text(f"Nameplate: {data.get('motor_nameplate', '-')}")
+    draw_text(f"Serial Number: {data.get('serial','-')}")
+    draw_text(f"วันที่ตรวจสอบ: {data.get('date','-')}")
+    draw_text(f"ประเภทสินค้า: {data.get('product_type','-')}")
+    draw_text(f"Nameplate: {data.get('motor_nameplate','-')}")
 
-    product_type = data.get("product_type", "").lower()
-    is_acdc_or_bldc = "ac/dc" in product_type or "bldc" in product_type
-    is_servo = "servo" in product_type
-
-    if is_servo:
-        draw_text("**ไม่ประกอบสินค้า", bold=True, color=red)
-        draw_text("**ไม่เติมน้ำมันเกียร์", bold=True, color=red)
-
-    draw_text("")  # spacer
-
-    if data.get("motor_current"):
-        draw_text(f"ค่ากระแสมอเตอร์: {data['motor_current']} A")
-    if data.get("gear_ratio"):
-        draw_text(f"อัตราทดเกียร์: {data['gear_ratio']}")
-    if data.get("gear_sound"):
-        draw_text(f"เสียงเกียร์: {data['gear_sound']} dB")
-
-    if not is_acdc_or_bldc and not is_servo:
-        draw_text(f"น้ำมันเกียร์ (ลิตร): {data.get('oil_liters', '-') or '-'} ลิตร")
-        draw_text(f"สถานะการเติมน้ำมัน: {data.get('oil_filled', '-')}")
-    elif is_acdc_or_bldc:
-        draw_text("*ไม่ต้องเติมน้ำมันเกียร์", bold=True, color=red)
-
-    draw_text(f"ระยะเวลารับประกัน: {data.get('warranty', '-')} เดือน", bold=True, color=red)
-    draw_text(f"ผู้ตรวจสอบ: {data.get('inspector', '-')}")
+    p = data.get('product_type','').lower()
+    is_servo = 'servo' in p
+    is_acdc  = 'ac/dc' in p or 'bldc' in p
 
     if is_servo:
-        draw_text("")
-        draw_text("**การรับประกันสินค้า 18 เดือน", bold=True, color=red)
+        draw_text('**ไม่ประกอบสินค้า', bold=True, color=red)
+        draw_text('**ไม่เติมน้ำมันเกียร์', bold=True, color=red)
+    draw_text('')  # spacer
 
-    # Footer line and contacts
+    if data.get('motor_current'): draw_text(f"ค่ากระแสมอเตอร์: {data['motor_current']} A")
+    if data.get('gear_ratio'):    draw_text(f"อัตราทดเกียร์: {data['gear_ratio']}")
+    if data.get('gear_sound'):    draw_text(f"เสียงเกียร์: {data['gear_sound']} dB")
+
+    if not (is_servo or is_acdc):
+        draw_text(f"น้ำมันเกียร์ (ล): {data.get('oil_liters','-') or '-'}")
+        draw_text(f"สถานะเติมน้ำมัน: {data.get('oil_filled','-')}")
+    elif is_acdc:
+        draw_text('*ไม่ต้องเติมน้ำมันเกียร์', bold=True, color=red)
+
+    draw_text(f"ระยะเวลารับประกัน: {data.get('warranty','-')} เดือน", bold=True, color=red)
+    draw_text(f"ผู้ตรวจสอบ: {data.get('inspector','-')}")
+
+    if is_servo:
+        draw_text('')
+        draw_text('**การรับประกันสินค้า 18 เดือน', bold=True, color=red)
+
+    # footer
     c.setFillColor(gray)
-    c.line(1.5 * cm, 3.5 * cm, width - 1.5 * cm, 3.5 * cm)
-    c.setFont("THSarabunNew", 18)
+    c.line(1.5*cm, 3.5*cm, width-1.5*cm, 3.5*cm)
+    c.setFont('THSarabunNew', 18)
     c.setFillColor(black)
-    c.drawString(2 * cm, 1 * cm, "📞 SAS Service: 081-9216225")
-    c.drawRightString(width - 2 * cm, 1 * cm, "📞 SAS Sales: 081-9216225 คุณสมยศ")
+    c.drawString(2*cm, 1*cm, '📞 SAS Service: 081-9216225')
+    c.drawRightString(width-2*cm, 1*cm, '📞 SAS Sales: 081-9216225 คุณสมยศ')
 
     c.showPage()
 
-    # --- Page 2: Images ---
+    # --- Page 2: Images ---
     draw_header()
-    c.setFont("THSarabunNew", 18)
-    c.drawString(margin, height - margin - 20, "ภาพประกอบ:")
-    y_top = height - margin - 60
+    c.setFont('THSarabunNew', 18)
+    c.drawString(margin, height - margin - 20, 'ภาพประกอบ:')
+    y_top   = height - margin - 60
     center_x = width / 2
-    max_img_w = 8 * cm
+    max_w    = 8 * cm
 
-    for idx, url in enumerate(image_urls):
-        label = image_labels[idx] if idx < len(image_labels) else f"ภาพที่ {idx + 1}"
-
-        # New page if not enough space
-        if y_top - max_img_w * 1.2 < 3 * cm:
+    for i, url in enumerate(image_urls):
+        label = image_labels[i] if i < len(image_labels) else f'ภาพที่ {i+1}'
+        if y_top - max_w*1.2 < 3*cm:
             c.showPage()
             draw_header()
-            c.setFont("THSarabunNew", 18)
-            c.drawString(margin, height - margin - 20, "ภาพประกอบ (ต่อ):")
+            c.setFont('THSarabunNew', 18)
+            c.drawString(margin, height - margin - 20, 'ภาพประกอบ (ต่อ):')
             y_top = height - margin - 60
 
-        # Draw label
-        c.setFont("THSarabunNew", 16)
+        c.setFont('THSarabunNew', 16)
         c.drawCentredString(center_x, y_top, label)
         y_top -= 20
 
-        # Draw the image itself
-        y_top = draw_image(c, url, center_x, y_top, max_img_w)
+        y_top = draw_image(c, url, center_x, y_top, max_w)
 
-    # Final footer on last page
+    # final footer
     c.setFillColor(gray)
-    c.line(1.5 * cm, 3.5 * cm, width - 1.5 * cm, 3.5 * cm)
+    c.line(1.5*cm, 3.5*cm, width-1.5*cm, 3.5*cm)
     c.setFillColor(black)
-    c.drawString(2 * cm, 1 * cm, "📞 SAS Service: 081-9216225")
-    c.drawRightString(width - 2 * cm, 1 * cm, "📞 SAS Sales: 081-9216225 คุณสมยศ")
+    c.drawString(2*cm, 1*cm, '📞 SAS Service: 081-9216225')
+    c.drawRightString(width-2*cm, 1*cm, '📞 SAS Sales: 081-9216225 คุณสมยศ')
 
     c.save()
     buffer.seek(0)
