@@ -17,26 +17,34 @@ from datetime import datetime, date, timedelta
 pdfmetrics.registerFont(TTFont('THSarabunNew', 'static/fonts/THSarabunNew.ttf'))
 
 # Paths to static assets (เดิม)
-sas_logo_path  = 'static/logos_sas.png'
+sas_logo_path  = 'static/logo_sas.png'
 qc_passed_path = 'static/qc_passed.png'
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+def _resolve_sas_logo_path():
+    """
+    ✅ NEW: หาไฟล์โลโก้ให้เจอแบบชัวร์ โดยอิงตำแหน่งไฟล์ generate_pdf.py
+    """
+    # utils/generate_pdf.py -> BASE_DIR = โฟลเดอร์โปรเจค
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-_SAS_LOGO_CANDIDATES = [
-    # โฟลเดอร์ static (ตามที่หน้า form ใช้จริง)
-    os.path.join(BASE_DIR, "static", "logo_sas.png"),
-    os.path.join(BASE_DIR, "static", "logo_sas.PNG"),
-    os.path.join(BASE_DIR, "static", "logos_sas.png"),  # เดิม
-    os.path.join(BASE_DIR, "static", "logos_sas.PNG"),
+    candidates = [
+        os.path.join(base_dir, "static", "logo_sas.png"),     # ✅ ตัวที่หน้าเว็บใช้จริง
+        os.path.join(base_dir, "static", "logo_sas.PNG"),
+        os.path.join(base_dir, "static", "logos_sas.png"),    # เผื่อมีชื่อเดิม
+        os.path.join(base_dir, "static", "logos_sas.PNG"),
+        os.path.join(base_dir, "logo_sas.png"),               # เผื่ออยู่ root
+        os.path.join(base_dir, "logo_sas.PNG"),
+    ]
 
-    # โฟลเดอร์ templates (จากรูปโปรเจคคุณมีอยู่)
-    os.path.join(BASE_DIR, "templates", "logo_sas.png"),
-    os.path.join(BASE_DIR, "templates", "logo_sas.PNG"),
+    for p in candidates:
+        if os.path.exists(p):
+            return p
 
-    # โฟลเดอร์ root (จากรูปโปรเจคคุณมี logo_sas ที่ root)
-    os.path.join(BASE_DIR, "logo_sas.png"),
-    os.path.join(BASE_DIR, "logo_sas.PNG"),
-]
+    # fallback: ใช้ค่าที่กำหนดไว้เดิม (เผื่อรัน local จาก cwd ถูก)
+    if os.path.exists(sas_logo_path):
+        return sas_logo_path
+
+    return None
 
 
 def _parse_th_date(s: str):
@@ -112,27 +120,22 @@ def _compute_warranty_end_date(data: dict):
 def draw_header(c, width, height):
     """Draw the SAS logo in the top-right corner."""
     try:
-        found_path = None
-        for p in _SAS_LOGO_CANDIDATES:
-            try:
-                if os.path.exists(p):
-                    Image.open(p).close()
-                    found_path = p
-                    break
-            except Exception:
-                continue
+        logo_path = _resolve_sas_logo_path()
+        if not logo_path:
+            raise FileNotFoundError("SAS logo not found (static/logo_sas.png).")
 
-        if not found_path:
-            raise FileNotFoundError(
-                f"SAS logo not found. BASE_DIR={BASE_DIR} Tried: {', '.join(_SAS_LOGO_CANDIDATES)}"
-            )
+        # ✅ ใช้หลักการเดียวกับ qc_passed: PIL -> BytesIO -> ImageReader(buf)
+        logo = Image.open(logo_path).convert("RGBA")
+        buf = io.BytesIO()
+        logo.save(buf, format="PNG")
+        buf.seek(0)
 
         logo_w = 3 * cm
         x = width - logo_w - 1.5 * cm
         y = height - 3 * cm
 
         c.drawImage(
-            ImageReader(found_path),
+            ImageReader(buf),
             x, y,
             width=logo_w,
             preserveAspectRatio=True,
@@ -230,6 +233,12 @@ def _infer_image_label(url: str, fallback: str = "ภาพประกอบ"):
     u = str(url).lower()
 
     mapping = [
+        # ✅ NEW: RFKS nameplate images (ตามฟิลด์ใหม่ใน form.html)
+        ("rfks_nameplate_motor", "Name plate : Motor"),
+        ("rfks_nameplate_gear", "Name plate : Gear"),
+        ("nameplate_motor", "Name plate : Motor"),
+        ("nameplate_gear", "Name plate : Gear"),
+
         # กระแส / Nameplate / มอเตอร์ / เกียร์ / คอนโทรลเลอร์ / ติดตั้ง
         ("current", "ภาพค่ากระแส"),
         ("amp", "ภาพค่ากระแส"),

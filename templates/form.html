@@ -171,7 +171,19 @@
               </div>
             </div>
           </div>
-
+	        <!-- RFKS Series Section (NEW) -->
+        <div id="rfks_section" style="display:none;">
+          <div class="row">
+            <div class="col-md-6">
+              <label>Name plate : Motor</label>
+              <input type="file" name="rfks_nameplate_motor_img" accept="image/*" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label>Name plate : Gear</label>
+              <input type="file" name="rfks_nameplate_gear_img" accept="image/*" class="form-control">
+            </div>
+          </div>
+        </div>
           <!-- รูปภาพ -->
           <div class="row mt-3">
             <div class="col-md-4">
@@ -216,7 +228,7 @@
       document.getElementById("acdc_parts").style.display = (type === "AC/DC Gear Motor" || type === "BLDC Gear Motor") ? "block" : "none";
       document.getElementById("servo_section").style.display = (type === "Servo Motor and Servo Drive") ? "block" : "none";
       document.getElementById("general_section").style.display = (type === "Servo Motor and Servo Drive") ? "none" : "block";
-
+            document.getElementById("rfks_section").style.display = (type === "RFKS Series") ? "block" : "none";
       document.getElementById("controller_image").style.display = "none";
       document.getElementById("oil_section").style.display = (type === "AC/DC Gear Motor" || type === "BLDC Gear Motor") ? "none" : "block";
 

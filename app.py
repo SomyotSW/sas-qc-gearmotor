@@ -93,6 +93,10 @@ def submit():
         servo_drive_img = request.files.get('servo_drive_img')
         cable_wire_img = request.files.get('cable_wire_img')
 
+        # ✅ NEW (RFKS): รับไฟล์แนบ Name plate เพิ่ม 2 ช่อง
+        rfks_nameplate_motor_img = request.files.get('rfks_nameplate_motor_img')
+        rfks_nameplate_gear_img = request.files.get('rfks_nameplate_gear_img')
+
         images = {
             "motor_current_img": upload_image(motor_current_img, "motor_current"),
             "gear_sound_img": upload_image(gear_sound_img, "gear_sound"),
@@ -100,7 +104,11 @@ def submit():
             "controller_img": upload_image(controller_img, "controller"),
             "servo_motor_img": upload_image(servo_motor_img, "servo_motor"),
             "servo_drive_img": upload_image(servo_drive_img, "servo_drive"),
-            "cable_wire_img": upload_image(cable_wire_img, "cable_wire")
+            "cable_wire_img": upload_image(cable_wire_img, "cable_wire"),
+
+            # ✅ NEW (RFKS): อัปโหลดรูป Name plate : Motor / Gear (จะเป็น None ถ้าไม่ได้เลือก หรือไม่ใช่ RFKS)
+            "rfks_nameplate_motor_img": upload_image(rfks_nameplate_motor_img, "rfks_nameplate_motor"),
+            "rfks_nameplate_gear_img": upload_image(rfks_nameplate_gear_img, "rfks_nameplate_gear"),
         }
 
         ref.child(serial).set({
@@ -125,8 +133,44 @@ def submit():
             try:
                 data = ref.child(serial).get()
 
+                # ✅ NEW (RFKS): จัดลำดับรูป + ชื่อรูปให้ตรงหัวข้อ (ไม่กระทบกรณีอื่น)
+                images_dict = data.get("images", {}) or {}
+
+                image_urls = []
+                image_labels = []
+
+                # 1) RFKS nameplate (เฉพาะเมื่อมีรูปจริง)
+                if images_dict.get("rfks_nameplate_motor_img"):
+                    image_urls.append(images_dict.get("rfks_nameplate_motor_img"))
+                    image_labels.append("Name plate : Motor")
+
+                if images_dict.get("rfks_nameplate_gear_img"):
+                    image_urls.append(images_dict.get("rfks_nameplate_gear_img"))
+                    image_labels.append("Name plate : Gear")
+
+                # 2) ภาพเดิมทั้งหมด (คงไว้เหมือนเดิม แต่กรอง None ออก)
+                ordered_keys = [
+                    ("motor_current_img", "ภาพค่ากระแส"),
+                    ("gear_sound_img", "ภาพเสียงเกียร์"),
+                    ("assembly_img", "ภาพประกอบหน้างาน"),
+                    ("controller_img", "ภาพ Controller"),
+                    ("servo_motor_img", "ภาพ Servo Motor"),
+                    ("servo_drive_img", "ภาพ Servo Drive"),
+                    ("cable_wire_img", "ภาพ Cable Wire"),
+                ]
+
+                for k, label in ordered_keys:
+                    url = images_dict.get(k)
+                    if url:
+                        image_urls.append(url)
+                        image_labels.append(label)
+
                 # ✅ สร้าง PDF และอัปโหลดก่อน
-                pdf_stream = create_qc_pdf(data, image_urls=list(data.get("images", {}).values()))
+                pdf_stream = create_qc_pdf(
+                    data,
+                    image_urls=image_urls,
+                    image_labels=image_labels
+                )
                 report_blob = bucket.blob(f"qc_reports/{serial}.pdf")
                 pdf_stream.seek(0)
                 report_blob.upload_from_file(pdf_stream, content_type="application/pdf")
@@ -171,7 +215,35 @@ def download_pdf(serial_number):
     report_data = ref.child(serial_number).get()
     if not report_data:
         return "ไม่พบรายงาน", 404
-    pdf_stream = create_qc_pdf(report_data, image_urls=list(report_data.get("images", {}).values()))
+
+    # ✅ NEW (RFKS): ให้ download สร้าง PDF ด้วย label/order เดียวกับ background
+    images_dict = report_data.get("images", {}) or {}
+    image_urls = []
+    image_labels = []
+
+    if images_dict.get("rfks_nameplate_motor_img"):
+        image_urls.append(images_dict.get("rfks_nameplate_motor_img"))
+        image_labels.append("Name plate : Motor")
+    if images_dict.get("rfks_nameplate_gear_img"):
+        image_urls.append(images_dict.get("rfks_nameplate_gear_img"))
+        image_labels.append("Name plate : Gear")
+
+    ordered_keys = [
+        ("motor_current_img", "ภาพค่ากระแส"),
+        ("gear_sound_img", "ภาพเสียงเกียร์"),
+        ("assembly_img", "ภาพประกอบหน้างาน"),
+        ("controller_img", "ภาพ Controller"),
+        ("servo_motor_img", "ภาพ Servo Motor"),
+        ("servo_drive_img", "ภาพ Servo Drive"),
+        ("cable_wire_img", "ภาพ Cable Wire"),
+    ]
+    for k, label in ordered_keys:
+        url = images_dict.get(k)
+        if url:
+            image_urls.append(url)
+            image_labels.append(label)
+
+    pdf_stream = create_qc_pdf(report_data, image_urls=image_urls, image_labels=image_labels)
     pdf_stream.seek(0)
     return send_file(pdf_stream,
                      as_attachment=True,
@@ -197,7 +269,35 @@ def autodownload(serial_number):
     report_data = ref.child(serial_number).get()
     if not report_data:
         return "ไม่พบรายงาน", 404
-    pdf_stream = create_qc_pdf(report_data, image_urls=list(report_data.get("images", {}).values()))
+
+    # ✅ NEW (RFKS): ให้ autodownload สร้าง PDF ด้วย label/order เดียวกับ background
+    images_dict = report_data.get("images", {}) or {}
+    image_urls = []
+    image_labels = []
+
+    if images_dict.get("rfks_nameplate_motor_img"):
+        image_urls.append(images_dict.get("rfks_nameplate_motor_img"))
+        image_labels.append("Name plate : Motor")
+    if images_dict.get("rfks_nameplate_gear_img"):
+        image_urls.append(images_dict.get("rfks_nameplate_gear_img"))
+        image_labels.append("Name plate : Gear")
+
+    ordered_keys = [
+        ("motor_current_img", "ภาพค่ากระแส"),
+        ("gear_sound_img", "ภาพเสียงเกียร์"),
+        ("assembly_img", "ภาพประกอบหน้างาน"),
+        ("controller_img", "ภาพ Controller"),
+        ("servo_motor_img", "ภาพ Servo Motor"),
+        ("servo_drive_img", "ภาพ Servo Drive"),
+        ("cable_wire_img", "ภาพ Cable Wire"),
+    ]
+    for k, label in ordered_keys:
+        url = images_dict.get(k)
+        if url:
+            image_urls.append(url)
+            image_labels.append(label)
+
+    pdf_stream = create_qc_pdf(report_data, image_urls=image_urls, image_labels=image_labels)
     pdf_stream.seek(0)
     return send_file(pdf_stream,
                      as_attachment=True,
