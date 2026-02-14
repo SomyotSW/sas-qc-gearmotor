@@ -126,19 +126,27 @@ def draw_header(c, width, height):
 
         # ✅ ใช้หลักการเดียวกับ qc_passed: PIL -> BytesIO -> ImageReader(buf)
         logo = Image.open(logo_path).convert("RGBA")
+
+        # ✅ สำคัญ: คำนวณอัตราส่วน แล้วกำหนดทั้ง width และ height
+        lw, lh = logo.size
+        logo_w = 3 * cm
+        logo_h = logo_w * (lh / lw)
+
         buf = io.BytesIO()
         logo.save(buf, format="PNG")
         buf.seek(0)
 
-        logo_w = 3 * cm
-        x = width - logo_w - 1.5 * cm
-        y = height - 3 * cm
+        # ✅ จัดตำแหน่งให้ไม่หลุดขอบบน (อิงจาก margin)
+        margin_top = 1.5 * cm
+        margin_right = 1.5 * cm
+        x = width - logo_w - margin_right
+        y = height - margin_top - logo_h
 
         c.drawImage(
             ImageReader(buf),
             x, y,
             width=logo_w,
-            preserveAspectRatio=True,
+            height=logo_h,
             mask='auto'
         )
     except Exception as e:

@@ -91,15 +91,17 @@
             </div>
 
             <a class="btn" href="{{ qc_url }}" target="_blank">📄 ดูรายงาน QC Report (PDF)</a>
-            <a class="btn" href="{{ qr_url }}" download>📥 ดาวน์โหลด QR Code (.PNG)</a>
+
+            <!-- ✅ UPDATED: กดแล้วดาวน์โหลดทันที (เรียก endpoint ที่คืนไฟล์ PNG โดยตรง) -->
+            <a class="btn" href="{{ url_for('generate_qr', serial_number=serial_number) }}" download>
+                📥 ดาวน์โหลด QR Code (.PNG)
+            </a>
 
             <!-- ✅ เสียงแจ้งเตือน -->
             <audio id="doneSound" autoplay>
                 <source src="{{ url_for('static', filename='audio/qrcodedone.mp3') }}" type="audio/mpeg">
                 Browser ของคุณไม่รองรับเสียง
             </audio>
-
-            <button class="btn" onclick="document.getElementById('doneSound').play()">🔊 ฟังอีกครั้ง</button>
 
             <script>
                 window.onload = function () {
