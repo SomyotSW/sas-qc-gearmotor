@@ -6,6 +6,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 from reportlab.lib.colors import red, black, gray
 import io
+import os
 import requests
 from PIL import Image, ExifTags
 
@@ -19,16 +20,22 @@ pdfmetrics.registerFont(TTFont('THSarabunNew', 'static/fonts/THSarabunNew.ttf'))
 sas_logo_path  = 'static/logos_sas.png'
 qc_passed_path = 'static/qc_passed.png'
 
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-# ✅ NEW: robust logo path candidates (แก้ปัญหาโลโก้ไม่ขึ้น)
 _SAS_LOGO_CANDIDATES = [
-    'static/logos_sas.png',     # เดิม
-    'static/logo_sas.png',
-    'static/logo_sas.PNG',
-    'templates/logo_sas.png',
-    'templates/logo_sas.PNG',
-    'logo_sas.png',
-    'logo_sas.PNG',
+    # โฟลเดอร์ static (ตามที่หน้า form ใช้จริง)
+    os.path.join(BASE_DIR, "static", "logo_sas.png"),
+    os.path.join(BASE_DIR, "static", "logo_sas.PNG"),
+    os.path.join(BASE_DIR, "static", "logos_sas.png"),  # เดิม
+    os.path.join(BASE_DIR, "static", "logos_sas.PNG"),
+
+    # โฟลเดอร์ templates (จากรูปโปรเจคคุณมีอยู่)
+    os.path.join(BASE_DIR, "templates", "logo_sas.png"),
+    os.path.join(BASE_DIR, "templates", "logo_sas.PNG"),
+
+    # โฟลเดอร์ root (จากรูปโปรเจคคุณมี logo_sas ที่ root)
+    os.path.join(BASE_DIR, "logo_sas.png"),
+    os.path.join(BASE_DIR, "logo_sas.PNG"),
 ]
 
 
@@ -105,20 +112,19 @@ def _compute_warranty_end_date(data: dict):
 def draw_header(c, width, height):
     """Draw the SAS logo in the top-right corner."""
     try:
-        # ✅ NEW: try multiple locations; use ImageReader(path) directly
         found_path = None
         for p in _SAS_LOGO_CANDIDATES:
             try:
-                # open to validate existence + readable
-                Image.open(p).close()
-                found_path = p
-                break
+                if os.path.exists(p):
+                    Image.open(p).close()
+                    found_path = p
+                    break
             except Exception:
                 continue
 
         if not found_path:
             raise FileNotFoundError(
-                f"SAS logo not found. Tried: {', '.join(_SAS_LOGO_CANDIDATES)}"
+                f"SAS logo not found. BASE_DIR={BASE_DIR} Tried: {', '.join(_SAS_LOGO_CANDIDATES)}"
             )
 
         logo_w = 3 * cm
