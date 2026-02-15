@@ -60,19 +60,19 @@ def submit():
         if not request.content_type.startswith('multipart/form-data'):
             return "Invalid Content-Type", 400
 
-        product_type = request.form.get('product_type')
-        motor_nameplate = request.form.get('motor_nameplate')
-        motor_current = request.form.get('motor_current')
-        gear_ratio = request.form.get('gear_ratio')
+         product_type = request.form.get('product_type')
+          motor_nameplate = request.form.get('motor_nameplate')
+         motor_current = request.form.get('motor_current')
+          gear_ratio = request.form.get('gear_ratio')
         gear_sound = request.form.get('gear_sound')
         warranty = request.form.get('warranty')
-        inspector = request.form.get('inspector')
+         inspector = request.form.get('inspector')
                 oil_type = request.form.get('oil_type')
-        oil_liters = request.form.get('oil_liters')
-        oil_filled = 'เติมแล้ว' if request.form.get('oil_filled') else 'ยังไม่เติม'
-        acdc_parts = request.form.getlist('acdc_parts')
-        servo_motor_model = request.form.get('servo_motor_model')
-        servo_drive_model = request.form.get('servo_drive_model')
+         oil_liters = request.form.get('oil_liters')
+         oil_filled = 'เติมแล้ว' if request.form.get('oil_filled') else 'ยังไม่เติม'
+         acdc_parts = request.form.getlist('acdc_parts')
+         servo_motor_model = request.form.get('servo_motor_model')
+          servo_drive_model = request.form.get('servo_drive_model')
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         serial = f"SAS{timestamp}"
@@ -119,11 +119,11 @@ def submit():
             "motor_current": motor_current,
             "gear_ratio": gear_ratio,
             "gear_sound": gear_sound,
-            "warranty": warranty,
-            "inspector": inspector,
+             "warranty": warranty,
+             "inspector": inspector,
                         "oil_type": oil_type,
-            "oil_liters": oil_liters,
-            "oil_filled": oil_filled,
+             "oil_liters": oil_liters,
+              "oil_filled": oil_filled,
             "acdc_parts": acdc_parts,
             "servo_motor_model": servo_motor_model,
             "servo_drive_model": servo_drive_model,
