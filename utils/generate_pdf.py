@@ -325,7 +325,10 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     line -= 40
 
     draw_text(f"Serial Number: {data.get('serial','-')}")
-    draw_text(f"วันที่ตรวจสอบ: {data.get('date','-')}")
+    raw_date = data.get('date', '-') or '-'
+    d = _parse_th_date(raw_date)  # ใช้ฟังก์ชัน parse ที่มีอยู่แล้ว
+    date_str = _format_th_date(d) if d else str(raw_date)
+    draw_text(f"วันที่ตรวจสอบ: {date_str}")
     draw_text(f"ประเภทสินค้า: {data.get('product_type','-')}")
     draw_text(f"Nameplate: {data.get('motor_nameplate','-')}")
 
@@ -409,9 +412,9 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
 
     # Final footer on last page
     c.setFillColor(gray)
-    c.line(1.5*cm, 3.5*cm, width-1.5*cm, 3.5*cm)
+    c.line(1.5*cm, 2.5*cm, width-1.5*cm, 2.5*cm)
     c.setFillColor(black)
-    c.drawString(2*cm, 1*cm, '📞 SAS Service: 081-9216225')
+    c.drawString(2*cm, 1*cm, '📞 SAS Service: 096-2815161')
     c.drawRightString(width-2*cm, 1*cm, '📞 SAS Sales: 081-9216225 คุณสมยศ')
 
     c.save()
