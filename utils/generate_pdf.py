@@ -316,11 +316,6 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
 
     # ✅ FIXED: Indentation ต้องตรงทุกบรรทัดใน block นี้
     if not (is_servo or is_acdc):
-
-		draw_text(f"ชนิดของน้ำมันเกียร์: {data.get('oil_type','-') or '-'}")
-		draw_text(f"จำนวนน้ำมันเกียร์ (ลิตร): {data.get('oil_liters','-') or '-'}")
-		draw_text(f"สถานะเติมน้ำมัน: {data.get('oil_filled','-')}")
-
         draw_text(f"ชนิดของน้ำมันเกียร์: {data.get('oil_type','-') or '-'}")
         draw_text(f"จำนวนน้ำมันเกียร์ (ลิตร): {data.get('oil_liters','-') or '-'}")
         draw_text(f"สถานะเติมน้ำมัน: {data.get('oil_filled','-')}")
