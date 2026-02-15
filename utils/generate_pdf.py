@@ -322,9 +322,9 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
         draw_text(f"เสียงเกียร์: {data['gear_sound']} dB")
 
     if not (is_servo or is_acdc):
-	draw_text(f"ชนิดของน้ำมันเกียร์: {data.get('oil_type','-') or '-'}")
-	draw_text(f"จำนวนน้ำมันเกียร์ (ลิตร): {data.get('oil_liters','-') or '-'}")
-	draw_text(f"สถานะเติมน้ำมัน: {data.get('oil_filled','-')}")
+		draw_text(f"ชนิดของน้ำมันเกียร์: {data.get('oil_type','-') or '-'}")
+		draw_text(f"จำนวนน้ำมันเกียร์ (ลิตร): {data.get('oil_liters','-') or '-'}")
+		draw_text(f"สถานะเติมน้ำมัน: {data.get('oil_filled','-')}")
     elif is_acdc:
         draw_text('*ไม่ต้องเติมน้ำมันเกียร์', color=red)
 
