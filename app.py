@@ -26,6 +26,13 @@ firebase_admin.initialize_app(cred, {
 
 ref = db.reference("/qc_data")
 bucket = storage.bucket()
+# ✅ NEW: Inspector mapping (ID -> ชื่อ)
+INSPECTOR_MAP = {
+    "QC001": "คุณสมประสงค์",
+    "QC002": "คุณเกียรติศักดิ์",
+    "QC003": "คุณมัด",
+    "QC999": "คุณโชติธนินท์",
+}
 
 
 @app.route('/')
@@ -36,13 +43,17 @@ def home():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        employee_id = request.form.get('employee_id')
-        allowed_ids = ['QC001', 'QC002', 'QC003']
+        employee_id = (request.form.get('employee_id') or '').strip().upper()  # ✅ NEW: กันพิมพ์หลุด
+        allowed_ids = list(INSPECTOR_MAP.keys())  # ✅ NEW: ใช้จาก mapping
+
         if employee_id not in allowed_ids:
             return render_template('login.html', error=True)
+
         session['employee_id'] = employee_id
+        session['inspector_name'] = INSPECTOR_MAP.get(employee_id, employee_id)  # ✅ NEW
         session['just_logged_in'] = True
         return redirect(url_for('form'))
+
     return render_template('login.html')
 
 
@@ -66,7 +77,7 @@ def submit():
         gear_ratio = request.form.get('gear_ratio')
         gear_sound = request.form.get('gear_sound')
         warranty = request.form.get('warranty')
-        inspector = request.form.get('inspector')
+        inspector = session.get('inspector_name') or request.form.get('inspector')
         oil_type = request.form.get('oil_type')  # ✅ FIXED INDENT
         oil_liters = request.form.get('oil_liters')
         oil_filled = 'เติมแล้ว' if request.form.get('oil_filled') else 'ยังไม่เติม'

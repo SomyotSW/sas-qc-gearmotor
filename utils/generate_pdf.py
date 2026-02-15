@@ -5,6 +5,7 @@ from reportlab.lib.units import cm
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 from reportlab.lib.colors import red, black, gray
+import time
 import io
 import os
 import requests
@@ -19,6 +20,33 @@ pdfmetrics.registerFont(TTFont('THSarabunNew', 'static/fonts/THSarabunNew.ttf'))
 # Paths to static assets (เดิม)
 sas_logo_path  = 'static/logo_sas.png'
 qc_passed_path = 'static/qc_passed.png'
+
+SESSION = requests.Session()
+
+_QC_STICKER_READER = None
+_QC_STICKER_SIZE = None
+
+def _get_qc_sticker_cached():
+    """
+    Load qc_passed.png once -> return (ImageReader, (w,h))
+    """
+    global _QC_STICKER_READER, _QC_STICKER_SIZE
+    if _QC_STICKER_READER is None:
+        sticker = Image.open(qc_passed_path).convert("RGBA")
+        sw, sh = sticker.size
+        buf = io.BytesIO()
+        sticker.save(buf, format="PNG")
+        buf.seek(0)
+        _QC_STICKER_READER = ImageReader(buf)
+        _QC_STICKER_SIZE = (sw, sh)
+    return _QC_STICKER_READER, _QC_STICKER_SIZE
+
+# ✅ NEW: Inspector mapping (ID -> ชื่อ) เผื่อข้อมูลเก่าเป็น ID
+INSPECTOR_MAP = {
+    "QC001": "คุณสมประสงค์",
+    "QC002": "คุณเกียรติศักดิ์",
+    "QC999": "คุณโชติธนินท์",
+}
 
 
 def _resolve_sas_logo_path():
@@ -158,7 +186,7 @@ def draw_image(c, image_url, center_x, y_top, max_width):
     BOTTOM_MARGIN = 3 * cm
 
     try:
-        img_data = requests.get(image_url, timeout=5).content
+        img_data = SESSION.get(image_url, timeout=5).content
         img = Image.open(io.BytesIO(img_data))
 
         try:
@@ -173,6 +201,7 @@ def draw_image(c, image_url, center_x, y_top, max_width):
                 img = img.rotate(90, expand=True)
         except Exception:
             pass
+	img.thumbnail((1600, 1600))
 
         ow, oh = img.size
         aspect = oh / ow
@@ -198,24 +227,20 @@ def draw_image(c, image_url, center_x, y_top, max_width):
             mask='auto'
         )
 
-        sticker = Image.open(qc_passed_path)
-        sw, sh = sticker.size
-        sticker_w = 2 * cm
-        sticker_h = sticker_w * (sh / sw)
-        pad = 0.2 * cm
-        sx = x + img_w - sticker_w - pad
-        sy = y + pad
+        sticker_reader, (sw, sh) = _get_qc_sticker_cached()
+	sticker_w = 2 * cm
+	sticker_h = sticker_w * (sh / sw)
+	pad = 0.2 * cm
+	sx = x + img_w - sticker_w - pad
+	sy = y + pad
 
-        sbuf = io.BytesIO()
-        sticker.save(sbuf, format='PNG')
-        sbuf.seek(0)
-        c.drawImage(
-            ImageReader(sbuf),
-            sx, sy,
-            width=sticker_w,
-            height=sticker_h,
-            mask='auto'
-        )
+	c.drawImage(
+	    sticker_reader,
+	    sx, sy,
+	    width=sticker_w,
+	    height=sticker_h,
+	    mask='auto'
+	)
 
         return y - 10
 
@@ -289,7 +314,7 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     # --- Page 1: Textual QC data ---
     draw_header(c, width, height)
     c.setFont('THSarabunNew', 22)
-    c.drawCentredString(width / 2, line, 'รายงานการตรวจสอบ QC มอเตอร์เกียร์')
+    c.drawCentredString(width / 2, line, 'รายงานการตรวจเช็คสินค้า QC Report')
     line -= 40
 
     draw_text(f"Serial Number: {data.get('serial','-')}")
@@ -328,7 +353,9 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     if end_date:
         draw_text(f"สิ้นสุดการรับประกัน: {_format_th_date(end_date)}", color=red)
 
-    draw_text(f"ผู้ตรวจสอบ: {data.get('inspector','-')}")
+    inspector_value = data.get('inspector', '-') or '-'
+        inspector_name = INSPECTOR_MAP.get(inspector_value, inspector_value)
+        draw_text(f"ผู้ตรวจสอบ: {inspector_name}")
 
     if is_servo:
         draw_text('')
@@ -339,8 +366,8 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     c.line(1.5*cm, 3.5*cm, width-1.5*cm, 3.5*cm)
     c.setFont('THSarabunNew', 18)
     c.setFillColor(black)
-    c.drawString(2*cm, 1*cm, '📞 SAS Service: 081-9216225')
-    c.drawRightString(width-2*cm, 1*cm, '📞 SAS Sales: 081-9216225 คุณสมยศ')
+    c.drawString(2*cm, 1*cm, '📞 SAS Service: 096-2815161')
+    c.drawRightString(width-2*cm, 1*cm, '📞 SAS Sales: 081-9216225 คุณโชติธนินท์')
 
     c.showPage()
 
