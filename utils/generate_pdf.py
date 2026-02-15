@@ -228,11 +228,11 @@ def draw_image(c, image_url, center_x, y_top, max_width):
         )
 
         sticker_reader, (sw, sh) = _get_qc_sticker_cached()
-	sticker_w = 2 * cm
-	sticker_h = sticker_w * (sh / sw)
-	pad = 0.2 * cm
-	sx = x + img_w - sticker_w - pad
-	sy = y + pad
+        sticker_w = 2 * cm
+        sticker_h = sticker_w * (sh / sw)
+        pad = 0.2 * cm
+        sx = x + img_w - sticker_w - pad
+        sy = y + pad
 
 	c.drawImage(
 	    sticker_reader,
