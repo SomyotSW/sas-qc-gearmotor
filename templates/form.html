@@ -50,6 +50,56 @@
       font-size: 1.5rem;
       font-weight: bold;
     }
+    /* ✅ NEW: Mobile Responsive */
+  @media (max-width: 576px) {
+    body {
+      background-attachment: scroll; /* กัน iOS กระตุก */
+    }
+
+    .container.mt-5 {
+      margin-top: 16px !important;
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+
+    .backdrop {
+      max-width: 100%;
+      padding: 16px;
+      border-radius: 16px;
+    }
+
+    h2 {
+      font-size: 1.2rem;
+      margin-bottom: 12px !important;
+    }
+
+    .logo {
+      top: 10px;
+      right: 10px;
+      width: 78px;
+    }
+
+    label {
+      font-size: 0.95rem;
+    }
+
+    .form-control, .form-select {
+      font-size: 16px; /* ✅ กัน iPhone ซูมตอนกด input */
+      margin-bottom: 12px;
+    }
+
+    .submit-btn .btn {
+      width: 100%;
+      font-size: 1.05rem;
+      padding: 12px 14px;
+    }
+
+    #overlay .message {
+      font-size: 1.1rem;
+      padding: 0 14px;
+      text-align: center;
+    }
+  }
   </style>
 </head>
 <body>
