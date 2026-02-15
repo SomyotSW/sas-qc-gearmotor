@@ -67,6 +67,7 @@ def submit():
         gear_sound = request.form.get('gear_sound')
         warranty = request.form.get('warranty')
         inspector = request.form.get('inspector')
+                oil_type = request.form.get('oil_type')
         oil_liters = request.form.get('oil_liters')
         oil_filled = 'เติมแล้ว' if request.form.get('oil_filled') else 'ยังไม่เติม'
         acdc_parts = request.form.getlist('acdc_parts')
@@ -120,6 +121,7 @@ def submit():
             "gear_sound": gear_sound,
             "warranty": warranty,
             "inspector": inspector,
+                        "oil_type": oil_type,
             "oil_liters": oil_liters,
             "oil_filled": oil_filled,
             "acdc_parts": acdc_parts,

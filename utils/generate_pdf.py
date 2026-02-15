@@ -129,7 +129,7 @@ def draw_header(c, width, height):
 
         # ✅ สำคัญ: คำนวณอัตราส่วน แล้วกำหนดทั้ง width และ height
         lw, lh = logo.size
-        logo_w = 3 * cm
+        logo_w = 2 * cm
         logo_h = logo_w * (lh / lw)
 
         buf = io.BytesIO()
@@ -137,7 +137,7 @@ def draw_header(c, width, height):
         buf.seek(0)
 
         # ✅ จัดตำแหน่งให้ไม่หลุดขอบบน (อิงจาก margin)
-        margin_top = 1.5 * cm
+        margin_top = 1.0 * cm
         margin_right = 1.5 * cm
         x = width - logo_w - margin_right
         y = height - margin_top - logo_h
@@ -322,7 +322,8 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
         draw_text(f"เสียงเกียร์: {data['gear_sound']} dB")
 
     if not (is_servo or is_acdc):
-        draw_text(f"น้ำมันเกียร์ (ล): {data.get('oil_liters','-') or '-'}")
+                draw_text(f"ชนิดของน้ำมันเกียร์: {data.get('oil_type','-') or '-'}")
+        draw_text(f"จำนวนน้ำมันเกียร์ (ลิตร): {data.get('oil_liters','-') or '-'}")
         draw_text(f"สถานะเติมน้ำมัน: {data.get('oil_filled','-')}")
     elif is_acdc:
         draw_text('*ไม่ต้องเติมน้ำมันเกียร์', color=red)

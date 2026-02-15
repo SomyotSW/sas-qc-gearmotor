@@ -56,7 +56,7 @@
   <img src="/static/logo_sas.png" alt="SAS Logo" class="logo">
   <div class="container mt-5">
     <div class="backdrop shadow">
-      <h2 class="text-center mb-4">แบบฟอร์มตรวจสอบ QC มอเตอร์เกียร์</h2>
+      <h2 class="text-center mb-4">แบบฟอร์มการตรวจเช็คสินค้า QC Report</h2>
       <form action="/submit" method="POST" enctype="multipart/form-data" onsubmit="return handleSubmit()">
         <input type="hidden" name="inspector" value="{{ employee_id }}">
 
@@ -69,14 +69,19 @@
               <option value="AC/DC Gear Motor">AC/DC Gear Motor</option>
               <option value="BLDC Gear Motor">BLDC Gear Motor</option>
               <option value="Servo Motor and Servo Drive">Servo Motor and Servo Drive</option>
-              <option value="Planetary Gear">Planetary Gear</option>
+              <option value="Planetary GearReducer">Planetary GearReducer</option>
               <option value="RFKS Series">RFKS Series</option>
-              <option value="MTH/MTB Gear Box">MTH/MTB Gear Box</option>
+              <option value="H/B Gear Box">H/B Gear Box</option>
+              <option value="Hypoid GearMotor">Hypoid GearMotor</option>
+              <option value="Cycloidal GearMotor">Cycloidal GearMotor</option>
+              <option value="SRV WormGear">SRV WormGear</option>
+              <option value="SMR Gearbox">SMR Gearbox</option>
+              <option value="Small AC Gearmotor">Small AC Gearmotor</option>
               <option value="Others">Others</option>
             </select>
           </div>
           <div class="col-md-6">
-            <label>ชื่อมอเตอร์</label>
+            <label>ชื่อมอเตอร์ ( Model : )</label>
             <input type="text" name="motor_nameplate" class="form-control">
           </div>
         </div>
@@ -162,7 +167,15 @@
           <div id="oil_section">
             <div class="row">
               <div class="col-md-6">
-                <label>น้ำมันเกียร์ (L)</label>
+                      <!-- ✅ NEW: ชนิดของน้ำมันเกียร์ (แสดงเฉพาะ RFKS / H/B / SMR) -->
+      <label>ชนิดของน้ำมันเกียร์</label>
+      <select name="oil_type" id="oil_type" class="form-select">
+        <option value="">-- เลือกชนิดน้ำมันเกียร์ --</option>
+        <option value="Shell Omala VG220">Shell Omala VG220</option>
+        <option value="Shell Omala VG460">Shell Omala VG460</option>
+        <option value="Shell Omala VG680">Shell Omala VG680</option>
+      </select>
+                <label>จำนวนน้ำมันเกียร์ (ลิตร)</label>
                 <input type="text" name="oil_liters" class="form-control">
               </div>
               <div class="col-md-6">
@@ -230,7 +243,13 @@
       document.getElementById("general_section").style.display = (type === "Servo Motor and Servo Drive") ? "none" : "block";
             document.getElementById("rfks_section").style.display = (type === "RFKS Series") ? "block" : "none";
       document.getElementById("controller_image").style.display = "none";
-      document.getElementById("oil_section").style.display = (type === "AC/DC Gear Motor" || type === "BLDC Gear Motor") ? "none" : "block";
+      // ✅ NEW: น้ำมันแสดงเฉพาะ RFKS Series / H/B Gear Box / SMR Gearbox
+document.getElementById("oil_section").style.display =
+  (type === "RFKS Series" || type === "H/B Gear Box" || type === "SMR Gearbox") ? "block" : "none";
+      // ✅ NEW: กันค่าค้างเวลาเปลี่ยนประเภท
+if (!(type === "RFKS Series" || type === "H/B Gear Box" || type === "SMR Gearbox")) {
+  document.getElementById("oil_type").value = "";
+}
 
       const warning = document.getElementById("warning_section");
       if (type === "Servo Motor and Servo Drive") {
