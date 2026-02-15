@@ -186,9 +186,11 @@ def draw_image(c, image_url, center_x, y_top, max_width):
     BOTTOM_MARGIN = 3 * cm
 
     try:
+        # 1) Load and correct orientation (✅ faster: reuse session)
         img_data = SESSION.get(image_url, timeout=5).content
         img = Image.open(io.BytesIO(img_data))
 
+        # EXIF orientation
         try:
             exif = img._getexif() or {}
             tag = next(k for k, v in ExifTags.TAGS.items() if v == "Orientation")
@@ -201,46 +203,51 @@ def draw_image(c, image_url, center_x, y_top, max_width):
                 img = img.rotate(90, expand=True)
         except Exception:
             pass
+
+        # ✅ NEW: resize before embedding (faster + smaller PDF)
         img.thumbnail((1600, 1600))
 
+        # 2) Scale to fit within max_width and available height
         ow, oh = img.size
-        aspect = oh / ow
+        aspect = oh / ow if ow else 1
         img_w = max_width
         img_h = img_w * aspect
 
         avail_h = y_top - BOTTOM_MARGIN
         if img_h > avail_h:
             img_h = avail_h
-            img_w = img_h / aspect
+            img_w = img_h / aspect if aspect else img_w
 
         x = center_x - img_w / 2
         y = y_top - img_h
 
+        # 3) Draw main image
         mbuf = io.BytesIO()
-        img.save(mbuf, format='PNG')
+        img.save(mbuf, format="PNG")
         mbuf.seek(0)
         c.drawImage(
             ImageReader(mbuf),
             x, y,
             width=img_w,
             height=img_h,
-            mask='auto'
+            mask="auto"
         )
 
+        # 4) ✅ CHANGED: Overlay QC Passed sticker (cached)
         sticker_reader, (sw, sh) = _get_qc_sticker_cached()
         sticker_w = 2 * cm
-        sticker_h = sticker_w * (sh / sw)
+        sticker_h = sticker_w * (sh / sw) if sw else sticker_w
         pad = 0.2 * cm
         sx = x + img_w - sticker_w - pad
         sy = y + pad
 
-	c.drawImage(
-	    sticker_reader,
-	    sx, sy,
-	    width=sticker_w,
-	    height=sticker_h,
-	    mask='auto'
-	)
+        c.drawImage(
+            sticker_reader,
+            sx, sy,
+            width=sticker_w,
+            height=sticker_h,
+            mask="auto"
+        )
 
         return y - 10
 
@@ -354,8 +361,8 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
         draw_text(f"สิ้นสุดการรับประกัน: {_format_th_date(end_date)}", color=red)
 
     inspector_value = data.get('inspector', '-') or '-'
-        inspector_name = INSPECTOR_MAP.get(inspector_value, inspector_value)
-        draw_text(f"ผู้ตรวจสอบ: {inspector_name}")
+    inspector_name = INSPECTOR_MAP.get(inspector_value, inspector_value)
+    draw_text(f"ผู้ตรวจสอบ: {inspector_name}")
 
     if is_servo:
         draw_text('')
