@@ -201,7 +201,7 @@ def draw_image(c, image_url, center_x, y_top, max_width):
                 img = img.rotate(90, expand=True)
         except Exception:
             pass
-	img.thumbnail((1600, 1600))
+        img.thumbnail((1600, 1600))
 
         ow, oh = img.size
         aspect = oh / ow
