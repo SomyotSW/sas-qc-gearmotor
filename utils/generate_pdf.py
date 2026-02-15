@@ -20,19 +20,19 @@ pdfmetrics.registerFont(TTFont('THSarabunNew', 'static/fonts/THSarabunNew.ttf'))
 sas_logo_path  = 'static/logo_sas.png'
 qc_passed_path = 'static/qc_passed.png'
 
+
 def _resolve_sas_logo_path():
     """
     ✅ NEW: หาไฟล์โลโก้ให้เจอแบบชัวร์ โดยอิงตำแหน่งไฟล์ generate_pdf.py
     """
-    # utils/generate_pdf.py -> BASE_DIR = โฟลเดอร์โปรเจค
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
     candidates = [
-        os.path.join(base_dir, "static", "logo_sas.png"),     # ✅ ตัวที่หน้าเว็บใช้จริง
+        os.path.join(base_dir, "static", "logo_sas.png"),
         os.path.join(base_dir, "static", "logo_sas.PNG"),
-        os.path.join(base_dir, "static", "logos_sas.png"),    # เผื่อมีชื่อเดิม
+        os.path.join(base_dir, "static", "logos_sas.png"),
         os.path.join(base_dir, "static", "logos_sas.PNG"),
-        os.path.join(base_dir, "logo_sas.png"),               # เผื่ออยู่ root
+        os.path.join(base_dir, "logo_sas.png"),
         os.path.join(base_dir, "logo_sas.PNG"),
     ]
 
@@ -40,7 +40,6 @@ def _resolve_sas_logo_path():
         if os.path.exists(p):
             return p
 
-    # fallback: ใช้ค่าที่กำหนดไว้เดิม (เผื่อรัน local จาก cwd ถูก)
     if os.path.exists(sas_logo_path):
         return sas_logo_path
 
@@ -69,12 +68,13 @@ def _add_months(d: date, months: int) -> date:
     """
     y = d.year + (d.month - 1 + months) // 12
     m = (d.month - 1 + months) % 12 + 1
-    # last day of target month
+
     if m == 12:
         next_month = date(y + 1, 1, 1)
     else:
         next_month = date(y, m + 1, 1)
     last_day = next_month - timedelta(days=1)
+
     day = min(d.day, last_day.day)
     return date(y, m, day)
 
@@ -93,7 +93,6 @@ def _compute_warranty_end_date(data: dict):
     - + 7 วัน = วันเริ่มนับ
     - + N เดือน (18/24/36) = วันสิ้นสุด
     """
-    # warranty could be '18', 18, '18 เดือน', etc.
     w_raw = data.get('warranty')
     months = None
 
@@ -101,7 +100,6 @@ def _compute_warranty_end_date(data: dict):
         if w_raw is None:
             months = None
         else:
-            # ดึงตัวเลขตัวแรกออกมา
             w_str = str(w_raw)
             digits = ''.join(ch for ch in w_str if ch.isdigit())
             months = int(digits) if digits else None
@@ -109,7 +107,7 @@ def _compute_warranty_end_date(data: dict):
         months = None
 
     if months not in (18, 24, 36):
-        return None  # ไม่เข้าเงื่อนไข ก็ไม่แสดง
+        return None
 
     doc_date = _parse_th_date(data.get('date')) or date.today()
     start_date = doc_date + timedelta(days=7)
@@ -124,19 +122,17 @@ def draw_header(c, width, height):
         if not logo_path:
             raise FileNotFoundError("SAS logo not found (static/logo_sas.png).")
 
-        # ✅ ใช้หลักการเดียวกับ qc_passed: PIL -> BytesIO -> ImageReader(buf)
         logo = Image.open(logo_path).convert("RGBA")
-
-        # ✅ สำคัญ: คำนวณอัตราส่วน แล้วกำหนดทั้ง width และ height
         lw, lh = logo.size
-        logo_w = 2 * cm
+
+        # ✅ ปรับเล็กลง + ขยับขึ้น
+        logo_w = 2.5 * cm
         logo_h = logo_w * (lh / lw)
 
         buf = io.BytesIO()
         logo.save(buf, format="PNG")
         buf.seek(0)
 
-        # ✅ จัดตำแหน่งให้ไม่หลุดขอบบน (อิงจาก margin)
         margin_top = 1.0 * cm
         margin_right = 1.5 * cm
         x = width - logo_w - margin_right
@@ -162,9 +158,9 @@ def draw_image(c, image_url, center_x, y_top, max_width):
     BOTTOM_MARGIN = 3 * cm
 
     try:
-        # 1) Load and correct orientation
         img_data = requests.get(image_url, timeout=5).content
         img = Image.open(io.BytesIO(img_data))
+
         try:
             exif = img._getexif() or {}
             tag = next(k for k, v in ExifTags.TAGS.items() if v == "Orientation")
@@ -178,11 +174,11 @@ def draw_image(c, image_url, center_x, y_top, max_width):
         except Exception:
             pass
 
-        # 2) Scale to fit within max_width and available height
         ow, oh = img.size
         aspect = oh / ow
         img_w = max_width
         img_h = img_w * aspect
+
         avail_h = y_top - BOTTOM_MARGIN
         if img_h > avail_h:
             img_h = avail_h
@@ -191,7 +187,6 @@ def draw_image(c, image_url, center_x, y_top, max_width):
         x = center_x - img_w / 2
         y = y_top - img_h
 
-        # 3) Draw main image
         mbuf = io.BytesIO()
         img.save(mbuf, format='PNG')
         mbuf.seek(0)
@@ -203,7 +198,6 @@ def draw_image(c, image_url, center_x, y_top, max_width):
             mask='auto'
         )
 
-        # 4) Overlay QC Passed sticker
         sticker = Image.open(qc_passed_path)
         sw, sh = sticker.size
         sticker_w = 2 * cm
@@ -230,7 +224,6 @@ def draw_image(c, image_url, center_x, y_top, max_width):
         return y_top - 10
 
 
-# ✅ NEW: label inference to match QC topics
 def _infer_image_label(url: str, fallback: str = "ภาพประกอบ"):
     """
     เดาจาก keyword ใน URL ให้ชื่อรูปตรงกับหัวข้อการตรวจสอบ
@@ -241,13 +234,12 @@ def _infer_image_label(url: str, fallback: str = "ภาพประกอบ"):
     u = str(url).lower()
 
     mapping = [
-        # ✅ NEW: RFKS nameplate images (ตามฟิลด์ใหม่ใน form.html)
+        # ✅ RFKS nameplate images
         ("rfks_nameplate_motor", "Name plate : Motor"),
         ("rfks_nameplate_gear", "Name plate : Gear"),
         ("nameplate_motor", "Name plate : Motor"),
         ("nameplate_gear", "Name plate : Gear"),
 
-        # กระแส / Nameplate / มอเตอร์ / เกียร์ / คอนโทรลเลอร์ / ติดตั้ง
         ("current", "ภาพค่ากระแส"),
         ("amp", "ภาพค่ากระแส"),
         ("nameplate", "ภาพ Nameplate"),
@@ -258,7 +250,7 @@ def _infer_image_label(url: str, fallback: str = "ภาพประกอบ"):
         ("install", "ภาพประกอบหน้างาน"),
         ("site", "ภาพประกอบหน้างาน"),
         ("controller", "ภาพ Controller"),
-        # servo set
+
         ("servo_motor", "ภาพ Servo Motor"),
         ("servo_drive", "ภาพ Servo Drive"),
         ("cable", "ภาพ Cable Wire"),
@@ -305,13 +297,14 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     draw_text(f"ประเภทสินค้า: {data.get('product_type','-')}")
     draw_text(f"Nameplate: {data.get('motor_nameplate','-')}")
 
-    ptype = data.get('product_type','').lower()
+    ptype = data.get('product_type', '').lower()
     is_servo = 'servo' in ptype
     is_acdc  = 'ac/dc' in ptype or 'bldc' in ptype
 
     if is_servo:
         draw_text('**ไม่ประกอบสินค้า', color=red)
         draw_text('**ไม่เติมน้ำมันเกียร์', color=red)
+
     draw_text('')  # spacer
 
     if data.get('motor_current'):
@@ -321,16 +314,22 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     if data.get('gear_sound'):
         draw_text(f"เสียงเกียร์: {data['gear_sound']} dB")
 
+    # ✅ FIXED: Indentation ต้องตรงทุกบรรทัดใน block นี้
     if not (is_servo or is_acdc):
+
 		draw_text(f"ชนิดของน้ำมันเกียร์: {data.get('oil_type','-') or '-'}")
 		draw_text(f"จำนวนน้ำมันเกียร์ (ลิตร): {data.get('oil_liters','-') or '-'}")
 		draw_text(f"สถานะเติมน้ำมัน: {data.get('oil_filled','-')}")
+
+        draw_text(f"ชนิดของน้ำมันเกียร์: {data.get('oil_type','-') or '-'}")
+        draw_text(f"จำนวนน้ำมันเกียร์ (ลิตร): {data.get('oil_liters','-') or '-'}")
+        draw_text(f"สถานะเติมน้ำมัน: {data.get('oil_filled','-')}")
+
     elif is_acdc:
         draw_text('*ไม่ต้องเติมน้ำมันเกียร์', color=red)
 
     draw_text(f"ระยะเวลารับประกัน: {data.get('warranty','-')} เดือน", color=red)
 
-    # ✅ NEW: สิ้นสุดการรับประกัน (ตามเงื่อนไข +7 วัน แล้ว +N เดือน)
     end_date = _compute_warranty_end_date(data)
     if end_date:
         draw_text(f"สิ้นสุดการรับประกัน: {_format_th_date(end_date)}", color=red)
@@ -358,20 +357,15 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     y_top    = height - margin - 60
     center_x = width / 2
 
-    # ✅ CHANGED: รูปใหญ่ขึ้น 1 เท่า แต่ไม่เกินพื้นที่หน้า
-    # เดิม max_w = 8*cm
-    max_w = min(16 * cm, width - (2 * margin))  # ~2 เท่า, แต่ไม่ล้นหน้า
+    # ✅ รูปใหญ่ขึ้น ~2 เท่า แต่ไม่ล้นหน้า
+    max_w = min(16 * cm, width - (2 * margin))
 
     for i, url in enumerate(image_urls):
-        # ✅ CHANGED: label ให้ตรงกับหัวข้อ
-        # - ถ้ามี image_labels ส่งมา ใช้ของเดิม
-        # - ถ้าไม่มี ให้เดา label จาก url
         if i < len(image_labels) and image_labels[i]:
             label = image_labels[i]
         else:
             label = _infer_image_label(url, fallback=f'ภาพที่ {i+1}')
 
-        # กันพื้นที่ไม่พอ (เดิมใช้ max_w * 1.2)
         if y_top - max_w * 0.9 < 3 * cm:
             c.showPage()
             draw_header(c, width, height)
