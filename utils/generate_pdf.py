@@ -5,6 +5,7 @@ from reportlab.lib.units import cm
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 from reportlab.lib.colors import red, black, gray
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import io
 import os
@@ -40,6 +41,11 @@ def _get_qc_sticker_cached():
         _QC_STICKER_READER = ImageReader(buf)
         _QC_STICKER_SIZE = (sw, sh)
     return _QC_STICKER_READER, _QC_STICKER_SIZE
+
+def _fetch_image_bytes(url: str) -> bytes:
+    r = SESSION.get(url, timeout=8)
+    r.raise_for_status()
+    return r.content
 
 # ✅ NEW: Inspector mapping (ID -> ชื่อ) เผื่อข้อมูลเก่าเป็น ID
 INSPECTOR_MAP = {
@@ -255,6 +261,64 @@ def draw_image(c, image_url, center_x, y_top, max_width):
         print("Error loading image:", e, flush=True)
         return y_top - 10
 
+def draw_image_bytes(c, img_bytes, center_x, y_top, max_width):
+    BOTTOM_MARGIN = 3 * cm
+    try:
+        img = Image.open(io.BytesIO(img_bytes))
+
+        # EXIF orientation
+        try:
+            exif = img._getexif() or {}
+            tag = next(k for k, v in ExifTags.TAGS.items() if v == "Orientation")
+            ori = exif.get(tag)
+            if ori == 3:
+                img = img.rotate(180, expand=True)
+            elif ori == 6:
+                img = img.rotate(270, expand=True)
+            elif ori == 8:
+                img = img.rotate(90, expand=True)
+        except Exception:
+            pass
+
+        # ลดขนาดก่อนฝัง (ปรับได้ 1200/1600)
+        img.thumbnail((1100, 1100))
+
+        ow, oh = img.size
+        aspect = oh / ow if ow else 1
+        img_w = max_width
+        img_h = img_w * aspect
+
+        avail_h = y_top - BOTTOM_MARGIN
+        if img_h > avail_h:
+            img_h = avail_h
+            img_w = img_h / aspect if aspect else img_w
+
+        x = center_x - img_w / 2
+        y = y_top - img_h
+
+        # ✅ เร็วขึ้นอีก: ฝังเป็น JPEG (เร็ว+ไฟล์เล็กกว่า PNG)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+
+        mbuf = io.BytesIO()
+        img.save(mbuf, format="JPEG", quality=75, optimize=True)
+        mbuf.seek(0)
+
+        c.drawImage(ImageReader(mbuf), x, y, width=img_w, height=img_h)
+
+        # sticker cached
+        sticker_reader, (sw, sh) = _get_qc_sticker_cached()
+        sticker_w = 2 * cm
+        sticker_h = sticker_w * (sh / sw) if sw else sticker_w
+        pad = 0.2 * cm
+        sx = x + img_w - sticker_w - pad
+        sy = y + pad
+        c.drawImage(sticker_reader, sx, sy, width=sticker_w, height=sticker_h, mask="auto")
+
+        return y - 10
+    except Exception as e:
+        print("Error draw_image_bytes:", e, flush=True)
+        return y_top - 10
 
 def _infer_image_label(url: str, fallback: str = "ภาพประกอบ"):
     """
@@ -330,7 +394,7 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     date_str = _format_th_date(d) if d else str(raw_date)
     draw_text(f"วันที่ตรวจสอบ: {date_str}")
     draw_text(f"ประเภทสินค้า: {data.get('product_type','-')}")
-    draw_text(f"Nameplate: {data.get('motor_nameplate','-')}")
+    draw_text(f"Model : {data.get('motor_nameplate','-')}")
 
     ptype = data.get('product_type', '').lower()
     is_servo = 'servo' in ptype
@@ -353,7 +417,7 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     if not (is_servo or is_acdc):
         draw_text(f"ชนิดของน้ำมันเกียร์: {data.get('oil_type','-') or '-'}")
         draw_text(f"จำนวนน้ำมันเกียร์ (ลิตร): {data.get('oil_liters','-') or '-'}")
-        draw_text(f"สถานะเติมน้ำมัน: {data.get('oil_filled','-')}")
+        draw_text(f"สถานะการเติมน้ำมัน: {data.get('oil_filled','-')}")
     elif is_acdc:
         draw_text('*ไม่ต้องเติมน้ำมันเกียร์', color=red)
 
@@ -391,6 +455,17 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     # ✅ รูปใหญ่ขึ้น ~2 เท่า แต่ไม่ล้นหน้า
     max_w = min(16 * cm, width - (2 * margin))
 
+    fetched = [None] * len(image_urls)
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        future_map = {ex.submit(_fetch_image_bytes, u): idx for idx, u in enumerate(image_urls)}
+    for fut in as_completed(future_map):
+        idx = future_map[fut]
+        try:
+            fetched[idx] = fut.result()
+        except Exception as e:
+            print("Fetch image failed:", image_urls[idx], e, flush=True)
+            fetched[idx] = None
+
     for i, url in enumerate(image_urls):
         if i < len(image_labels) and image_labels[i]:
             label = image_labels[i]
@@ -408,7 +483,10 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
         c.drawCentredString(center_x, y_top, label)
         y_top -= 20
 
-        y_top = draw_image(c, url, center_x, y_top, max_w)
+        if fetched[i]:
+            y_top = draw_image_bytes(c, fetched[i], center_x, y_top, max_w)
+        else:
+            y_top -= 10
 
     # Final footer on last page
     c.setFillColor(gray)
