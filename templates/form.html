@@ -110,6 +110,17 @@
       <form action="/submit" method="POST" enctype="multipart/form-data" onsubmit="return handleSubmit()">
         <input type="hidden" name="inspector" value="{{ employee_id }}">
 
+                <!-- ✅ NEW: OR No. + Company Name (วางเหนือประเภทสินค้า) -->
+        <div class="row">
+          <div class="col-md-6">
+            <label>OR No.</label>
+            <input type="text" name="or_no" class="form-control" placeholder="กรอก OR No.">
+          </div>
+          <div class="col-md-6">
+            <label>ชื่อบริษัท :</label>
+            <input type="text" name="company_name" class="form-control" placeholder="กรอกชื่อบริษัท">
+          </div>
+        </div>
         <!-- ประเภทสินค้า -->
         <div class="row">
           <div class="col-md-6">

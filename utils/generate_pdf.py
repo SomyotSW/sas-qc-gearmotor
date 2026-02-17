@@ -393,6 +393,8 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     d = _parse_th_date(raw_date)  # ใช้ฟังก์ชัน parse ที่มีอยู่แล้ว
     date_str = _format_th_date(d) if d else str(raw_date)
     draw_text(f"วันที่ตรวจสอบ: {date_str}")
+    draw_text(f"OR No.: {data.get('or_no','-') or '-'}")
+    draw_text(f"ชื่อบริษัท: {data.get('company_name','-') or '-'}")
     draw_text(f"ประเภทสินค้า: {data.get('product_type','-')}")
     draw_text(f"Model : {data.get('motor_nameplate','-')}")
 
