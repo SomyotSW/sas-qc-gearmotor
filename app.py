@@ -127,6 +127,8 @@ def submit():
 
         ref.child(serial).set({
             "serial": serial,
+            "or_no": or_no,                    # ✅ NEW
+            "company_name": company_name,  
             "product_type": product_type,
             "motor_nameplate": motor_nameplate,
             "motor_current": motor_current,
