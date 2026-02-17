@@ -70,7 +70,9 @@ def submit():
     try:
         if not request.content_type.startswith('multipart/form-data'):
             return "Invalid Content-Type", 400
-
+        
+        or_no = request.form.get('or_no')
+        company_name = request.form.get('company_name')
         product_type = request.form.get('product_type')
         motor_nameplate = request.form.get('motor_nameplate')
         motor_current = request.form.get('motor_current')
