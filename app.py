@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, send_file, url_for, session
+from flask import Flask, render_template, request, redirect, send_file, url_for, session, jsonify
 from werkzeug.utils import secure_filename
 import os
 import firebase_admin
@@ -10,6 +10,7 @@ from utils.qr_generator import generate_qr_code
 import json
 import qrcode
 import threading
+import pandas as pd
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
@@ -26,6 +27,63 @@ firebase_admin.initialize_app(cred, {
 
 ref = db.reference("/qc_data")
 bucket = storage.bucket()
+
+# =========================
+# Stock on shelf (FAST + SIMPLE)
+# =========================
+STOCK_XLS_PATH = os.path.join(os.path.dirname(__file__), "Stock motor 19-2-2026.xls")
+
+_stock_cache = {
+    "mtime": None,
+    "rows": []
+}
+_stock_lock = threading.Lock()
+
+
+def _load_stock_rows_cached():
+    """
+    Read Excel once and cache by file modified time (mtime) for speed.
+    Pull ranges:
+      Code: A10-A460
+      Description: E10-E460
+      Total: J10-J460
+    """
+    if not os.path.exists(STOCK_XLS_PATH):
+        raise FileNotFoundError(f"ไม่พบไฟล์: {STOCK_XLS_PATH}")
+
+    mtime = os.path.getmtime(STOCK_XLS_PATH)
+
+    with _stock_lock:
+        if _stock_cache["mtime"] == mtime and _stock_cache["rows"]:
+            return _stock_cache["rows"]
+
+        # Read whole sheet, no header
+        df = pd.read_excel(STOCK_XLS_PATH, header=None)  # .xls ใช้ xlrd
+        rows = []
+
+        # Excel row 10-460 => index 9-459 (0-based)
+        for r in range(9, 460):
+            code = df.iat[r, 0] if r < len(df.index) and 0 < len(df.columns) else None      # A
+            desc = df.iat[r, 4] if r < len(df.index) and 4 < len(df.columns) else None      # E
+            total = df.iat[r, 9] if r < len(df.index) and 9 < len(df.columns) else None     # J
+
+            # Normalize
+            code_s = "" if pd.isna(code) else str(code).strip()
+            desc_s = "" if pd.isna(desc) else str(desc).strip()
+            total_s = "" if pd.isna(total) else str(total).strip()
+
+            # เก็บเฉพาะแถวที่มี code (กันแถวว่าง)
+            if code_s:
+                rows.append({
+                    "code": code_s,
+                    "description": desc_s,
+                    "total": total_s
+                })
+
+        _stock_cache["mtime"] = mtime
+        _stock_cache["rows"] = rows
+        return rows
+
 # ✅ NEW: Inspector mapping (ID -> ชื่อ)
 INSPECTOR_MAP = {
     "QC001": "คุณสมประสงค์",
@@ -39,6 +97,19 @@ INSPECTOR_MAP = {
 def home():
     return render_template('index.html')
 
+@app.route('/stock')
+def stock_page():
+    # หน้า UI Stock on shelf
+    return render_template('stock.html')
+
+@app.route('/api/stock')
+def stock_api():
+    # API ส่งข้อมูล stock เป็น JSON (โหลดจาก cache เพื่อให้เร็ว)
+    try:
+        rows = _load_stock_rows_cached()
+        return jsonify({"ok": True, "count": len(rows), "rows": rows})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():

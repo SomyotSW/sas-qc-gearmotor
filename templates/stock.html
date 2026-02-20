@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Stock on shelf</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    body{
+      background: linear-gradient(135deg, #0b2a5b 0%, #0e4aa6 55%, #ffffff 100%);
+      min-height: 100vh;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .glass{
+      background: rgba(255,255,255,0.92);
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 18px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+    }
+    .title{
+      font-weight: 800;
+      letter-spacing: .3px;
+      color: #0b2a5b;
+    }
+    .sub{
+      color: #2b4a7a;
+    }
+    .table thead th{
+      background: #0b2a5b;
+      color: white;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    .badge-count{
+      background: #0e4aa6;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container py-4">
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <div>
+        <div class="title fs-2">📦 Stock on shelf</div>
+        <div class="sub">ค้นหา Code หรือเลื่อนดูรายการทั้งหมดได้</div>
+      </div>
+      <div class="d-flex gap-2">
+        <a href="/" class="btn btn-outline-light">⬅ กลับหน้าแรก</a>
+      </div>
+    </div>
+
+    <div class="glass p-3 p-md-4">
+      <div class="row g-3 align-items-end">
+        <div class="col-12 col-md-8">
+          <label class="form-label fw-semibold">ค้นหา Code</label>
+          <input id="search" type="text" class="form-control form-control-lg" placeholder="พิมพ์ Code เช่น A120 แล้วกด Enter หรือพิมพ์ได้เลย...">
+        </div>
+        <div class="col-12 col-md-4">
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="fw-semibold">จำนวนรายการ</div>
+            <span id="count" class="badge badge-count text-white fs-6">-</span>
+          </div>
+          <button id="reload" class="btn btn-primary w-100 mt-2">🔄 โหลดข้อมูลใหม่</button>
+        </div>
+      </div>
+
+      <hr class="my-4">
+
+      <div class="table-responsive" style="max-height: 65vh;">
+        <table class="table table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th style="width: 22%;">Code</th>
+              <th>Description</th>
+              <th style="width: 18%;">Total</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="3">กำลังโหลดข้อมูล...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+  let ALL = [];
+
+  function render(list){
+    const tbody = document.getElementById('tbody');
+    const count = document.getElementById('count');
+    count.textContent = list.length;
+
+    if(!list.length){
+      tbody.innerHTML = '<tr><td colspan="3">ไม่พบข้อมูล</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = list.map(r => `
+      <tr>
+        <td class="fw-semibold">${escapeHtml(r.code || '')}</td>
+        <td>${escapeHtml(r.description || '')}</td>
+        <td>${escapeHtml(r.total || '')}</td>
+      </tr>
+    `).join('');
+  }
+
+  function filterNow(){
+    const q = (document.getElementById('search').value || '').trim().toLowerCase();
+    if(!q){
+      render(ALL);
+      return;
+    }
+    const filtered = ALL.filter(r => (r.code || '').toLowerCase().includes(q));
+    render(filtered);
+  }
+
+  async function load(){
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = '<tr><td colspan="3">กำลังโหลดข้อมูล...</td></tr>';
+
+    const res = await fetch('/api/stock', { cache: 'no-store' });
+    const data = await res.json();
+
+    if(!data.ok){
+      tbody.innerHTML = `<tr><td colspan="3">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(data.error || 'Unknown error')}</td></tr>`;
+      return;
+    }
+
+    ALL = data.rows || [];
+    render(ALL);
+  }
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, s => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[s]));
+  }
+
+  document.getElementById('search').addEventListener('input', filterNow);
+  document.getElementById('search').addEventListener('keydown', (e) => {
+    if(e.key === 'Enter'){ e.preventDefault(); filterNow(); }
+  });
+  document.getElementById('reload').addEventListener('click', load);
+
+  load();
+</script>
+
+</body>
+</html>
