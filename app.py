@@ -56,7 +56,7 @@ def _load_stock_rows_cached():
     mtime = os.path.getmtime(STOCK_XLS_PATH)
 
     with _stock_lock:
-        if _stock_cache["mtime"] == mtime and _stock_cache["rows"]:
+        if _stock_cache["mtime"] == mtime and _stock_cache["rows"] is not None:
             return _stock_cache["rows"]
 
         wb = load_workbook(STOCK_XLS_PATH, data_only=True)
@@ -75,6 +75,10 @@ def _load_stock_rows_cached():
 
             if code_s:
                 rows.append({"code": code_s, "description": desc_s, "total": total_s})
+        
+        _stock_cache["mtime"] = mtime
+        _stock_cache["rows"] = rows
+        return rows
                 
 # ✅ NEW: Inspector mapping (ID -> ชื่อ)
 INSPECTOR_MAP = {
