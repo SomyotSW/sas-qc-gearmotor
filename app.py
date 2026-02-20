@@ -11,6 +11,7 @@ import json
 import qrcode
 import threading
 import pandas as pd
+import xlrd
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
@@ -57,33 +58,27 @@ def _load_stock_rows_cached():
         if _stock_cache["mtime"] == mtime and _stock_cache["rows"]:
             return _stock_cache["rows"]
 
-        # Read whole sheet, no header
-        df = pd.read_excel(STOCK_XLS_PATH, header=None)  # .xls ใช้ xlrd
+        book = xlrd.open_workbook(STOCK_XLS_PATH)
+        sheet = book.sheet_by_index(0)
+
         rows = []
-
-        # Excel row 10-460 => index 9-459 (0-based)
+        # Excel row 10-460 => index 9-459
         for r in range(9, 460):
-            code = df.iat[r, 0] if r < len(df.index) and 0 < len(df.columns) else None      # A
-            desc = df.iat[r, 4] if r < len(df.index) and 4 < len(df.columns) else None      # E
-            total = df.iat[r, 9] if r < len(df.index) and 9 < len(df.columns) else None     # J
+            code = sheet.cell_value(r, 0)    # A
+            desc = sheet.cell_value(r, 4)    # E
+            total = sheet.cell_value(r, 9)   # J
 
-            # Normalize
-            code_s = "" if pd.isna(code) else str(code).strip()
-            desc_s = "" if pd.isna(desc) else str(desc).strip()
-            total_s = "" if pd.isna(total) else str(total).strip()
+            code_s = str(code).strip() if code not in (None, "") else ""
+            desc_s = str(desc).strip() if desc not in (None, "") else ""
+            total_s = str(total).strip() if total not in (None, "") else ""
 
-            # เก็บเฉพาะแถวที่มี code (กันแถวว่าง)
             if code_s:
                 rows.append({
                     "code": code_s,
                     "description": desc_s,
                     "total": total_s
                 })
-
-        _stock_cache["mtime"] = mtime
-        _stock_cache["rows"] = rows
-        return rows
-
+                
 # ✅ NEW: Inspector mapping (ID -> ชื่อ)
 INSPECTOR_MAP = {
     "QC001": "คุณสมประสงค์",
