@@ -12,6 +12,7 @@ import qrcode
 import threading
 #import pandas as pd
 import xlrd
+from io import BytesIO
 from openpyxl import load_workbook
 
 app = Flask(__name__)
@@ -33,7 +34,8 @@ bucket = storage.bucket()
 # =========================
 # Stock on shelf (FAST + SIMPLE)
 # =========================
-STOCK_XLS_PATH = os.path.join(os.path.dirname(__file__), "Stock motor 19-2-2026.xlsx")
+STOCK_BLOB_NAME = "stock/Stock motor.xlsx"
+STOCK_XLS_PATH = os.path.join(os.path.dirname(__file__), "Stock motor.xlsx")
 
 _stock_cache = {
     "mtime": None,
@@ -44,26 +46,29 @@ _stock_lock = threading.Lock()
 
 def _load_stock_rows_cached():
     """
-    Read Excel once and cache by file modified time (mtime) for speed.
-    Pull ranges:
+    Read latest stock xlsx from Firebase Storage and cache by blob updated time.
+    Range:
       Code: A10-A460
       Description: E10-E460
       Total: J10-J460
     """
-    if not os.path.exists(STOCK_XLS_PATH):
-        raise FileNotFoundError(f"ไม่พบไฟล์: {STOCK_XLS_PATH}")
+    blob = bucket.blob(STOCK_BLOB_NAME)
+    blob.reload()  # ดึง metadata ล่าสุด
 
-    mtime = os.path.getmtime(STOCK_XLS_PATH)
+    # ใช้เวลา updated เป็น key กันโหลดซ้ำ
+    # (ถ้า updated เป็น None ให้ fallback)
+    mtime = str(blob.updated) if blob.updated else str(blob.generation)
 
     with _stock_lock:
         if _stock_cache["mtime"] == mtime and _stock_cache["rows"] is not None:
             return _stock_cache["rows"]
 
-        wb = load_workbook(STOCK_XLS_PATH, data_only=True)
+        # โหลดไฟล์เป็น bytes แล้วอ่านด้วย openpyxl
+        data = blob.download_as_bytes()
+        wb = load_workbook(BytesIO(data), data_only=True)
         ws = wb.worksheets[0]
 
         rows = []
-        # Excel row 10-460
         for r in range(10, 461):
             code = ws[f"A{r}"].value
             desc = ws[f"E{r}"].value
@@ -75,10 +80,34 @@ def _load_stock_rows_cached():
 
             if code_s:
                 rows.append({"code": code_s, "description": desc_s, "total": total_s})
-        
+
         _stock_cache["mtime"] = mtime
         _stock_cache["rows"] = rows
         return rows
+    
+@app.route("/stock-upload", methods=["GET", "POST"])
+def stock_upload_public():
+    if request.method == "GET":
+        return render_template("stock_upload_public.html")
+
+    f = request.files.get("file")
+    if not f or f.filename.strip() == "":
+        return "No file uploaded", 400
+
+    # กันไฟล์ผิดชนิดแบบเบา ๆ
+    if not f.filename.lower().endswith(".xlsx"):
+        return "Invalid file type (ต้องเป็น .xlsx เท่านั้น)", 400
+
+    # อัปโหลดขึ้น Firebase Storage (ไม่ต้อง deploy)
+    blob = bucket.blob(STOCK_BLOB_NAME)
+    blob.upload_from_file(f, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    # ล้าง cache เพื่อให้หน้า stock ดึงไฟล์ใหม่ทันที
+    with _stock_lock:
+        _stock_cache["mtime"] = None
+        _stock_cache["rows"] = []
+
+    return redirect("/stock")
                 
 # ✅ NEW: Inspector mapping (ID -> ชื่อ)
 INSPECTOR_MAP = {
