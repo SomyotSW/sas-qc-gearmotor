@@ -12,6 +12,7 @@ import qrcode
 import threading
 #import pandas as pd
 import xlrd
+from openpyxl import load_workbook
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
@@ -32,7 +33,7 @@ bucket = storage.bucket()
 # =========================
 # Stock on shelf (FAST + SIMPLE)
 # =========================
-STOCK_XLS_PATH = os.path.join(os.path.dirname(__file__), "Stock motor 19-2-2026.xls")
+STOCK_XLS_PATH = os.path.join(os.path.dirname(__file__), "Stock motor 19-2-2026.xlsx")
 
 _stock_cache = {
     "mtime": None,
@@ -58,26 +59,22 @@ def _load_stock_rows_cached():
         if _stock_cache["mtime"] == mtime and _stock_cache["rows"]:
             return _stock_cache["rows"]
 
-        book = xlrd.open_workbook(STOCK_XLS_PATH)
-        sheet = book.sheet_by_index(0)
+        wb = load_workbook(STOCK_XLS_PATH, data_only=True)
+        ws = wb.worksheets[0]
 
         rows = []
-        # Excel row 10-460 => index 9-459
-        for r in range(9, 460):
-            code = sheet.cell_value(r, 0)    # A
-            desc = sheet.cell_value(r, 4)    # E
-            total = sheet.cell_value(r, 9)   # J
+        # Excel row 10-460
+        for r in range(10, 461):
+            code = ws[f"A{r}"].value
+            desc = ws[f"E{r}"].value
+            total = ws[f"J{r}"].value
 
-            code_s = str(code).strip() if code not in (None, "") else ""
-            desc_s = str(desc).strip() if desc not in (None, "") else ""
-            total_s = str(total).strip() if total not in (None, "") else ""
+            code_s = "" if code is None else str(code).strip()
+            desc_s = "" if desc is None else str(desc).strip()
+            total_s = "" if total is None else str(total).strip()
 
             if code_s:
-                rows.append({
-                    "code": code_s,
-                    "description": desc_s,
-                    "total": total_s
-                })
+                rows.append({"code": code_s, "description": desc_s, "total": total_s})
                 
 # ✅ NEW: Inspector mapping (ID -> ชื่อ)
 INSPECTOR_MAP = {
