@@ -37,18 +37,92 @@
     .badge-count{
       background: #0e4aa6;
     }
+  
+  /* ...ของเดิมทั้งหมด... */
+
+  /* ===== NEW: 3D gradient animated title ===== */
+    .title-3d{
+      font-weight: 900;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+
+    /* gradient text */
+      background: linear-gradient(90deg, #ffffff 0%, #b7dcff 45%, #ffffff 100%);
+      background-size: 200% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+
+    /* 3D emboss (white) */
+      text-shadow:
+        0 1px 0 rgba(255,255,255,0.7),
+        0 2px 0 rgba(255,255,255,0.35),
+        0 6px 14px rgba(0,0,0,0.35);
+
+      animation: sheen 2.8s ease-in-out infinite alternate;
+    }
+
+    @keyframes sheen{
+      0%   { background-position: 0% 50%; }
+      100% { background-position: 100% 50%; }
+    }
+
+  /* ===== NEW: footer credit ===== */
+    .presented-by{
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 10px;
+      text-align: center;
+      font-size: 12px;
+      opacity: 0.28;
+      color: #000;
+      pointer-events: none;
+      user-select: none;
+      letter-spacing: .3px;
+    }
+
+  /* ===== NEW: mobile responsive tweaks ===== */
+    @media (max-width: 576px){
+      body{ background: linear-gradient(160deg, #0b2a5b 0%, #0e4aa6 60%, #ffffff 140%); }
+
+      .container{ padding-left: 12px; padding-right: 12px; }
+      .glass{ border-radius: 14px; }
+
+    /* header stack */
+      .header-wrap{
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 10px;
+      }
+      .header-actions{
+        width: 100%;
+        justify-content: flex-end;
+      }
+
+      /* title scale */
+      .title-3d{ font-size: 1.35rem !important; }
+
+      /* input / button sizing */
+      .form-control-lg{ font-size: 1rem; padding: .7rem .85rem; }
+      .btn{ padding: .65rem .9rem; }
+
+      /* table height on phones */
+      .table-responsive{ max-height: 55vh !important; }
+    }
+
   </style>
 </head>
 
 <body>
   <div class="container py-4">
 
-    <div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="d-flex align-items-center justify-content-between mb-3 header-wrap">
       <div>
-        <div class="title fs-2">📦 Stock on shelf</div>
+        <div class="title-3d fs-2">📦 STOCK ON SHELF</div>
         <div class="sub">ค้นหา Code หรือเลื่อนดูรายการทั้งหมดได้</div>
       </div>
-      <div class="d-flex gap-2">
+      <div class="d-flex gap-2 header-actions">
         <a href="/" class="btn btn-outline-light">Home</a>
       </div>
     </div>
@@ -150,6 +224,6 @@
 
   load();
 </script>
-
+<div class="presented-by">Presented by Stephen A.</div>
 </body>
 </html>
