@@ -123,7 +123,7 @@
         <div class="sub">ค้นหา Code หรือเลื่อนดูรายการทั้งหมดได้</div>
       </div>
       <div class="d-flex gap-2 header-actions">
-        <a href="/stock-upload" class="btn btn-outline-light">📤</a>
+        <a href="#" class="btn btn-outline-light" onclick="return goUploadStock();">📤</a>
         <a href="/" class="btn btn-outline-light">Home</a>
       </div>
     </div>
@@ -224,6 +224,16 @@
   document.getElementById('reload').addEventListener('click', load);
 
   load();
+  function goUploadStock(){
+    const pass = prompt('กรอกรหัสเพื่อเข้า Upload Stock File');
+    if(pass === null) return false; // กด Cancel
+    if(pass.trim() === 'Adminsas2026'){
+      window.location.href = '/stock-upload?key=' + encodeURIComponent(pass.trim());
+    }else{
+      alert('รหัสไม่ถูกต้อง');
+    }
+    return false;
+  }
 </script>
 <div class="presented-by">Presented by Stephen A.</div>
 </body>

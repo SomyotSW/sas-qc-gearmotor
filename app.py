@@ -36,6 +36,7 @@ bucket = storage.bucket()
 # =========================
 STOCK_BLOB_NAME = "stock/Stock motor.xlsx"
 STOCK_XLS_PATH = os.path.join(os.path.dirname(__file__), "Stock motor.xlsx")
+STOCK_UPLOAD_PASS = "Adminsas2026"
 
 _stock_cache = {
     "mtime": None,
@@ -54,6 +55,7 @@ def _load_stock_rows_cached():
     """
     blob = bucket.blob(STOCK_BLOB_NAME)
     blob.reload()  # ดึง metadata ล่าสุด
+    
 
     # ใช้เวลา updated เป็น key กันโหลดซ้ำ
     # (ถ้า updated เป็น None ให้ fallback)
@@ -88,24 +90,39 @@ def _load_stock_rows_cached():
 @app.route("/stock-upload", methods=["GET", "POST"])
 def stock_upload_public():
     if request.method == "GET":
+        key = (request.args.get("key") or "").strip()
+        if key != STOCK_UPLOAD_PASS:
+            return "Unauthorized", 403
+
+        # ✅ ผ่านรหัสแล้ว เก็บสิทธิ์ไว้ใน session เพื่อใช้ตอน POST
+        session["stock_upload_ok"] = True
         return render_template("stock_upload_public.html")
+
+    # ===== POST =====
+    # ✅ ตรวจซ้ำฝั่ง server ก่อนอัปโหลด
+    if not session.get("stock_upload_ok"):
+        return "Unauthorized", 403
 
     f = request.files.get("file")
     if not f or f.filename.strip() == "":
         return "No file uploaded", 400
 
-    # กันไฟล์ผิดชนิดแบบเบา ๆ
     if not f.filename.lower().endswith(".xlsx"):
         return "Invalid file type (ต้องเป็น .xlsx เท่านั้น)", 400
 
-    # อัปโหลดขึ้น Firebase Storage (ไม่ต้อง deploy)
     blob = bucket.blob(STOCK_BLOB_NAME)
-    blob.upload_from_file(f, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    blob.upload_from_file(
+        f,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
     # ล้าง cache เพื่อให้หน้า stock ดึงไฟล์ใหม่ทันที
     with _stock_lock:
         _stock_cache["mtime"] = None
         _stock_cache["rows"] = []
+
+    # ✅ ใช้เสร็จแล้ว ปิดสิทธิ์ (กันคนกด refresh แล้วยิง POST ซ้ำ)
+    session.pop("stock_upload_ok", None)
 
     return redirect("/stock")
                 
