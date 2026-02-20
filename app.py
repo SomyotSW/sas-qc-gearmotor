@@ -10,7 +10,7 @@ from utils.qr_generator import generate_qr_code
 import json
 import qrcode
 import threading
-import pandas as pd
+#import pandas as pd
 import xlrd
 
 app = Flask(__name__)
