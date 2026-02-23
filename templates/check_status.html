@@ -205,8 +205,19 @@
     const tbody = document.getElementById('tbody');
     tbody.innerHTML = '<tr><td colspan="9">กำลังโหลดข้อมูล...</td></tr>';
 
-    const res = await fetch('/api/check-status', { cache: 'no-store' });
-    const data = await res.json();
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 15000);
+
+    let res, data;
+    try{
+      res = await fetch('/api/check-status', { cache: 'no-store', signal: controller.signal });
+      data = await res.json();
+    } catch(e){
+      tbody.innerHTML = `<tr><td colspan="9">โหลดข้อมูลไม่สำเร็จ: API timeout / server ไม่ตอบกลับ</td></tr>`;
+      return;
+    } finally {
+      clearTimeout(t);
+    }
 
     if(!data.ok){
       tbody.innerHTML = `<tr><td colspan="9">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(data.error || 'Unknown error')}</td></tr>`;

@@ -72,7 +72,7 @@ def _load_stock_rows_cached():
 
         # โหลดไฟล์เป็น bytes แล้วอ่านด้วย openpyxl
         data = blob.download_as_bytes()
-        wb = load_workbook(BytesIO(data), data_only=True)
+        wb = load_workbook(BytesIO(data), data_only=True, read_only=True)
         ws = wb.worksheets[0]
 
         rows = []
