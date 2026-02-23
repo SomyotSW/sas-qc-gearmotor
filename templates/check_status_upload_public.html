@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Upload Check Status File</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body{ background: linear-gradient(135deg,#0b2a5b 0%, #0e4aa6 55%, #ffffff 100%); min-height:100vh; }
+    .glass{ background: rgba(255,255,255,.92); border-radius: 18px; box-shadow: 0 12px 30px rgba(0,0,0,.18); }
+  </style>
+</head>
+<body>
+  <div class="container py-5">
+    <div class="glass p-4 p-md-5">
+      <h3 class="mb-1">📤 Upload Check Status File</h3>
+      <div class="text-muted mb-4">
+        อัปโหลดไฟล์ <b>Check status.xlsx</b> เพื่ออัปเดตข้อมูล
+        (*ย้ำชื่อไฟล์ต้องเป็นชื่อนี้ นามสกุลนี้ เท่านั้น)
+      </div>
+
+      <form method="POST" enctype="multipart/form-data" class="row g-3">
+        <div class="col-12">
+          <label class="form-label fw-semibold">ไฟล์ Excel (.xlsx)</label>
+          <input name="file" type="file" class="form-control" accept=".xlsx" required>
+        </div>
+
+        <div class="col-12 d-flex gap-2">
+          <button class="btn btn-primary">อัปโหลด</button>
+          <a class="btn btn-outline-secondary" href="/check-status">ไปหน้า Check Status</a>
+          <a class="btn btn-outline-secondary" href="/">Home</a>
+        </div>
+      </form>
+
+      <hr class="my-4">
+      <div class="small text-muted">
+        * ระบบจะอัปโหลดไฟล์ขึ้น Firebase Storage และหน้า Check Status จะดึงไฟล์ล่าสุดอัตโนมัติ
+      </div>
+    </div>
+  </div>
+</body>
+</html>

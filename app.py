@@ -179,6 +179,45 @@ def stock_upload_public():
     session.pop("stock_upload_ok", None)
 
     return redirect("/stock")
+
+@app.route("/check-status-upload", methods=["GET", "POST"])
+def check_status_upload_public():
+    if request.method == "GET":
+        key = (request.args.get("key") or "").strip()
+        if key != CHECK_UPLOAD_PASS:
+            return "Unauthorized", 403
+
+        # ✅ ผ่านรหัสแล้ว เก็บสิทธิ์ไว้ใน session เพื่อใช้ตอน POST
+        session["check_upload_ok"] = True
+        return render_template("check_status_upload_public.html")
+
+    # ===== POST =====
+    # ✅ ตรวจซ้ำฝั่ง server ก่อนอัปโหลด
+    if not session.get("check_upload_ok"):
+        return "Unauthorized", 403
+
+    f = request.files.get("file")
+    if not f or f.filename.strip() == "":
+        return "No file uploaded", 400
+
+    if not f.filename.lower().endswith(".xlsx"):
+        return "Invalid file type (ต้องเป็น .xlsx เท่านั้น)", 400
+
+    blob = bucket.blob(CHECK_BLOB_NAME)
+    blob.upload_from_file(
+        f,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    # ล้าง cache เพื่อให้หน้า check-status ดึงไฟล์ใหม่ทันที
+    with _check_lock:
+        _check_cache["mtime"] = None
+        _check_cache["rows"] = []
+
+    # ✅ ใช้เสร็จแล้ว ปิดสิทธิ์ (กันคนกด refresh แล้วยิง POST ซ้ำ)
+    session.pop("check_upload_ok", None)
+
+    return redirect("/check-status")
                 
 # ✅ NEW: Inspector mapping (ID -> ชื่อ)
 INSPECTOR_MAP = {
