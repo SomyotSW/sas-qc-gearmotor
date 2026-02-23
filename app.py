@@ -124,7 +124,7 @@ def _load_check_rows_cached():
             factory_eta  = row[16]  # Q
             delivery_eta = row[17]  # R
 
-            if (no_item is None and po_no is None and po_open_date is None and customer is None
+            if (no_item is None and po_no is None and po_open_date is None
                 and stock_order is None and amount is None and transport is None
                 and factory_eta is None and delivery_eta is None):
                 continue
