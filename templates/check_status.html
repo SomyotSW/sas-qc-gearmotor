@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>เช็คสถานะสินค้า</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    body{
+      background: linear-gradient(135deg, #0b2a5b 0%, #0e4aa6 55%, #ffffff 100%);
+      min-height: 100vh;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .glass{
+      background: rgba(255,255,255,0.92);
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 18px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+    }
+    .title{
+      font-weight: 800;
+      letter-spacing: .3px;
+      color: #0b2a5b;
+    }
+    .sub{
+      color: #2b4a7a;
+    }
+    .table thead th{
+      background: #0b2a5b;
+      color: white;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      white-space: nowrap;
+    }
+    .badge-count{
+      background: #0e4aa6;
+    }
+
+    /* ===== 3D gradient animated title (เหมือน stock.html) ===== */
+    .title-3d{
+      font-weight: 900;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+
+      background: linear-gradient(90deg, #ffffff 0%, #b7dcff 45%, #ffffff 100%);
+      background-size: 200% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+
+      text-shadow:
+        0 1px 0 rgba(255,255,255,0.7),
+        0 2px 0 rgba(255,255,255,0.35),
+        0 6px 14px rgba(0,0,0,0.35);
+
+      animation: sheen 2.8s ease-in-out infinite alternate;
+    }
+
+    @keyframes sheen{
+      0%   { background-position: 0% 50%; }
+      100% { background-position: 100% 50%; }
+    }
+
+    /* ===== footer credit ===== */
+    .presented-by{
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 10px;
+      text-align: center;
+      font-size: 12px;
+      opacity: 0.28;
+      color: #000;
+      pointer-events: none;
+      user-select: none;
+      letter-spacing: .3px;
+    }
+
+    /* ===== mobile responsive tweaks ===== */
+    @media (max-width: 576px){
+      body{ background: linear-gradient(160deg, #0b2a5b 0%, #0e4aa6 60%, #ffffff 140%); }
+
+      .container{ padding-left: 12px; padding-right: 12px; }
+      .glass{ border-radius: 14px; }
+
+      .header-wrap{
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 10px;
+      }
+      .header-actions{
+        width: 100%;
+        justify-content: flex-end;
+      }
+
+      .title-3d{ font-size: 1.35rem !important; }
+      .form-control-lg{ font-size: 1rem; padding: .7rem .85rem; }
+      .btn{ padding: .65rem .9rem; }
+
+      .table-responsive{ max-height: 55vh !important; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container py-4">
+
+    <div class="d-flex align-items-center justify-content-between mb-3 header-wrap">
+      <div>
+        <div class="title-3d fs-2">✈️ เช็คสถานะสินค้า</div>
+        <div class="sub">ค้นหาเลข PO หรือชื่อลูกค้า หรือเลื่อนดูรายการทั้งหมดได้</div>
+      </div>
+      <div class="d-flex gap-2 header-actions">
+        <a href="#" class="btn btn-outline-light" onclick="return goUploadStatus();">📤</a>
+        <a href="/" class="btn btn-outline-light">Home</a>
+      </div>
+    </div>
+
+    <div class="glass p-3 p-md-4">
+      <div class="row g-3 align-items-end">
+        <div class="col-12 col-md-8">
+          <label class="form-label fw-semibold">ค้นหา (เลข PO / ลูกค้า)</label>
+          <input id="search" type="text" class="form-control form-control-lg" placeholder="พิมพ์เลข PO หรือชื่อลูกค้า แล้วค้นหาได้ทันที...">
+        </div>
+        <div class="col-12 col-md-4">
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="fw-semibold">จำนวนรายการ</div>
+            <span id="count" class="badge badge-count text-white fs-6">-</span>
+          </div>
+          <button id="reload" class="btn btn-primary w-100 mt-2">🔄 โหลดข้อมูลใหม่</button>
+        </div>
+      </div>
+
+      <hr class="my-4">
+
+      <div class="table-responsive" style="max-height: 65vh;">
+        <table class="table table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th style="width: 70px;">No.</th>
+              <th style="width: 150px;">เลข PO</th>
+              <th style="min-width: 220px;">ลูกค้า</th>
+              <th style="width: 140px;">ยอดสั่งซื้อ</th>
+              <th style="width: 160px;">สถานะสินค้า</th>
+              <th style="width: 200px;">กำหนดการถึง SAS Factory</th>
+              <th style="width: 180px;">กำหนดการส่งมอบ</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="7">กำลังโหลดข้อมูล...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+  let ALL = [];
+
+  function render(list){
+    const tbody = document.getElementById('tbody');
+    const count = document.getElementById('count');
+    count.textContent = list.length;
+
+    if(!list.length){
+      tbody.innerHTML = '<tr><td colspan="7">ไม่พบข้อมูล</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = list.map((r, idx) => `
+      <tr>
+        <td class="fw-semibold">${escapeHtml(r.no ?? (idx + 1))}</td>
+        <td class="fw-semibold">${escapeHtml(r.po || '')}</td>
+        <td>${escapeHtml(r.customer || '')}</td>
+        <td>${escapeHtml(r.amount || '')}</td>
+        <td>${escapeHtml(r.status || '')}</td>
+        <td>${escapeHtml(r.factory_eta || '')}</td>
+        <td>${escapeHtml(r.delivery_eta || '')}</td>
+      </tr>
+    `).join('');
+  }
+
+  function filterNow(){
+    const q = (document.getElementById('search').value || '').trim().toLowerCase();
+    if(!q){
+      render(ALL);
+      return;
+    }
+    const filtered = ALL.filter(r =>
+      String(r.po || '').toLowerCase().includes(q) ||
+      String(r.customer || '').toLowerCase().includes(q)
+    );
+    render(filtered);
+  }
+
+  async function load(){
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = '<tr><td colspan="7">กำลังโหลดข้อมูล...</td></tr>';
+
+    const res = await fetch('/api/check-status', { cache: 'no-store' });
+    const data = await res.json();
+
+    if(!data.ok){
+      tbody.innerHTML = `<tr><td colspan="7">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(data.error || 'Unknown error')}</td></tr>`;
+      return;
+    }
+
+    ALL = data.rows || [];
+    render(ALL);
+  }
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, s => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[s]));
+  }
+
+  document.getElementById('search').addEventListener('input', filterNow);
+  document.getElementById('search').addEventListener('keydown', (e) => {
+    if(e.key === 'Enter'){ e.preventDefault(); filterNow(); }
+  });
+  document.getElementById('reload').addEventListener('click', load);
+
+  load();
+
+  // ปุ่มอัปโหลด "เหมือน stock.html" (ใช้รหัสเดียวกัน)
+  function goUploadStatus(){
+    const pass = prompt('กรอกรหัสเพื่อเข้า Upload File');
+    if(pass === null) return false;
+    if(pass.trim() === 'Adminsas2026'){
+      window.location.href = '/check-status-upload?key=' + encodeURIComponent(pass.trim());
+    }else{
+      alert('รหัสไม่ถูกต้อง');
+    }
+    return false;
+  }
+</script>
+
+<div class="presented-by">Presented by Stephen A.</div>
+</body>
+</html>
