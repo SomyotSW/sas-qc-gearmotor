@@ -110,11 +110,29 @@
       /* table height on phones */
       .table-responsive{ max-height: 55vh !important; }
     }
+  .truck-fly{
+  position: fixed;
+  top: 16px;                 /* ปรับสูง/ต่ำได้ */
+  left: -90px;
+  font-size: 40px;           /* รถคันใหญ่กว่าเครื่องบินนิดนึง */
+  z-index: 1;                /* อยู่หลัง UI */
+  opacity: 0.18;
+  pointer-events: none;
+  user-select: none;
+  animation: truckRoundTrip 22s ease-in-out infinite; /* ช้าๆ */
+  }
 
+  @keyframes truckRoundTrip{
+    0%   { transform: translateX(0) scaleX(-1); }
+    49%  { transform: translateX(calc(100vw + 180px)) scaleX(-1); }
+    50%  { transform: translateX(calc(100vw + 180px)) scaleX(1); }
+    100% { transform: translateX(0) scaleX(1); }
+  }
   </style>
 </head>
 
 <body>
+  <span class="truck-fly">🚚</span>
   <div class="container py-4">
 
     <div class="d-flex align-items-center justify-content-between mb-3 header-wrap">

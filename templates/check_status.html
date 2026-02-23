@@ -154,11 +154,36 @@
         border-radius: 10px;
       }
     }
+  
+  /* ... ของเดิม ... */
+
+  /* ===== Plane animation (ซ้ายไปขวาไปกลับช้าๆ) ===== */
+  .plane-fly {
+    position: fixed;
+    top: 5px;              /* ปรับตำแหน่งสูง/ต่ำได้ */
+    left: -60px;
+    font-size: 48px;        /* ขนาดไม่ใหญ่มาก */
+    z-index: 1;             /* ให้ลอยอยู่ “ด้านหลัง” ปุ่ม Home */
+    opacity: 0.18;          /* จางๆ */
+    pointer-events: none;   /* ไม่บังการกดปุ่ม */
+    user-select: none;
+    animation: planeRoundTrip 18s ease-in-out infinite;
+    filter: drop-shadow(0 6px 10px rgba(0,0,0,.35)) drop-shadow(0 1px 0 rgba(255,255,255,.35));
+    text-shadow: 0 1px 0 rgba(255,255,255,.45);
+  }
+
+  @keyframes planeRoundTrip {
+    0%   { transform: translateX(0) scaleX(1); }
+    49%  { transform: translateX(calc(100vw + 120px)) scaleX(1); }
+    50%  { transform: translateX(calc(100vw + 120px)) scaleX(-1); } /* กลับหัว */
+    100% { transform: translateX(0) scaleX(-1); }
+  }
     
   </style>
 </head>
 
 <body>
+  <span class="plane-fly">🛬</span>
   <div class="container py-4">
 
     <div class="d-flex align-items-center justify-content-between mb-3 header-wrap">
