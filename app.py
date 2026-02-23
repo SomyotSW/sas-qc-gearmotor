@@ -39,7 +39,7 @@ STOCK_XLS_PATH = os.path.join(os.path.dirname(__file__), "Stock motor.xlsx")
 STOCK_UPLOAD_PASS = "Adminsas2026"
 
 CHECK_BLOB_NAME = "stock/Check status.xlsx"   # <-- คุณเปลี่ยนชื่อไฟล์ได้ตามจริง
-CHECK_UPLOAD_PASS = "Adminsas2029"            # ใช้รหัสเดียวกับ stock ได้
+CHECK_UPLOAD_PASS = "Adminsas2026"            # ใช้รหัสเดียวกับ stock ได้
 _check_cache = {"mtime": None, "rows": []}
 _check_lock = threading.Lock()
 
@@ -107,27 +107,32 @@ def _load_check_rows_cached():
         ws = wb.worksheets[0]
 
         rows = []
-        # เริ่มอ่านตั้งแต่แถว 2 (ข้ามหัวตาราง)
-        for r in range(2, ws.max_row + 1):
-            no = ws[f"A{r}"].value
-            po = ws[f"B{r}"].value
-            customer = ws[f"C{r}"].value
-            amount = ws[f"D{r}"].value
-            status = ws[f"E{r}"].value
-            factory_eta = ws[f"F{r}"].value
-            delivery_eta = ws[f"G{r}"].value
+        # อ่านช่วงแถว 25-600 (ตามไฟล์ Excel)
+        for r in range(25, 601):
+            no_item      = ws[f"A{r}"].value   # 1) No Item
+            po_no        = ws[f"D{r}"].value   # 3) เลข PO
+            po_open_date = ws[f"E{r}"].value   # 2) วันที่เปิด PO
+            customer     = ws[f"F{r}"].value   # 4) ลูกค้า
+            stock_order  = ws[f"G{r}"].value   # 5) Stock or Order
+            amount       = ws[f"H{r}"].value   # 6) ยอดสั่งซื้อ
+            transport    = ws[f"N{r}"].value   # 7) ขนส่ง
+            factory_eta  = ws[f"Q{r}"].value   # 8) กำหนดการถึง SAS Factory
+            delivery_eta = ws[f"R{r}"].value   # 9) กำหนดการส่งมอบ
 
-            # ถ้าว่างทั้งแถวให้ข้าม
-            if (no is None and po is None and customer is None and amount is None
-                and status is None and factory_eta is None and delivery_eta is None):
+            # ถ้าว่างทั้งหมดให้ข้าม
+            if (no_item is None and po_no is None and po_open_date is None and customer is None
+                and stock_order is None and amount is None and transport is None
+                and factory_eta is None and delivery_eta is None):
                 continue
 
             rows.append({
-                "no": "" if no is None else str(no).strip(),
-                "po": "" if po is None else str(po).strip(),
+                "no_item": "" if no_item is None else str(no_item).strip(),
+                "po_open_date": "" if po_open_date is None else str(po_open_date).strip(),
+                "po": "" if po_no is None else str(po_no).strip(),
                 "customer": "" if customer is None else str(customer).strip(),
+                "stock_or_order": "" if stock_order is None else str(stock_order).strip(),
                 "amount": "" if amount is None else str(amount).strip(),
-                "status": "" if status is None else str(status).strip(),
+                "transport": "" if transport is None else str(transport).strip(),
                 "factory_eta": "" if factory_eta is None else str(factory_eta).strip(),
                 "delivery_eta": "" if delivery_eta is None else str(delivery_eta).strip(),
             })
