@@ -11,7 +11,6 @@ import json
 import qrcode
 import threading
 #import pandas as pd
-import xlrd
 from io import BytesIO
 from openpyxl import load_workbook
 
@@ -76,17 +75,19 @@ def _load_stock_rows_cached():
         ws = wb.worksheets[0]
 
         rows = []
-        for r in range(10, 461):
-            code = ws[f"A{r}"].value
-            desc = ws[f"E{r}"].value
-            total = ws[f"J{r}"].value
+        # อ่านช่วง A..J เพื่อให้ดึง A/E/AF ได้ในรอบเดียว (A=1 ... J=10)
+        for row in ws.iter_rows(min_row=9, max_row=460, min_col=1, max_col=10, values_only=True):
+            code  = row[0]   # A
+            desc  = row[4]   # E
+            total = row[31]   # AF
 
             code_s = "" if code is None else str(code).strip()
-            desc_s = "" if desc is None else str(desc).strip()
-            total_s = "" if total is None else str(total).strip()
-
             if code_s:
-                rows.append({"code": code_s, "description": desc_s, "total": total_s})
+                rows.append({
+                    "code": code_s,
+                    "description": "" if desc is None else str(desc).strip(),
+                    "total": "" if total is None else str(total).strip()
+                })
 
         _stock_cache["mtime"] = mtime
         _stock_cache["rows"] = rows
