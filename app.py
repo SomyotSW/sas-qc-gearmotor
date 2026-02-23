@@ -72,12 +72,12 @@ def _load_stock_rows_cached():
         # โหลดไฟล์เป็น bytes แล้วอ่านด้วย openpyxl
         data = blob.download_as_bytes()
         wb = load_workbook(BytesIO(data), data_only=True, read_only=True)
-        ws = next((s for s in wb.worksheets if (s.max_column or 0) >= 10 and (s.max_row or 0) >= 460), wb.worksheets[0])
+        ws = next((s for s in wb.worksheets if (s.max_column or 0) >= 32 and (s.max_row or 0) >= 460), wb.worksheets[0])
 
         rows = []
 
         # อ่าน A..J (1..10) แต่กันกรณีชีตนี้คอลัมน์ไม่ถึง
-        for row in ws.iter_rows(min_row=9, max_row=460, min_col=1, max_col=10, values_only=True):
+        for row in ws.iter_rows(min_row=9, max_row=460, min_col=1, max_col=32, values_only=True):
         # กัน tuple สั้น (กันพัง)
             code  = row[0] if len(row) > 0 else None   # A
             desc  = row[4] if len(row) > 4 else None   # E
@@ -118,14 +118,13 @@ def _load_check_rows_cached():
             no_item      = row[0]   # A
             po_no        = row[3]   # D
             po_open_date = row[4]   # E
-            customer     = row[5]   # F
             stock_order  = row[6]   # G
             amount       = row[7]   # H
             transport    = row[13]  # N
             factory_eta  = row[16]  # Q
             delivery_eta = row[17]  # R
 
-            if (no_item is None and po_no is None and po_open_date is None and customer is None
+            if (no_item is None and po_no is None and po_open_date is None
                 and stock_order is None and amount is None and transport is None
                 and factory_eta is None and delivery_eta is None):
                 continue
@@ -134,7 +133,6 @@ def _load_check_rows_cached():
                 "no_item": "" if no_item is None else str(no_item).strip(),
                 "po_open_date": "" if po_open_date is None else str(po_open_date).strip(),
                 "po": "" if po_no is None else str(po_no).strip(),
-                "customer": "" if customer is None else str(customer).strip(),
                 "stock_or_order": "" if stock_order is None else str(stock_order).strip(),
                 "amount": "" if amount is None else str(amount).strip(),
                 "transport": "" if transport is None else str(transport).strip(),
