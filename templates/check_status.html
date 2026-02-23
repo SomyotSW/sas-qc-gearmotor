@@ -201,15 +201,15 @@
               <th style="width: 90px;">No.</th>
               <th style="width: 160px;">วันที่เปิด PO</th>
               <th style="width: 150px;">เลข PO</th>
-              <th style="min-width: 250px;">Stock or Order</th>
-              <th style="max-width: 220px;">รายการสินค้า</th>
+              <th style="min-width: 140px;">Stock or Order</th>
+              <th style="min-width: 260px;">รายการสินค้า</th>
               <th style="max-width: 140px;">ขนส่ง</th>
-              <th style="max-width: 1800px;">กำหนดการถึงไทย</th>
+              <th style="min-width: 180px;">กำหนดการถึงไทย</th>
               <th style="width: 180px;">กำหนดการถึง SAS Factory</th>
             </tr>
           </thead>
           <tbody id="tbody">
-            <tr><td colspan="9">กำลังโหลดข้อมูล...</td></tr>
+            <tr><td colspan="8">กำลังโหลดข้อมูล...</td></tr>
           </tbody>
         </table>
       </div>
@@ -227,7 +227,7 @@
     count.textContent = list.length;
 
     if(!list.length){
-      tbody.innerHTML = '<tr><td colspan="9">ไม่พบข้อมูล</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8">ไม่พบข้อมูล</td></tr>';
       return;
     }
 
@@ -236,7 +236,6 @@
         <td class="fw-semibold">${escapeHtml(r.no_item ?? '')}</td>
         <td>${escapeHtml(r.po_open_date || '')}</td>
         <td class="fw-semibold">${escapeHtml(r.po || '')}</td>
-        <td>${escapeHtml(r.customer || '')}</td>
         <td>${escapeHtml(r.stock_or_order || '')}</td>
         <td>${escapeHtml(r.amount || '')}</td>
         <td>${escapeHtml(r.transport || '')}</td>
@@ -276,7 +275,7 @@
 
   async function load(){
     const tbody = document.getElementById('tbody');
-    tbody.innerHTML = '<tr><td colspan="9">กำลังโหลดข้อมูล...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8">กำลังโหลดข้อมูล...</td></tr>';
 
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), 15000);
@@ -286,14 +285,14 @@
       res = await fetch('/api/check-status', { cache: 'no-store', signal: controller.signal });
       data = await res.json();
     } catch(e){
-      tbody.innerHTML = `<tr><td colspan="9">โหลดข้อมูลไม่สำเร็จ: API timeout / server ไม่ตอบกลับ</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8">โหลดข้อมูลไม่สำเร็จ: API timeout / server ไม่ตอบกลับ</td></tr>`;
       return;
     } finally {
       clearTimeout(t);
     }
 
     if(!data.ok){
-      tbody.innerHTML = `<tr><td colspan="9">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(data.error || 'Unknown error')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(data.error || 'Unknown error')}</td></tr>`;
       return;
     }
 
