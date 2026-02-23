@@ -72,14 +72,16 @@ def _load_stock_rows_cached():
         # โหลดไฟล์เป็น bytes แล้วอ่านด้วย openpyxl
         data = blob.download_as_bytes()
         wb = load_workbook(BytesIO(data), data_only=True, read_only=True)
-        ws = wb.worksheets[0]
+        ws = next((s for s in wb.worksheets if (s.max_column or 0) >= 10 and (s.max_row or 0) >= 460), wb.worksheets[0])
 
         rows = []
-        # อ่านช่วง A..J เพื่อให้ดึง A/E/AF ได้ในรอบเดียว (A=1 ... J=10)
+
+        # อ่าน A..J (1..10) แต่กันกรณีชีตนี้คอลัมน์ไม่ถึง
         for row in ws.iter_rows(min_row=9, max_row=460, min_col=1, max_col=10, values_only=True):
-            code  = row[0]   # A
-            desc  = row[4]   # E
-            total = row[31]   # AF
+        # กัน tuple สั้น (กันพัง)
+            code  = row[0] if len(row) > 0 else None   # A
+            desc  = row[4] if len(row) > 4 else None   # E
+            total = row[31] if len(row) > 31 else None   # AF
 
             code_s = "" if code is None else str(code).strip()
             if code_s:
