@@ -103,23 +103,25 @@ def _load_check_rows_cached():
             return _check_cache["rows"]
 
         data = blob.download_as_bytes()
-        wb = load_workbook(BytesIO(data), data_only=True)
-        ws = wb.worksheets[0]
+        wb = load_workbook(BytesIO(data), data_only=True, read_only=True)
+        year_sheets = [s for s in wb.sheetnames if str(s).isdigit()]
+        ws = wb[str(max(map(int, year_sheets)))] if year_sheets else wb.worksheets[0]
 
         rows = []
-        # อ่านช่วงแถว 25-600 (ตามไฟล์ Excel)
-        for r in range(25, 601):
-            no_item      = ws[f"A{r}"].value   # 1) No Item
-            po_no        = ws[f"D{r}"].value   # 3) เลข PO
-            po_open_date = ws[f"E{r}"].value   # 2) วันที่เปิด PO
-            customer     = ws[f"F{r}"].value   # 4) ลูกค้า
-            stock_order  = ws[f"G{r}"].value   # 5) Stock or Order
-            amount       = ws[f"H{r}"].value   # 6) ยอดสั่งซื้อ
-            transport    = ws[f"N{r}"].value   # 7) ขนส่ง
-            factory_eta  = ws[f"Q{r}"].value   # 8) กำหนดการถึง SAS Factory
-            delivery_eta = ws[f"R{r}"].value   # 9) กำหนดการส่งมอบ
 
-            # ถ้าว่างทั้งหมดให้ข้าม
+        # อ่าน A ถึง R เพื่อให้เข้าถึง N/Q/R ได้ในรอบเดียว (A=1 ... R=18)
+        for row in ws.iter_rows(min_row=25, max_row=600, min_col=1, max_col=18, values_only=True):
+        # index ใน tuple: A=0, D=3, E=4, F=5, G=6, H=7, N=13, Q=16, R=17
+            no_item      = row[0]   # A
+            po_no        = row[3]   # D
+            po_open_date = row[4]   # E
+            customer     = row[5]   # F
+            stock_order  = row[6]   # G
+            amount       = row[7]   # H
+            transport    = row[13]  # N
+            factory_eta  = row[16]  # Q
+            delivery_eta = row[17]  # R
+
             if (no_item is None and po_no is None and po_open_date is None and customer is None
                 and stock_order is None and amount is None and transport is None
                 and factory_eta is None and delivery_eta is None):
