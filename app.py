@@ -120,9 +120,9 @@ def _load_check_rows_cached():
             po_open_date = row[4]   # E
             stock_order  = row[5]   # G
             amount       = row[6]   # H
-            transport    = row[11]  # N
-            factory_eta  = row[14]  # Q
-            delivery_eta = row[15]  # R
+            transport    = row[12]  # N
+            factory_eta  = row[16]  # Q
+            delivery_eta = row[17]  # R
 
             if (no_item is None and po_no is None and po_open_date is None
                 and stock_order is None and amount is None and transport is None
