@@ -102,6 +102,59 @@
 
       .table-responsive{ max-height: 55vh !important; }
     }
+  
+ 
+
+    /* ===== Mini Filter STOCK/ORDER (ด้านข้าง) ===== */
+    .glass{ position: relative; } /* เพิ่มเพื่อให้ปุ่มด้านข้างยึดกับกล่อง */
+
+    .mini-filter{
+      position: absolute;
+      right: 14px;
+      top: 120px;              /* เลื่อนลงมาให้อยู่เหนือหัวตารางพอดี (ปรับได้) */
+      display: flex;
+      flex-direction: row;     /* ✅ จาก column -> row */
+      gap: 8px;
+      z-index: 5;
+    }
+
+    .mini-filter .mf-btn{
+      width: 30px;
+      height: 20px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.55);
+      background: rgba(2, 2, 2, 0.16);
+      color: #0b2a5b;
+      font-weight: 800;
+      font-size: 8px;
+      line-height: 1;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.10);
+      transition: .15s ease;
+    }
+
+    .mini-filter .mf-btn:hover{
+      transform: translateY(-1px);
+      background: rgba(13, 110, 253, 0.24);
+    }
+
+    .mini-filter .mf-btn.active{
+      background: #0d6efd;
+      color: #fff;
+      border-color: rgba(255,255,255,0.75);
+    }
+
+    @media (max-width: 576px){
+      .mini-filter{
+        right: 10px;
+        top: 200px;
+      }
+      .mini-filter .mf-btn{
+        width: 42px;
+        height: 32px;
+        border-radius: 10px;
+      }
+    }
+    
   </style>
 </head>
 
@@ -120,6 +173,11 @@
     </div>
 
     <div class="glass p-3 p-md-4">
+      <div class="mini-filter" aria-label="Filter Stock or Order">
+        <button type="button" class="mf-btn active" id="mfAll" title="ดูทั้งหมด">ALL</button>
+        <button type="button" class="mf-btn" id="mfStock" title="ดูเฉพาะ STOCK">STK</button>
+        <button type="button" class="mf-btn" id="mfOrder" title="ดูเฉพาะ ORDER">ORD</button>
+      </div>
       <div class="row g-3 align-items-end">
         <div class="col-12 col-md-8">
           <label class="form-label fw-semibold">ค้นหา (เลข PO / รายการสินค้า)</label>
@@ -143,7 +201,6 @@
               <th style="width: 90px;">No Item</th>
               <th style="width: 160px;">วันที่เปิด PO</th>
               <th style="width: 150px;">เลข PO</th>
-              <th style="width: 140px;">Supplier</th>
               <th style="width: 140px;">Stock or Order</th>
               <th style="min-width: 220px;">รายการสินค้า</th>
               <th style="width: 140px;">ขนส่ง</th>
@@ -162,6 +219,7 @@
 
 <script>
   let ALL = [];
+  let MODE = 'ALL'; // ALL | STOCK | ORDER
 
   function render(list){
     const tbody = document.getElementById('tbody');
@@ -188,17 +246,32 @@
     `).join('');
   }
 
-  function filterNow(){
+  function applyFilters(){
     const q = (document.getElementById('search').value || '').trim().toLowerCase();
-    if(!q){
-      render(ALL);
-      return;
+
+    let list = ALL;
+
+    // 1) filter ตามโหมด STOCK/ORDER
+    if(MODE === 'STOCK'){
+      list = list.filter(r => String(r.stock_or_order || '').toUpperCase().includes('STOCK'));
+    }else if(MODE === 'ORDER'){
+      list = list.filter(r => String(r.stock_or_order || '').toUpperCase().includes('ORDER'));
     }
-    const filtered = ALL.filter(r =>
-      String(r.po || '').toLowerCase().includes(q) ||
-      String(r.amount || '').toLowerCase().includes(q)
-    );
-    render(filtered);
+
+    // 2) filter จากช่องค้นหา (เลข PO / รายการสินค้า)
+    if(q){
+      list = list.filter(r =>
+        String(r.po || '').toLowerCase().includes(q) ||
+        String(r.amount || '').toLowerCase().includes(q)
+      );
+    }
+
+    render(list);
+  }
+
+  // คงชื่อเดิมไว้ เพื่อไม่กระทบ event listener เดิม
+  function filterNow(){
+    applyFilters();
   }
 
   async function load(){
@@ -225,7 +298,7 @@
     }
 
     ALL = data.rows || [];
-    render(ALL);
+    applyFilters();
   }
 
   function escapeHtml(str){
@@ -239,6 +312,21 @@
     if(e.key === 'Enter'){ e.preventDefault(); filterNow(); }
   });
   document.getElementById('reload').addEventListener('click', load);
+
+  function setMode(next){
+    MODE = next;
+
+    // update UI active
+    document.getElementById('mfAll').classList.toggle('active', MODE === 'ALL');
+    document.getElementById('mfStock').classList.toggle('active', MODE === 'STOCK');
+    document.getElementById('mfOrder').classList.toggle('active', MODE === 'ORDER');
+
+    applyFilters();
+  }
+
+  document.getElementById('mfAll').addEventListener('click', () => setMode('ALL'));
+  document.getElementById('mfStock').addEventListener('click', () => setMode('STOCK'));
+  document.getElementById('mfOrder').addEventListener('click', () => setMode('ORDER'));
 
   load();
 
