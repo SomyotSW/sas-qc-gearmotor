@@ -53,9 +53,9 @@ def _load_stock_rows_cached():
     """
     Read latest stock xlsx from Firebase Storage and cache by blob updated time.
     Range:
-      Code: A10-A460
-      Description: E10-E460
-      Total: J10-J460
+      Code: A10-A3000
+      Description: E10-E3000
+      Total: J10-J3000
     """
     blob = bucket.blob(STOCK_BLOB_NAME)
     blob.reload()  # ดึง metadata ล่าสุด
@@ -72,12 +72,12 @@ def _load_stock_rows_cached():
         # โหลดไฟล์เป็น bytes แล้วอ่านด้วย openpyxl
         data = blob.download_as_bytes()
         wb = load_workbook(BytesIO(data), data_only=True, read_only=True)
-        ws = next((s for s in wb.worksheets if (s.max_column or 0) >= 32 and (s.max_row or 0) >= 460), wb.worksheets[0])
+        ws = next((s for s in wb.worksheets if (s.max_column or 0) >= 32 and (s.max_row or 0) >= 3000), wb.worksheets[0])
 
         rows = []
 
         # อ่าน A..J (1..10) แต่กันกรณีชีตนี้คอลัมน์ไม่ถึง
-        for row in ws.iter_rows(min_row=9, max_row=460, min_col=1, max_col=32, values_only=True):
+        for row in ws.iter_rows(min_row=9, max_row=3000, min_col=1, max_col=32, values_only=True):
         # กัน tuple สั้น (กันพัง)
             code  = row[0] if len(row) > 0 else None   # A
             desc  = row[4] if len(row) > 4 else None   # E
