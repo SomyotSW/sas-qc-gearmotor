@@ -13,12 +13,22 @@
       font-family: 'Segoe UI', sans-serif;
     }
     .overlay {
-      background-color: rgba(255, 255, 255, 0.85);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 20px;
+      position: relative;
+      z-index: 2; /* content อยู่บนสุด */
+    }
+
+    /* แผ่นขาวทับพื้นหลัง (แต่ไม่บังรูป side) */
+    .overlay::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-color: rgba(255, 255, 255, 0.85);
+      z-index: 1;
     }
     .welcome-container {
       background: #e9f4ff; /* ฟ้าอ่อน */
@@ -41,16 +51,16 @@
       position: fixed;
       top: 0;
       bottom: 0;
-      width: min(28vw, 360px);
-      height: 100vh;
+      width: min(30vw, 460px);
+      height: 120vh;
       object-fit: contain;
-      z-index: 0;
+      z-index: 1;
       pointer-events: none;
       opacity: 0.95;
     }
     .bg-left { left: 0; }
     .bg-right { right: 0; }
-    .overlay, .sas-logo { position: relative; z-index: 1; }
+    .sas-logo { position: relative; z-index: 3; }
     h1 {
       color: #007bff;
       margin-bottom: 30px;
