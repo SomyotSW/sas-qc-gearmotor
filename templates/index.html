@@ -21,7 +21,7 @@
       padding: 20px;
     }
     .welcome-container {
-      background: white;
+      background: #e9f4ff; /* ฟ้าอ่อน */
       padding: 40px 30px;
       border-radius: 12px;
       text-align: center;
@@ -35,6 +35,22 @@
       left: 15px;
       height: 50px;
     }
+
+    /* ===== Side background overlays ===== */
+    .bg-side {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      width: min(28vw, 360px);
+      height: 100vh;
+      object-fit: contain;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.95;
+    }
+    .bg-left { left: 0; }
+    .bg-right { right: 0; }
+    .overlay, .sas-logo { position: relative; z-index: 1; }
     h1 {
       color: #007bff;
       margin-bottom: 30px;
@@ -42,19 +58,57 @@
     .btn-custom {
       margin-top: 15px;
     }
+
+    /* ===== Full-width 3D Buttons (same tone) ===== */
+    .btn-sas {
+      width: 100%;
+      display: block;
+      margin-top: 15px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.55);
+      background: linear-gradient(180deg, #5aa7ff 0%, #2f79d8 100%);
+      color: #ffffff !important;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      box-shadow:
+        0 10px 18px rgba(0, 70, 160, 0.30),
+        inset 0 1px 0 rgba(255,255,255,0.40),
+        inset 0 -2px 0 rgba(0,0,0,0.12);
+      transform: translateY(0);
+      transition: transform 0.08s ease, box-shadow 0.12s ease, filter 0.12s ease;
+    }
+    .btn-sas:hover {
+      filter: brightness(1.03);
+      transform: translateY(-1px);
+      box-shadow:
+        0 14px 24px rgba(0, 70, 160, 0.34),
+        inset 0 1px 0 rgba(255,255,255,0.45),
+        inset 0 -2px 0 rgba(0,0,0,0.10);
+      text-decoration: none;
+    }
+    .btn-sas:active {
+      transform: translateY(2px) scale(0.99);
+      box-shadow:
+        0 6px 12px rgba(0, 70, 160, 0.22),
+        inset 0 2px 0 rgba(0,0,0,0.16),
+        inset 0 -1px 0 rgba(255,255,255,0.20);
+    }
   </style>
 </head>
 <body>
   <img src="/static/logo_sas.png" alt="SAS Logo" class="sas-logo">
+  <img src="/static/3.png" alt="" class="bg-side bg-left">
+  <img src="/static/2.png" alt="" class="bg-side bg-right">
   <div class="overlay">
     <div class="welcome-container">
       <h1>ยินดีต้อนรับสู่</h1>
       <h1>Synergy Asia Solution</h1>
-      <a href="https://www.synergy-as.com" target="_blank" class="btn btn-outline-primary btn-lg btn-block btn-custom">🌐 www.synergy-as.com</a>
-      <a href="https://www.motorsas.com" target="_blank" class="btn btn-outline-success btn-lg btn-block btn-custom">⚙️ www.motorsas.com</a>
-      <a href="/login" class="btn btn-primary btn-lg btn-block btn-custom">🔐 SAS QC Report</a>
-      <a href="/stock" class="btn btn-primary btn-lg btn-block btn-custom">📦 STOCK ON SHELF</a>
-      <a href="/check-status" class="btn btn-primary btn-lg btn-block btn-custom">✈️ เช็คสถานะสินค้า</a>
+      <a href="https://www.synergy-as.com" target="_blank" class="btn btn-lg btn-sas">🌐 www.synergy-as.com</a>
+      <a href="https://www.motorsas.com" target="_blank" class="btn btn-lg btn-sas">⚙️ www.motorsas.com</a>
+      <a href="/login" class="btn btn-lg btn-sas">🔐 SAS QC Report</a>
+      <a href="/stock" class="btn btn-lg btn-sas">📦 STOCK ON SHELF</a>
+      <a href="/check-status" class="btn btn-lg btn-sas">✈️ เช็คสถานะสินค้า</a>
     </div>
   </div>
 </body>
