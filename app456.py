@@ -37,10 +37,6 @@ STOCK_BLOB_NAME = "stock/Stock motor.xlsx"
 STOCK_XLS_PATH = os.path.join(os.path.dirname(__file__), "Stock motor.xlsx")
 STOCK_UPLOAD_PASS = "Adminsas2026"
 
-# ✅ NEW: Supplier (ZD) stock file
-SUPPLIER_BLOB_NAME = "stock/Stock ZD.xlsx"
-SUPPLIER_UPLOAD_PASS = "Chottaninsas2029"
-
 CHECK_BLOB_NAME = "stock/Check status.xlsx"   # <-- คุณเปลี่ยนชื่อไฟล์ได้ตามจริง
 CHECK_UPLOAD_PASS = "Adminsas2026"            # ใช้รหัสเดียวกับ stock ได้
 _check_cache = {"mtime": None, "rows": []}
@@ -51,10 +47,6 @@ _stock_cache = {
     "rows": []
 }
 _stock_lock = threading.Lock()
-
-# ✅ NEW: cache for Supplier ZD
-_supplier_cache = {"mtime": None, "rows": []}
-_supplier_lock = threading.Lock()
 
 
 def _load_stock_rows_cached():
@@ -101,41 +93,6 @@ def _load_stock_rows_cached():
 
         _stock_cache["mtime"] = mtime
         _stock_cache["rows"] = rows
-        return rows
-
-
-# ✅ NEW: Supplier ZD rows (Sheet1, A2-A400, B2-B400)
-def _load_supplier_rows_cached():
-    blob = bucket.blob(SUPPLIER_BLOB_NAME)
-    blob.reload()
-
-    mtime = str(blob.updated) if blob.updated else str(blob.generation)
-
-    with _supplier_lock:
-        if _supplier_cache["mtime"] == mtime and _supplier_cache["rows"] is not None:
-            return _supplier_cache["rows"]
-
-        data = blob.download_as_bytes()
-        wb = load_workbook(BytesIO(data), data_only=True, read_only=True)
-
-        # ต้องการเฉพาะ Sheet1 ถ้ามี ไม่งั้นใช้ชีตแรก
-        ws = wb["Sheet1"] if "Sheet1" in wb.sheetnames else wb.worksheets[0]
-
-        rows = []
-        for row in ws.iter_rows(min_row=2, max_row=400, min_col=1, max_col=2, values_only=True):
-            code = row[0] if len(row) > 0 else None  # A
-            total = row[1] if len(row) > 1 else None # B
-
-            code_s = "" if code is None else str(code).strip()
-            if code_s:
-                rows.append({
-                    "code": code_s,
-                    "description": "Supplier ZD",
-                    "total": "" if total is None else str(total).strip()
-                })
-
-        _supplier_cache["mtime"] = mtime
-        _supplier_cache["rows"] = rows
         return rows
     
 def _load_check_rows_cached():
@@ -287,55 +244,10 @@ def stock_page():
 def stock_api():
     # API ส่งข้อมูล stock เป็น JSON (โหลดจาก cache เพื่อให้เร็ว)
     try:
-        rows_main = _load_stock_rows_cached()
-
-        # ✅ NEW: append Supplier ZD rows เข้า "หน้ารวม"
-        try:
-            rows_supplier = _load_supplier_rows_cached()
-        except Exception:
-            rows_supplier = []
-
-        rows = (rows_main or []) + (rows_supplier or [])
+        rows = _load_stock_rows_cached()
         return jsonify({"ok": True, "count": len(rows), "rows": rows})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
-
-
-# ✅ NEW: Supplier upload page (same UI as stock_upload_public.html)
-@app.route("/supplier-upload", methods=["GET", "POST"])
-def supplier_upload_public():
-    if request.method == "GET":
-        key = (request.args.get("key") or "").strip()
-        if key != SUPPLIER_UPLOAD_PASS:
-            return "Unauthorized", 403
-
-        session["supplier_upload_ok"] = True
-        return render_template("stock_upload_supplier.html")
-
-    # ===== POST =====
-    if not session.get("supplier_upload_ok"):
-        return "Unauthorized", 403
-
-    f = request.files.get("file")
-    if not f or f.filename.strip() == "":
-        return "No file uploaded", 400
-
-    if not f.filename.lower().endswith(".xlsx"):
-        return "Invalid file type (ต้องเป็น .xlsx เท่านั้น)", 400
-
-    blob = bucket.blob(SUPPLIER_BLOB_NAME)
-    blob.upload_from_file(
-        f,
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-    # ล้าง cache เพื่อให้หน้า stock ดึงไฟล์ใหม่ทันที
-    with _supplier_lock:
-        _supplier_cache["mtime"] = None
-        _supplier_cache["rows"] = []
-
-    session.pop("supplier_upload_ok", None)
-    return redirect("/stock")
 
 @app.route('/check-status')
 def check_status_page():
