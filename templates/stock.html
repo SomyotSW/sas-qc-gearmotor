@@ -171,6 +171,7 @@
         <div class="sub">ค้นหา Code หรือเลื่อนดูรายการทั้งหมดได้</div>
       </div>
       <div class="d-flex gap-2 header-actions">
+        <a href="#" class="btn btn-outline-light" onclick="return goUploadSupplier();">Supplier</a>
         <a href="#" class="btn btn-outline-light" onclick="return goUploadStock();">📤</a>
         <a href="/" class="btn btn-outline-light">Home</a>
       </div>
@@ -335,6 +336,16 @@
   document.getElementById('reload').addEventListener('click', load);
 
   load();
+  function goUploadSupplier(){
+    const pass = prompt('กรอกรหัสเพื่อเข้า Upload Supplier File');
+    if(pass === null) return false; // กด Cancel
+    if(pass.trim() === 'Chottaninsas2029'){
+      window.location.href = '/supplier-upload?key=' + encodeURIComponent(pass.trim());
+    }else{
+      alert('รหัสไม่ถูกต้อง');
+    }
+    return false;
+  }
   function goUploadStock(){
     const pass = prompt('กรอกรหัสเพื่อเข้า Upload Stock File');
     if(pass === null) return false; // กด Cancel

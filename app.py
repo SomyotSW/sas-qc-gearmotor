@@ -85,7 +85,7 @@ def _load_stock_rows_cached():
         rows = []
 
         # อ่าน A..J (1..10) แต่กันกรณีชีตนี้คอลัมน์ไม่ถึง
-        for row in ws.iter_rows(min_row=9, max_row=3000, min_col=1, max_col=32, values_only=True):
+        for row in ws.iter_rows(min_row=2, max_row=3000, min_col=1, max_col=32, values_only=True):
         # กัน tuple สั้น (กันพัง)
             code  = row[0] if len(row) > 0 else None   # A
             desc  = row[4] if len(row) > 4 else None   # E
