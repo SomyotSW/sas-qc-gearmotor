@@ -278,6 +278,10 @@ INSPECTOR_MAP = {
 def home():
     return render_template('index.html')
 
+@app.route("/healthz")
+def healthz():
+    return "ok", 200
+
 @app.route('/stock')
 def stock_page():
     # หน้า UI Stock on shelf
