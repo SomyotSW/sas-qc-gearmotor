@@ -1,8 +1,10 @@
+from dotenv import load_dotenv
+load_dotenv()
 from flask import Flask, render_template, request, redirect, send_file, url_for, session, jsonify
 from werkzeug.utils import secure_filename
 import os
 import firebase_admin
-from firebase_admin import credentials, db, storage
+from firebase_admin import credentials, db
 import datetime
 import io
 from utils.generate_pdf import create_qc_pdf
@@ -14,21 +16,92 @@ import threading
 from io import BytesIO
 from openpyxl import load_workbook
 
+# ✅ NEW: Cloudflare R2 (แทน Firebase Storage)
+import boto3
+from botocore.client import Config
+
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
 app.config['UPLOAD_FOLDER'] = 'uploads'
 
 # ==== Load Firebase Credential from Environment ====
+# (ยังคงใช้ Firebase Realtime Database เหมือนเดิมทุกอย่าง)
 firebase_json = json.loads(os.environ.get("FIREBASE_CREDENTIAL_JSON"))
 cred = credentials.Certificate(firebase_json)
 
 firebase_admin.initialize_app(cred, {
     'databaseURL': 'https://sas-qc-gearmotor-app-default-rtdb.asia-southeast1.firebasedatabase.app/',
-    'storageBucket': 'sas-qc-gearmotor-app.firebasestorage.app'
 })
 
 ref = db.reference("/qc_data")
-bucket = storage.bucket()
+
+# ==== Cloudflare R2 Setup ====
+# ตั้งค่า Environment Variables บน Render.com:
+#   R2_ACCOUNT_ID     = Cloudflare Account ID (ดูได้จาก R2 dashboard)
+#   R2_ACCESS_KEY_ID  = R2 API Token Access Key ID
+#   R2_SECRET_KEY     = R2 API Token Secret Access Key
+#   R2_BUCKET_NAME    = ชื่อ bucket ที่สร้างไว้
+#   R2_PUBLIC_URL     = https://<your-bucket>.<your-subdomain>.r2.dev  (หรือ custom domain)
+#
+# วิธีสร้าง R2 API Token:
+#   1. เข้า Cloudflare Dashboard → R2 → Manage R2 API Tokens
+#   2. Create API Token → ให้สิทธิ์ Object Read & Write
+#   3. คัดลอก Access Key ID และ Secret Access Key ไปใส่ใน Render Environment
+
+R2_ACCOUNT_ID    = os.environ.get("R2_ACCOUNT_ID", "")
+R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "")
+R2_SECRET_KEY    = os.environ.get("R2_SECRET_KEY", "")
+R2_BUCKET_NAME   = os.environ.get("R2_BUCKET_NAME", "sas-qc-gearmotor")
+R2_PUBLIC_URL    = os.environ.get("R2_PUBLIC_URL", "").rstrip("/")
+
+r2 = boto3.client(
+    "s3",
+    endpoint_url=f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
+    aws_access_key_id=R2_ACCESS_KEY_ID,
+    aws_secret_access_key=R2_SECRET_KEY,
+    config=Config(signature_version="s3v4"),
+    region_name="auto",
+)
+
+def r2_upload_fileobj(fileobj, key, content_type):
+    """
+    อัปโหลด file-like object ขึ้น R2
+    คืน public URL ของไฟล์
+    """
+    r2.upload_fileobj(
+        fileobj,
+        R2_BUCKET_NAME,
+        key,
+        ExtraArgs={"ContentType": content_type},
+    )
+    return f"{R2_PUBLIC_URL}/{key}"
+
+def r2_upload_bytes(data_bytes, key, content_type):
+    """
+    อัปโหลด bytes ขึ้น R2
+    คืน public URL ของไฟล์
+    """
+    r2.put_object(
+        Bucket=R2_BUCKET_NAME,
+        Key=key,
+        Body=data_bytes,
+        ContentType=content_type,
+    )
+    return f"{R2_PUBLIC_URL}/{key}"
+
+def r2_download_bytes(key):
+    """
+    ดาวน์โหลดไฟล์จาก R2 คืนเป็น bytes
+    """
+    resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=key)
+    return resp["Body"].read()
+
+def r2_get_mtime(key):
+    """
+    ดึง LastModified ของ object ใน R2 (ใช้เป็น cache key เหมือนเดิม)
+    """
+    resp = r2.head_object(Bucket=R2_BUCKET_NAME, Key=key)
+    return str(resp.get("LastModified", ""))
 
 # =========================
 # Stock on shelf (FAST + SIMPLE)
@@ -37,12 +110,12 @@ STOCK_BLOB_NAME = "stock/Stock motor.xlsx"
 STOCK_XLS_PATH = os.path.join(os.path.dirname(__file__), "Stock motor.xlsx")
 STOCK_UPLOAD_PASS = "Adminsas2026"
 
-# ✅ NEW: Supplier (ZD) stock file
+# ✅ Supplier (ZD) stock file
 SUPPLIER_BLOB_NAME = "stock/Stock ZD.xlsx"
 SUPPLIER_UPLOAD_PASS = "Chottaninsas2029"
 
-CHECK_BLOB_NAME = "stock/Check status.xlsx"   # <-- คุณเปลี่ยนชื่อไฟล์ได้ตามจริง
-CHECK_UPLOAD_PASS = "Adminsas2026"            # ใช้รหัสเดียวกับ stock ได้
+CHECK_BLOB_NAME = "stock/Check status.xlsx"
+CHECK_UPLOAD_PASS = "Adminsas2026"
 _check_cache = {"mtime": None, "rows": []}
 _check_lock = threading.Lock()
 
@@ -52,44 +125,35 @@ _stock_cache = {
 }
 _stock_lock = threading.Lock()
 
-# ✅ NEW: cache for Supplier ZD
+# ✅ cache for Supplier ZD
 _supplier_cache = {"mtime": None, "rows": []}
 _supplier_lock = threading.Lock()
 
 
 def _load_stock_rows_cached():
     """
-    Read latest stock xlsx from Firebase Storage and cache by blob updated time.
+    Read latest stock xlsx from R2 and cache by object mtime.
     Range:
-      Code: A10-A3000
-      Description: E10-E3000
-      Total: J10-J3000
+      Code: A (col 1)
+      Description: E (col 5)
+      Total: AF (col 32)
     """
-    blob = bucket.blob(STOCK_BLOB_NAME)
-    blob.reload()  # ดึง metadata ล่าสุด
-    
-
-    # ใช้เวลา updated เป็น key กันโหลดซ้ำ
-    # (ถ้า updated เป็น None ให้ fallback)
-    mtime = str(blob.updated) if blob.updated else str(blob.generation)
+    mtime = r2_get_mtime(STOCK_BLOB_NAME)
 
     with _stock_lock:
         if _stock_cache["mtime"] == mtime and _stock_cache["rows"] is not None:
             return _stock_cache["rows"]
 
-        # โหลดไฟล์เป็น bytes แล้วอ่านด้วย openpyxl
-        data = blob.download_as_bytes()
+        data = r2_download_bytes(STOCK_BLOB_NAME)
         wb = load_workbook(BytesIO(data), data_only=True, read_only=True)
         ws = next((s for s in wb.worksheets if (s.max_column or 0) >= 32 and (s.max_row or 0) >= 3000), wb.worksheets[0])
 
         rows = []
 
-        # อ่าน A..J (1..10) แต่กันกรณีชีตนี้คอลัมน์ไม่ถึง
         for row in ws.iter_rows(min_row=2, max_row=3000, min_col=1, max_col=32, values_only=True):
-        # กัน tuple สั้น (กันพัง)
             code  = row[0] if len(row) > 0 else None   # A
             desc  = row[4] if len(row) > 4 else None   # E
-            total = row[31] if len(row) > 31 else None   # AF
+            total = row[31] if len(row) > 31 else None  # AF
 
             code_s = "" if code is None else str(code).strip()
             if code_s:
@@ -104,27 +168,23 @@ def _load_stock_rows_cached():
         return rows
 
 
-# ✅ NEW: Supplier ZD rows (Sheet1, A2-A400, B2-B400)
+# ✅ Supplier ZD rows (Sheet1, A2-A400, B2-B400)
 def _load_supplier_rows_cached():
-    blob = bucket.blob(SUPPLIER_BLOB_NAME)
-    blob.reload()
-
-    mtime = str(blob.updated) if blob.updated else str(blob.generation)
+    mtime = r2_get_mtime(SUPPLIER_BLOB_NAME)
 
     with _supplier_lock:
         if _supplier_cache["mtime"] == mtime and _supplier_cache["rows"] is not None:
             return _supplier_cache["rows"]
 
-        data = blob.download_as_bytes()
+        data = r2_download_bytes(SUPPLIER_BLOB_NAME)
         wb = load_workbook(BytesIO(data), data_only=True, read_only=True)
 
-        # ต้องการเฉพาะ Sheet1 ถ้ามี ไม่งั้นใช้ชีตแรก
         ws = wb["Sheet1"] if "Sheet1" in wb.sheetnames else wb.worksheets[0]
 
         rows = []
         for row in ws.iter_rows(min_row=2, max_row=400, min_col=1, max_col=2, values_only=True):
             code = row[0] if len(row) > 0 else None  # A
-            total = row[1] if len(row) > 1 else None # B
+            total = row[1] if len(row) > 1 else None  # B
 
             code_s = "" if code is None else str(code).strip()
             if code_s:
@@ -137,27 +197,23 @@ def _load_supplier_rows_cached():
         _supplier_cache["mtime"] = mtime
         _supplier_cache["rows"] = rows
         return rows
+
     
 def _load_check_rows_cached():
-    blob = bucket.blob(CHECK_BLOB_NAME)
-    blob.reload()
-
-    mtime = str(blob.updated) if blob.updated else str(blob.generation)
+    mtime = r2_get_mtime(CHECK_BLOB_NAME)
 
     with _check_lock:
         if _check_cache["mtime"] == mtime and _check_cache["rows"] is not None:
             return _check_cache["rows"]
 
-        data = blob.download_as_bytes()
+        data = r2_download_bytes(CHECK_BLOB_NAME)
         wb = load_workbook(BytesIO(data), data_only=True, read_only=True)
         year_sheets = [s for s in wb.sheetnames if str(s).isdigit()]
         ws = wb[str(max(map(int, year_sheets)))] if year_sheets else wb.worksheets[0]
 
         rows = []
 
-        # อ่าน A ถึง R เพื่อให้เข้าถึง N/Q/R ได้ในรอบเดียว (A=1 ... R=18)
         for row in ws.iter_rows(min_row=25, max_row=600, min_col=1, max_col=18, values_only=True):
-        # index ใน tuple: A=0, D=3, E=4, F=5, G=6, H=7, N=13, Q=16, R=17
             no_item      = row[0]   # A
             po_no        = row[3]   # D
             po_open_date = row[4]   # E
@@ -186,6 +242,7 @@ def _load_check_rows_cached():
         _check_cache["mtime"] = mtime
         _check_cache["rows"] = rows
         return rows
+
     
 @app.route("/stock-upload", methods=["GET", "POST"])
 def stock_upload_public():
@@ -194,12 +251,10 @@ def stock_upload_public():
         if key != STOCK_UPLOAD_PASS:
             return "Unauthorized", 403
 
-        # ✅ ผ่านรหัสแล้ว เก็บสิทธิ์ไว้ใน session เพื่อใช้ตอน POST
         session["stock_upload_ok"] = True
         return render_template("stock_upload_public.html")
 
     # ===== POST =====
-    # ✅ ตรวจซ้ำฝั่ง server ก่อนอัปโหลด
     if not session.get("stock_upload_ok"):
         return "Unauthorized", 403
 
@@ -210,10 +265,11 @@ def stock_upload_public():
     if not f.filename.lower().endswith(".xlsx"):
         return "Invalid file type (ต้องเป็น .xlsx เท่านั้น)", 400
 
-    blob = bucket.blob(STOCK_BLOB_NAME)
-    blob.upload_from_file(
+    # ✅ อัปโหลดขึ้น R2 แทน Firebase Storage
+    r2_upload_fileobj(
         f,
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        STOCK_BLOB_NAME,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
     # ล้าง cache เพื่อให้หน้า stock ดึงไฟล์ใหม่ทันที
@@ -221,10 +277,10 @@ def stock_upload_public():
         _stock_cache["mtime"] = None
         _stock_cache["rows"] = []
 
-    # ✅ ใช้เสร็จแล้ว ปิดสิทธิ์ (กันคนกด refresh แล้วยิง POST ซ้ำ)
     session.pop("stock_upload_ok", None)
 
     return redirect("/stock")
+
 
 @app.route("/check-status-upload", methods=["GET", "POST"])
 def check_status_upload_public():
@@ -233,12 +289,10 @@ def check_status_upload_public():
         if key != CHECK_UPLOAD_PASS:
             return "Unauthorized", 403
 
-        # ✅ ผ่านรหัสแล้ว เก็บสิทธิ์ไว้ใน session เพื่อใช้ตอน POST
         session["check_upload_ok"] = True
         return render_template("check_status_upload_public.html")
 
     # ===== POST =====
-    # ✅ ตรวจซ้ำฝั่ง server ก่อนอัปโหลด
     if not session.get("check_upload_ok"):
         return "Unauthorized", 403
 
@@ -249,23 +303,24 @@ def check_status_upload_public():
     if not f.filename.lower().endswith(".xlsx"):
         return "Invalid file type (ต้องเป็น .xlsx เท่านั้น)", 400
 
-    blob = bucket.blob(CHECK_BLOB_NAME)
-    blob.upload_from_file(
+    # ✅ อัปโหลดขึ้น R2 แทน Firebase Storage
+    r2_upload_fileobj(
         f,
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        CHECK_BLOB_NAME,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-    # ล้าง cache เพื่อให้หน้า check-status ดึงไฟล์ใหม่ทันที
+    # ล้าง cache
     with _check_lock:
         _check_cache["mtime"] = None
         _check_cache["rows"] = []
 
-    # ✅ ใช้เสร็จแล้ว ปิดสิทธิ์ (กันคนกด refresh แล้วยิง POST ซ้ำ)
     session.pop("check_upload_ok", None)
 
     return redirect("/check-status")
+
                 
-# ✅ NEW: Inspector mapping (ID -> ชื่อ)
+# ✅ Inspector mapping (ID -> ชื่อ)
 INSPECTOR_MAP = {
     "QC001": "คุณสมประสงค์",
     "QC002": "คุณเกียรติศักดิ์",
@@ -284,16 +339,13 @@ def healthz():
 
 @app.route('/stock')
 def stock_page():
-    # หน้า UI Stock on shelf
     return render_template('stock.html')
 
 @app.route('/api/stock')
 def stock_api():
-    # API ส่งข้อมูล stock เป็น JSON (โหลดจาก cache เพื่อให้เร็ว)
     try:
         rows_main = _load_stock_rows_cached()
 
-        # ✅ NEW: append Supplier ZD rows เข้า "หน้ารวม"
         try:
             rows_supplier = _load_supplier_rows_cached()
         except Exception:
@@ -305,7 +357,7 @@ def stock_api():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-# ✅ NEW: Supplier upload page (same UI as stock_upload_public.html)
+# ✅ Supplier upload page
 @app.route("/supplier-upload", methods=["GET", "POST"])
 def supplier_upload_public():
     if request.method == "GET":
@@ -327,19 +379,21 @@ def supplier_upload_public():
     if not f.filename.lower().endswith(".xlsx"):
         return "Invalid file type (ต้องเป็น .xlsx เท่านั้น)", 400
 
-    blob = bucket.blob(SUPPLIER_BLOB_NAME)
-    blob.upload_from_file(
+    # ✅ อัปโหลดขึ้น R2 แทน Firebase Storage
+    r2_upload_fileobj(
         f,
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        SUPPLIER_BLOB_NAME,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-    # ล้าง cache เพื่อให้หน้า stock ดึงไฟล์ใหม่ทันที
+    # ล้าง cache
     with _supplier_lock:
         _supplier_cache["mtime"] = None
         _supplier_cache["rows"] = []
 
     session.pop("supplier_upload_ok", None)
     return redirect("/stock")
+
 
 @app.route('/check-status')
 def check_status_page():
@@ -354,17 +408,18 @@ def check_status_api():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        employee_id = (request.form.get('employee_id') or '').strip().upper()  # ✅ NEW: กันพิมพ์หลุด
-        allowed_ids = list(INSPECTOR_MAP.keys())  # ✅ NEW: ใช้จาก mapping
+        employee_id = (request.form.get('employee_id') or '').strip().upper()
+        allowed_ids = list(INSPECTOR_MAP.keys())
 
         if employee_id not in allowed_ids:
             return render_template('login.html', error=True)
 
         session['employee_id'] = employee_id
-        session['inspector_name'] = INSPECTOR_MAP.get(employee_id, employee_id)  # ✅ NEW
+        session['inspector_name'] = INSPECTOR_MAP.get(employee_id, employee_id)
         session['just_logged_in'] = True
         return redirect(url_for('form'))
 
@@ -394,7 +449,7 @@ def submit():
         gear_sound = request.form.get('gear_sound')
         warranty = request.form.get('warranty')
         inspector = session.get('inspector_name') or request.form.get('inspector')
-        oil_type = request.form.get('oil_type')  # ✅ FIXED INDENT
+        oil_type = request.form.get('oil_type')
         oil_liters = request.form.get('oil_liters')
         oil_filled = 'เติมแล้ว' if request.form.get('oil_filled') else 'ยังไม่เติม'
         acdc_parts = request.form.getlist('acdc_parts')
@@ -405,12 +460,16 @@ def submit():
         serial = f"SAS{timestamp}"
 
         def upload_image(file, field_name):
+            """
+            ✅ อัปโหลดรูปขึ้น R2 แทน Firebase Storage
+            คืน public URL เหมือนเดิมทุกอย่าง
+            """
             if file and file.filename:
                 filename = secure_filename(file.filename)
-                blob = bucket.blob(f"qc_images/{serial}_{field_name}_{filename}")
-                blob.upload_from_file(file.stream, content_type=file.content_type)
-                blob.make_public()
-                return blob.public_url
+                key = f"qc_images/{serial}_{field_name}_{filename}"
+                # อ่าน stream เป็น bytes เพื่อ upload
+                file_bytes = file.stream.read()
+                return r2_upload_bytes(file_bytes, key, file.content_type or "image/jpeg")
             return None
 
         motor_current_img = request.files.get('motor_current_img')
@@ -421,7 +480,7 @@ def submit():
         servo_drive_img = request.files.get('servo_drive_img')
         cable_wire_img = request.files.get('cable_wire_img')
 
-        # ✅ NEW (RFKS): รับไฟล์แนบ Name plate เพิ่ม 2 ช่อง
+        # ✅ RFKS: รับไฟล์แนบ Name plate เพิ่ม 2 ช่อง
         rfks_nameplate_motor_img = request.files.get('rfks_nameplate_motor_img')
         rfks_nameplate_gear_img = request.files.get('rfks_nameplate_gear_img')
 
@@ -434,14 +493,14 @@ def submit():
             "servo_drive_img": upload_image(servo_drive_img, "servo_drive"),
             "cable_wire_img": upload_image(cable_wire_img, "cable_wire"),
 
-            # ✅ NEW (RFKS): อัปโหลดรูป Name plate : Motor / Gear (จะเป็น None ถ้าไม่ได้เลือก หรือไม่ใช่ RFKS)
+            # ✅ RFKS: อัปโหลดรูป Name plate : Motor / Gear
             "rfks_nameplate_motor_img": upload_image(rfks_nameplate_motor_img, "rfks_nameplate_motor"),
             "rfks_nameplate_gear_img": upload_image(rfks_nameplate_gear_img, "rfks_nameplate_gear"),
         }
 
         ref.child(serial).set({
             "serial": serial,
-            "or_no": or_no,                    # ✅ NEW
+            "or_no": or_no,
             "company_name": company_name,  
             "product_type": product_type,
             "motor_nameplate": motor_nameplate,
@@ -450,7 +509,7 @@ def submit():
             "gear_sound": gear_sound,
             "warranty": warranty,
             "inspector": inspector,
-            "oil_type": oil_type,  # ✅ FIXED INDENT
+            "oil_type": oil_type,
             "oil_liters": oil_liters,
             "oil_filled": oil_filled,
             "acdc_parts": acdc_parts,
@@ -464,7 +523,7 @@ def submit():
             try:
                 data = ref.child(serial).get()
 
-                # ✅ NEW (RFKS): จัดลำดับรูป + ชื่อรูปให้ตรงหัวข้อ (ไม่กระทบกรณีอื่น)
+                # ✅ RFKS: จัดลำดับรูป + ชื่อรูปให้ตรงหัวข้อ
                 images_dict = data.get("images", {}) or {}
 
                 image_urls = []
@@ -479,7 +538,7 @@ def submit():
                     image_urls.append(images_dict.get("rfks_nameplate_gear_img"))
                     image_labels.append("Name plate : Gear")
 
-                # 2) ภาพเดิมทั้งหมด (คงไว้เหมือนเดิม แต่กรอง None ออก)
+                # 2) ภาพเดิมทั้งหมด
                 ordered_keys = [
                     ("motor_current_img", "ภาพค่ากระแส"),
                     ("gear_sound_img", "ภาพเสียงเกียร์"),
@@ -496,27 +555,35 @@ def submit():
                         image_urls.append(url)
                         image_labels.append(label)
 
-                # ✅ สร้าง PDF และอัปโหลดก่อน
+                # ✅ สร้าง PDF
                 pdf_stream = create_qc_pdf(
                     data,
                     image_urls=image_urls,
                     image_labels=image_labels
                 )
-                report_blob = bucket.blob(f"qc_reports/{serial}.pdf")
                 pdf_stream.seek(0)
-                report_blob.upload_from_file(pdf_stream, content_type="application/pdf")
-                report_blob.make_public()
 
-                # ✅ สร้าง QR จาก public_url จริง
-                qr_stream = generate_qr_code(serial, report_blob.public_url)
-                qr_blob = bucket.blob(f"qr_codes/{serial}.png")
-                qr_blob.upload_from_file(qr_stream, content_type="image/png")
-                qr_blob.make_public()
+                # ✅ อัปโหลด PDF ขึ้น R2
+                pdf_key = f"qc_reports/{serial}.pdf"
+                pdf_url = r2_upload_bytes(
+                    pdf_stream.read(),
+                    pdf_key,
+                    "application/pdf"
+                )
 
-                # ✅ บันทึกลิงก์ลง Firebase
+                # ✅ สร้าง QR จาก public URL จริง
+                qr_stream = generate_qr_code(serial, pdf_url)
+                qr_key = f"qr_codes/{serial}.png"
+                qr_url = r2_upload_bytes(
+                    qr_stream.read(),
+                    qr_key,
+                    "image/png"
+                )
+
+                # ✅ บันทึกลิงก์ลง Firebase Realtime Database (เหมือนเดิม)
                 ref.child(serial).update({
-                    "qc_pdf_url": report_blob.public_url,
-                    "qr_png_url": qr_blob.public_url
+                    "qc_pdf_url": pdf_url,
+                    "qr_png_url": qr_url
                 })
 
                 print(f"✅ PDF + QR สำหรับ {serial} สร้างเสร็จ", flush=True)
@@ -547,7 +614,7 @@ def download_pdf(serial_number):
     if not report_data:
         return "ไม่พบรายงาน", 404
 
-    # ✅ NEW (RFKS): ให้ download สร้าง PDF ด้วย label/order เดียวกับ background
+    # ✅ RFKS: ให้ download สร้าง PDF ด้วย label/order เดียวกับ background
     images_dict = report_data.get("images", {}) or {}
     image_urls = []
     image_labels = []
@@ -584,7 +651,7 @@ def download_pdf(serial_number):
 
 @app.route('/qr/<serial_number>')
 def generate_qr(serial_number):
-    # ✅ NEW: ถ้ามีลิงก์ PDF แล้ว ให้ QR ชี้ไปที่ PDF จริง
+    # ✅ ถ้ามีลิงก์ PDF แล้ว ให้ QR ชี้ไปที่ PDF จริง
     report_data = ref.child(serial_number).get() or {}
     pdf_url = report_data.get("qc_pdf_url")
 
@@ -610,7 +677,7 @@ def autodownload(serial_number):
     if not report_data:
         return "ไม่พบรายงาน", 404
 
-    # ✅ NEW (RFKS): ให้ autodownload สร้าง PDF ด้วย label/order เดียวกับ background
+    # ✅ RFKS: ให้ autodownload สร้าง PDF ด้วย label/order เดียวกับ background
     images_dict = report_data.get("images", {}) or {}
     image_urls = []
     image_labels = []
