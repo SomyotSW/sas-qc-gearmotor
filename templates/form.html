@@ -9,6 +9,8 @@
     body {
       background: url('/static/BG.png') no-repeat center center fixed;
       background-size: cover;
+      /* ✅ เว้นที่บนสุดให้ปุ่ม Home + โลโก้ไม่ทับ content */
+      padding-top: 70px;
     }
     .backdrop {
       background: rgba(255, 255, 255, 0.95);
@@ -18,24 +20,36 @@
       margin: auto;
     }
     .logo {
-      position: absolute;
-      top: 20px;
-      right: 30px;
-      width: 120px;
+      position: fixed;
+      top: 15px;
+      right: 20px;
+      width: 100px;
+      z-index: 10;
     }
-    label {
-      font-weight: bold;
+    .btn-home {
+      position: fixed;
+      top: 15px;
+      left: 20px;
+      z-index: 10;
+      background: linear-gradient(180deg, #5aa7ff 0%, #2f79d8 100%);
+      color: #fff !important;
+      border: none;
+      border-radius: 10px;
+      padding: 8px 18px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      box-shadow: 0 4px 12px rgba(0,70,160,0.25);
+      text-decoration: none;
+      transition: filter 0.15s;
     }
-    .form-control, .form-select {
-      margin-bottom: 15px;
+    .btn-home:hover {
+      filter: brightness(1.1);
+      text-decoration: none;
     }
-    .submit-btn {
-      margin-top: 20px;
-    }
-    .red {
-      color: red;
-      font-weight: bold;
-    }
+    label { font-weight: bold; }
+    .form-control, .form-select { margin-bottom: 15px; }
+    .submit-btn { margin-top: 20px; }
+    .red { color: red; font-weight: bold; }
     #overlay {
       position: fixed;
       top: 0; left: 0;
@@ -46,71 +60,35 @@
       justify-content: center;
       z-index: 9999;
     }
-    #overlay .message {
-      font-size: 1.5rem;
-      font-weight: bold;
-    }
-    /* ✅ NEW: Mobile Responsive */
-  @media (max-width: 576px) {
-    body {
-      background-attachment: scroll; /* กัน iOS กระตุก */
-    }
+    #overlay .message { font-size: 1.5rem; font-weight: bold; }
 
-    .container.mt-5 {
-      margin-top: 16px !important;
-      padding-left: 12px;
-      padding-right: 12px;
+    @media (max-width: 576px) {
+      body {
+        background-attachment: scroll;
+        padding-top: 65px; /* ✅ เว้นที่ให้ปุ่มบนมือถือ */
+      }
+      .container { padding-left: 12px; padding-right: 12px; }
+      .backdrop { max-width: 100%; padding: 16px; border-radius: 16px; }
+      h2 { font-size: 1.2rem; margin-bottom: 12px !important; }
+      .logo { top: 12px; right: 12px; width: 70px; }
+      .btn-home { top: 12px; left: 12px; padding: 6px 14px; font-size: 0.95rem; }
+      label { font-size: 0.95rem; }
+      .form-control, .form-select { font-size: 16px; margin-bottom: 12px; }
+      .submit-btn .btn { width: 100%; font-size: 1.05rem; padding: 12px 14px; }
+      #overlay .message { font-size: 1.1rem; padding: 0 14px; text-align: center; }
     }
-
-    .backdrop {
-      max-width: 100%;
-      padding: 16px;
-      border-radius: 16px;
-    }
-
-    h2 {
-      font-size: 1.2rem;
-      margin-bottom: 12px !important;
-    }
-
-    .logo {
-      top: 10px;
-      right: 10px;
-      width: 78px;
-    }
-
-    label {
-      font-size: 0.95rem;
-    }
-
-    .form-control, .form-select {
-      font-size: 16px; /* ✅ กัน iPhone ซูมตอนกด input */
-      margin-bottom: 12px;
-    }
-
-    .submit-btn .btn {
-      width: 100%;
-      font-size: 1.05rem;
-      padding: 12px 14px;
-    }
-
-    #overlay .message {
-      font-size: 1.1rem;
-      padding: 0 14px;
-      text-align: center;
-    }
-  }
   </style>
 </head>
 <body>
+  <a href="/" class="btn-home">🏠 Home</a>
   <img src="/static/logo_sas.png" alt="SAS Logo" class="logo">
-  <div class="container mt-5">
+
+  <div class="container mb-5">
     <div class="backdrop shadow">
       <h2 class="text-center mb-4">แบบฟอร์มการตรวจเช็คสินค้า QC Report</h2>
       <form action="/submit" method="POST" enctype="multipart/form-data" onsubmit="return handleSubmit()">
         <input type="hidden" name="inspector" value="{{ employee_id }}">
 
-                <!-- ✅ NEW: OR No. + Company Name (วางเหนือประเภทสินค้า) -->
         <div class="row">
           <div class="col-md-6">
             <label>OR No.</label>
@@ -121,7 +99,7 @@
             <input type="text" name="company_name" class="form-control" placeholder="กรอกชื่อบริษัท">
           </div>
         </div>
-        <!-- ประเภทสินค้า -->
+
         <div class="row">
           <div class="col-md-6">
             <label>ประเภทสินค้า</label>
@@ -138,7 +116,7 @@
               <option value="SRV WormGear">SRV WormGear</option>
               <option value="SMR Gearbox">SMR Gearbox</option>
               <option value="Small AC Gearmotor">Small AC Gearmotor</option>
-	      <option value="Belt Conveyor">Others</option>
+              <option value="Belt Conveyor">Others</option>
               <option value="Automation">Others</option>
               <option value="Others">Others</option>
             </select>
@@ -149,10 +127,8 @@
           </div>
         </div>
 
-        <!-- เงื่อนไขพิเศษ -->
         <div id="warning_section" class="mb-3 red" style="display:none;"></div>
 
-        <!-- ส่วนประกอบ AC/DC -->
         <div id="acdc_parts" style="display:none;">
           <label>เลือกส่วนประกอบ</label>
           <div class="form-check form-check-inline">
@@ -174,7 +150,6 @@
           <input type="file" name="controller_img" accept="image/*" class="form-control">
         </div>
 
-        <!-- Servo Motor Section -->
         <div id="servo_section" style="display:none;">
           <div class="row">
             <div class="col-md-6">
@@ -202,7 +177,6 @@
           </div>
         </div>
 
-        <!-- ส่วนทั่วไป -->
         <div id="general_section">
           <div class="row">
             <div class="col-md-6">
@@ -226,18 +200,16 @@
             </div>
           </div>
 
-          <!-- น้ำมัน -->
           <div id="oil_section">
             <div class="row">
               <div class="col-md-6">
-                      <!-- ✅ NEW: ชนิดของน้ำมันเกียร์ (แสดงเฉพาะ RFKS / H/B / SMR) -->
-      <label>ชนิดของน้ำมันเกียร์</label>
-      <select name="oil_type" id="oil_type" class="form-select">
-        <option value="">-- เลือกชนิดน้ำมันเกียร์ --</option>
-        <option value="Shell Omala VG220">Shell Omala VG220</option>
-        <option value="Shell Omala VG460">Shell Omala VG460</option>
-        <option value="Shell Omala VG680">Shell Omala VG680</option>
-      </select>
+                <label>ชนิดของน้ำมันเกียร์</label>
+                <select name="oil_type" id="oil_type" class="form-select">
+                  <option value="">-- เลือกชนิดน้ำมันเกียร์ --</option>
+                  <option value="Shell Omala VG220">Shell Omala VG220</option>
+                  <option value="Shell Omala VG460">Shell Omala VG460</option>
+                  <option value="Shell Omala VG680">Shell Omala VG680</option>
+                </select>
                 <label>จำนวนน้ำมันเกียร์ (ลิตร)</label>
                 <input type="text" name="oil_liters" class="form-control">
               </div>
@@ -247,20 +219,20 @@
               </div>
             </div>
           </div>
-	        <!-- RFKS Series Section (NEW) -->
-        <div id="rfks_section" style="display:none;">
-          <div class="row">
-            <div class="col-md-6">
-              <label>Name plate : Motor</label>
-              <input type="file" name="rfks_nameplate_motor_img" accept="image/*" class="form-control">
-            </div>
-            <div class="col-md-6">
-              <label>Name plate : Gear</label>
-              <input type="file" name="rfks_nameplate_gear_img" accept="image/*" class="form-control">
+
+          <div id="rfks_section" style="display:none;">
+            <div class="row">
+              <div class="col-md-6">
+                <label>Name plate : Motor</label>
+                <input type="file" name="rfks_nameplate_motor_img" accept="image/*" class="form-control">
+              </div>
+              <div class="col-md-6">
+                <label>Name plate : Gear</label>
+                <input type="file" name="rfks_nameplate_gear_img" accept="image/*" class="form-control">
+              </div>
             </div>
           </div>
-        </div>
-          <!-- รูปภาพ -->
+
           <div class="row mt-3">
             <div class="col-md-4">
               <label>ภาพค่ากระแส</label>
@@ -277,7 +249,6 @@
           </div>
         </div>
 
-        <!-- ปุ่มส่ง -->
         <div class="text-center submit-btn">
           <button type="submit" class="btn btn-primary btn-lg">✅ ส่งข้อมูล QC</button>
         </div>
@@ -285,12 +256,10 @@
     </div>
   </div>
 
-  <!-- Overlay Loading -->
   <div id="overlay">
     <div class="message">⏳ รอสักครู่...กำลังสร้างไฟล์PDF</div>
   </div>
 
-  <!-- JavaScript -->
   <script>
     function handleSubmit() {
       document.getElementById("overlay").style.display = "flex";
@@ -304,16 +273,13 @@
       document.getElementById("acdc_parts").style.display = (type === "AC/DC Gear Motor" || type === "BLDC Gear Motor") ? "block" : "none";
       document.getElementById("servo_section").style.display = (type === "Servo Motor and Servo Drive") ? "block" : "none";
       document.getElementById("general_section").style.display = (type === "Servo Motor and Servo Drive") ? "none" : "block";
-            document.getElementById("rfks_section").style.display = (type === "RFKS Series") ? "block" : "none";
+      document.getElementById("rfks_section").style.display = (type === "RFKS Series") ? "block" : "none";
       document.getElementById("controller_image").style.display = "none";
-      // ✅ NEW: น้ำมันแสดงเฉพาะ RFKS Series / H/B Gear Box / SMR Gearbox
-document.getElementById("oil_section").style.display =
-  (type === "RFKS Series" || type === "H/B Gear Box" || type === "SMR Gearbox") ? "block" : "none";
-      // ✅ NEW: กันค่าค้างเวลาเปลี่ยนประเภท
-if (!(type === "RFKS Series" || type === "H/B Gear Box" || type === "SMR Gearbox")) {
-  document.getElementById("oil_type").value = "";
-}
-
+      document.getElementById("oil_section").style.display =
+        (type === "RFKS Series" || type === "H/B Gear Box" || type === "SMR Gearbox") ? "block" : "none";
+      if (!(type === "RFKS Series" || type === "H/B Gear Box" || type === "SMR Gearbox")) {
+        document.getElementById("oil_type").value = "";
+      }
       const warning = document.getElementById("warning_section");
       if (type === "Servo Motor and Servo Drive") {
         warning.style.display = "block";

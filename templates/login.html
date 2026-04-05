@@ -11,62 +11,130 @@
       background-size: cover;
       font-family: 'Segoe UI', sans-serif;
     }
-    .overlay {
+
+    .overlay::before {
+      content: "";
+      position: fixed;
+      inset: 0;
       background-color: rgba(255, 255, 255, 0.85);
+      z-index: 0;
+    }
+
+    .sas-logo {
+      position: fixed;
+      top: 15px;
+      left: 15px;
+      height: 50px;
+      z-index: 10;
+    }
+
+    .btn-home {
+      position: fixed;
+      top: 15px;
+      right: 20px;
+      z-index: 10;
+      background: linear-gradient(180deg, #5aa7ff 0%, #2f79d8 100%);
+      color: #fff !important;
+      border: none;
+      border-radius: 10px;
+      padding: 8px 18px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      box-shadow: 0 4px 12px rgba(0,70,160,0.25);
+      text-decoration: none;
+      transition: filter 0.15s;
+    }
+    .btn-home:hover {
+      filter: brightness(1.1);
+      text-decoration: none;
+    }
+
+    .overlay {
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 20px;
+      position: relative;
+      z-index: 2;
     }
+
+    .layout-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      position: relative;
+      z-index: 3;
+    }
+
+    .side-img {
+      height: min(70vh, 480px);
+      width: auto;
+      object-fit: contain;
+      pointer-events: none;
+      flex-shrink: 0;
+    }
+
     .login-container {
       background: white;
       padding: 30px;
       border-radius: 12px;
-      max-width: 400px;
-      width: 100%;
+      width: 380px;
+      flex-shrink: 0;
       box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      position: relative;
+      z-index: 4;
     }
-    .sas-logo {
-      position: absolute;
-      top: 15px;
-      left: 15px;
-      height: 50px;
-    }
+
     h2 {
       text-align: center;
       color: #007bff;
       margin-bottom: 20px;
     }
+
+    @media (max-width: 768px) {
+      .side-img { display: none; }
+      .login-container { width: 100%; max-width: 400px; }
+    }
   </style>
 </head>
 <body>
   <img src="{{ url_for('static', filename='logo_sas.png') }}" alt="SAS Logo" class="sas-logo">
-  <div class="overlay">
-    <div class="login-container">
-      <h2>เข้าสู่ระบบพนักงาน QC</h2>
-      <form method="post" action="/login">
-        <div class="mb-3">
-          <label class="form-label">รหัสพนักงาน</label>
-          <input type="text" name="employee_id" class="form-control" placeholder="เช่น QC001" required>
-        </div>
-        <div class="d-grid">
-          <button id="loginBtn" type="submit" class="btn btn-primary">เข้าสู่ระบบ</button>
-        </div>
+  <a href="/" class="btn-home">🏠 Home</a>
 
-        {% if error %}
-        <div class="alert alert-danger mt-3 text-center" role="alert">
-          รหัสผิด โปรดใส่รหัสให้ถูกต้องอีกครั้ง
-        </div>
-        <audio autoplay>
-          <source src="{{ url_for('static', filename='error.mp3') }}" type="audio/mpeg">
-        </audio>
-        {% endif %}
-      </form>
+  <div class="overlay">
+    <div class="layout-row">
+
+      <!-- กล่อง login -->
+      <div class="login-container">
+        <h2>เข้าสู่ระบบ QC</h2>
+        <form method="post" action="/login">
+          <div class="mb-3">
+            <label class="form-label">รหัสพนักงาน</label>
+            <input type="text" name="employee_id" class="form-control" placeholder="เช่น QC001" required>
+          </div>
+          <div class="d-grid">
+            <button id="loginBtn" type="submit" class="btn btn-primary">เข้าสู่ระบบ</button>
+          </div>
+
+          {% if error %}
+          <div class="alert alert-danger mt-3 text-center" role="alert">
+            รหัสผิด โปรดใส่รหัสให้ถูกต้องอีกครั้ง
+          </div>
+          <audio autoplay>
+            <source src="{{ url_for('static', filename='error.mp3') }}" type="audio/mpeg">
+          </audio>
+          {% endif %}
+        </form>
+      </div>
+
+      <!-- รูปขวากล่อง login -->
+      <img src="{{ url_for('static', filename='T.png') }}" alt="" class="side-img">
+
     </div>
   </div>
 
-  <!-- ✅ เล่นเสียงเมื่อ login สำเร็จ -->
   {% if request.args.get('welcome') == '1' %}
   <script>
     const audio = new Audio("{{ url_for('static', filename='welcome.mp3') }}");
