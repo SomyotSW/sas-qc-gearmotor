@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -12,17 +11,8 @@
       background-size: cover;
       font-family: 'Segoe UI', sans-serif;
     }
-    .overlay {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      position: relative;
-      z-index: 2; /* content อยู่บนสุด */
-    }
 
-    /* แผ่นขาวทับพื้นหลัง (แต่ไม่บังรูป side) */
+    /* พื้นขาวโปร่ง */
     .overlay::before {
       content: "";
       position: fixed;
@@ -30,48 +20,63 @@
       background-color: rgba(255, 255, 255, 0.85);
       z-index: 0;
     }
+
+    .sas-logo {
+      position: fixed;
+      top: 15px;
+      left: 15px;
+      height: 50px;
+      z-index: 10;
+    }
+
+    /* wrapper กลาง */
+    .overlay {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+      z-index: 2;
+    }
+
+    /* แถวรูปซ้าย + กล่อง + รูปขวา */
+    .layout-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      position: relative;
+      z-index: 3;
+    }
+
+    /* รูปข้างกล่อง */
+    .side-img {
+      height: min(75vh, 520px);
+      width: auto;
+      object-fit: contain;
+      pointer-events: none;
+      flex-shrink: 0;
+    }
+
+    /* กล่อง menu */
     .welcome-container {
-      background: #e9f4ff; /* ฟ้าอ่อน */
+      background: #e9f4ff;
       padding: 40px 30px;
       border-radius: 12px;
       text-align: center;
       box-shadow: 0 0 15px rgba(0,0,0,0.2);
-      max-width: 450px;
-      width: 100%;
+      width: 420px;
+      flex-shrink: 0;
       position: relative;
-      z-index: 3;
-    }
-    .sas-logo {
-      position: absolute;
-      top: 15px;
-      left: 15px;
-      height: 50px;
+      z-index: 4;
     }
 
-    /* ===== Side background overlays ===== */
-    .bg-side {
-      position: fixed;
-      top: 0;
-      bottom: 0;
-      width: min(30vw, 460px);
-      height: 120vh;
-      object-fit: contain;
-      z-index: 2;
-      pointer-events: none;
-      opacity: 0.95;
-    }
-    .bg-left { left: 0; }
-    .bg-right { right: 0; }
-    .sas-logo { position: relative; z-index: 3; }
     h1 {
       color: #007bff;
-      margin-bottom: 30px;
-    }
-    .btn-custom {
-      margin-top: 15px;
+      margin-bottom: 15px;
     }
 
-    /* ===== Full-width 3D Buttons (same tone) ===== */
     .btn-sas {
       width: 100%;
       display: block;
@@ -93,34 +98,42 @@
     .btn-sas:hover {
       filter: brightness(1.03);
       transform: translateY(-1px);
-      box-shadow:
-        0 14px 24px rgba(0, 70, 160, 0.34),
-        inset 0 1px 0 rgba(255,255,255,0.45),
-        inset 0 -2px 0 rgba(0,0,0,0.10);
       text-decoration: none;
     }
     .btn-sas:active {
       transform: translateY(2px) scale(0.99);
-      box-shadow:
-        0 6px 12px rgba(0, 70, 160, 0.22),
-        inset 0 2px 0 rgba(0,0,0,0.16),
-        inset 0 -1px 0 rgba(255,255,255,0.20);
+    }
+
+    /* มือถือ — ซ่อนรูปข้าง */
+    @media (max-width: 768px) {
+      .side-img { display: none; }
+      .welcome-container { width: 100%; max-width: 420px; }
     }
   </style>
 </head>
 <body>
   <img src="/static/logo_sas.png" alt="SAS Logo" class="sas-logo">
-  <img src="/static/3.png" alt="" class="bg-side bg-left">
-  <img src="/static/2.png" alt="" class="bg-side bg-right">
+
   <div class="overlay">
-    <div class="welcome-container">
-      <h1>SYNERGY SYSTEM</h1>
-      <h1>Update 26.2.26</h1>
-      <a href="https://www.synergy-as.com" target="_blank" class="btn btn-lg btn-sas">🌐 www.synergy-as.com</a>
-      <a href="https://www.motorsas.com" target="_blank" class="btn btn-lg btn-sas">⚙️ www.motorsas.com</a>
-      <a href="/login" class="btn btn-lg btn-sas">🔐 SAS QC Report</a>
-      <a href="/stock" class="btn btn-lg btn-sas">📦 STOCK ON SHELF</a>
-      <a href="/check-status" class="btn btn-lg btn-sas">✈️ เช็คสถานะสินค้า</a>
+    <div class="layout-row">
+
+      <!-- รูปซ้าย -->
+      <img src="/static/3.png" alt="" class="side-img">
+
+      <!-- กล่อง menu -->
+      <div class="welcome-container">
+        <h1>SYNERGY SYSTEM</h1>
+        <h1>Update 5.4.26</h1>
+        <a href="https://www.synergy-as.com" target="_blank" class="btn btn-lg btn-sas">🌐 www.synergy-as.com</a>
+        <a href="https://www.motorsas.com" target="_blank" class="btn btn-lg btn-sas">⚙️ www.motorsas.com</a>
+        <a href="/login" class="btn btn-lg btn-sas">🔐 SAS QC Report</a>
+        <a href="/stock" class="btn btn-lg btn-sas">📦 STOCK ON SHELF</a>
+        <a href="/check-status" class="btn btn-lg btn-sas">✈️ เช็คสถานะสินค้า</a>
+      </div>
+
+      <!-- รูปขวา -->
+      <img src="/static/2.png" alt="" class="side-img">
+
     </div>
   </div>
 </body>
