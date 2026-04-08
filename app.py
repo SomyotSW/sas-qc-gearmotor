@@ -24,6 +24,170 @@ app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
 app.config['UPLOAD_FOLDER'] = 'uploads'
 
+# ============================================================
+# 🔒 SECURITY & ALERT SYSTEM
+# ============================================================
+import smtplib
+import time
+import re
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from collections import defaultdict
+
+ALERT_EMAIL        = "Chottanin@synergy-as.com"
+ALERT_FROM_EMAIL   = os.environ.get("ALERT_EMAIL_ADDRESS", "")
+ALERT_FROM_PASS    = os.environ.get("ALERT_EMAIL_PASSWORD", "")
+
+# Rate limiting — กัน brute force login
+_login_attempts    = defaultdict(list)   # ip -> [timestamps]
+MAX_ATTEMPTS       = 5                   # ครั้งสูงสุดต่อ 10 นาที
+ATTEMPT_WINDOW     = 600                 # วินาที
+BLOCKED_IPS        = set()
+
+# Suspicious path patterns
+SUSPICIOUS_PATTERNS = [
+    r"\.\./", r"\.\.\\",
+    r"(etc/passwd|etc/shadow|proc/self)",
+    r"(wp-admin|wp-login|phpMyAdmin|\.php)",
+    r"(eval\(|base64_decode|exec\(|system\()",
+    r"(<script|javascript:|on\w+=)",
+    r"(UNION.+SELECT|SELECT.+FROM|DROP.+TABLE)",
+    r"(\x00|%00)",
+]
+_suspicious_re = [re.compile(p, re.IGNORECASE) for p in SUSPICIOUS_PATTERNS]
+
+_pending_alerts    = []
+_alert_lock        = threading.Lock()
+_last_alert_sent   = 0
+ALERT_COOLDOWN     = 300  # ส่งอีเมลซ้ำได้ทุก 5 นาที
+
+
+def _send_alert_email(subject: str, body: str):
+    if not ALERT_FROM_EMAIL or not ALERT_FROM_PASS:
+        print(f"[ALERT] {subject}: {body}", flush=True)
+        return
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"[SAS QC Alert] {subject}"
+        msg["From"]    = ALERT_FROM_EMAIL
+        msg["To"]      = ALERT_EMAIL
+        html = f"""
+        <html><body style="font-family:sans-serif;padding:20px;">
+        <h2 style="color:#cc0000;">⚠️ SAS QC System Alert</h2>
+        <table border="0" cellpadding="8" style="border-collapse:collapse;width:100%;">
+        <tr><td style="background:#f5f5f5;font-weight:bold;">เรื่อง</td>
+            <td>{subject}</td></tr>
+        <tr><td style="background:#f5f5f5;font-weight:bold;">รายละเอียด</td>
+            <td><pre style="margin:0;">{body}</pre></td></tr>
+        <tr><td style="background:#f5f5f5;font-weight:bold;">เวลา (UTC+7)</td>
+            <td>{(datetime.datetime.utcnow()+datetime.timedelta(hours=7)).strftime('%Y-%m-%d %H:%M:%S')}</td></tr>
+        </table>
+        <p style="color:#888;font-size:12px;">SAS QC Gearmotor — Automated Security Alert</p>
+        </body></html>"""
+        msg.attach(MIMEText(html, "html"))
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as smtp:
+            smtp.login(ALERT_FROM_EMAIL, ALERT_FROM_PASS)
+            smtp.sendmail(ALERT_FROM_EMAIL, ALERT_EMAIL, msg.as_string())
+        print(f"[ALERT SENT] {subject}", flush=True)
+    except Exception as e:
+        print(f"[ALERT ERROR] {e}", flush=True)
+
+
+def _flush_alerts():
+    global _last_alert_sent
+    with _alert_lock:
+        if not _pending_alerts:
+            return
+        now = time.time()
+        if now - _last_alert_sent < ALERT_COOLDOWN:
+            return
+        events = list(_pending_alerts)
+        _pending_alerts.clear()
+        _last_alert_sent = now
+    body = "\n\n---\n\n".join(events)
+    threading.Thread(
+        target=_send_alert_email,
+        args=(f"{len(events)} Security Event(s) Detected", body),
+        daemon=True
+    ).start()
+
+
+def _queue_alert(event: str):
+    with _alert_lock:
+        _pending_alerts.append(event)
+    threading.Thread(target=_flush_alerts, daemon=True).start()
+
+
+def _get_client_ip():
+    return (request.headers.get("X-Forwarded-For","") or "").split(",")[0].strip() \
+           or request.remote_addr or "unknown"
+
+
+def _is_suspicious_request() -> bool:
+    check_str = request.full_path + " " + str(request.data)[:500]
+    return any(rx.search(check_str) for rx in _suspicious_re)
+
+
+@app.before_request
+def security_middleware():
+    ip = _get_client_ip()
+    if ip in BLOCKED_IPS:
+        _queue_alert(
+            f"BLOCKED IP tried again\nIP: {ip}\nPath: {request.path}"
+        )
+        return "Forbidden", 403
+    if not request.path.startswith("/static/"):
+        if _is_suspicious_request():
+            BLOCKED_IPS.add(ip)
+            _queue_alert(
+                f"SUSPICIOUS REQUEST — IP auto-blocked\n"
+                f"IP: {ip}\nPath: {request.full_path}\n"
+                f"UA: {request.headers.get('User-Agent','')[:200]}"
+            )
+            return "Forbidden", 403
+
+
+@app.after_request
+def security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"]         = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"]        = "1; mode=block"
+    response.headers["Referrer-Policy"]         = "strict-origin-when-cross-origin"
+    return response
+
+
+def check_login_rate_limit(ip: str) -> bool:
+    now = time.time()
+    attempts = [t for t in _login_attempts[ip] if t > now - ATTEMPT_WINDOW]
+    _login_attempts[ip] = attempts
+    if len(attempts) >= MAX_ATTEMPTS:
+        return False
+    _login_attempts[ip].append(now)
+    return True
+
+
+def record_failed_login(ip: str, employee_id: str):
+    now = time.time()
+    attempts = [t for t in _login_attempts[ip] if t > now - ATTEMPT_WINDOW]
+    if len(attempts) >= MAX_ATTEMPTS - 1:
+        _queue_alert(
+            f"BRUTE FORCE LOGIN\nIP: {ip}\n"
+            f"ID ที่ลอง: {employee_id}\n"
+            f"พยายามใน 10 นาที: {len(attempts)+1} ครั้ง"
+        )
+
+
+def _send_startup_alert():
+    time.sleep(8)
+    _send_alert_email(
+        "Server Started",
+        f"SAS QC server เริ่มทำงานแล้ว\n"
+        f"เวลา (UTC+7): {(datetime.datetime.utcnow()+datetime.timedelta(hours=7)).strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"URL: https://sas-qc-gearmotor.onrender.com"
+    )
+
+threading.Thread(target=_send_startup_alert, daemon=True).start()
+
 # ==== Load Firebase Credential from Environment ====
 # (ยังคงใช้ Firebase Realtime Database เหมือนเดิมทุกอย่าง)
 firebase_cred_str = os.environ.get("FIREBASE_CREDENTIAL_JSON")
@@ -415,10 +579,22 @@ def check_status_api():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
+        ip = _get_client_ip()
+
+        # Rate limit check
+        if not check_login_rate_limit(ip):
+            _queue_alert(
+                f"LOGIN RATE LIMIT EXCEEDED — IP BLOCKED\n"
+                f"IP: {ip}\nUA: {request.headers.get('User-Agent','')[:200]}"
+            )
+            BLOCKED_IPS.add(ip)
+            return render_template('login.html', error=True, blocked=True)
+
         employee_id = (request.form.get('employee_id') or '').strip().upper()
         allowed_ids = list(INSPECTOR_MAP.keys())
 
         if employee_id not in allowed_ids:
+            record_failed_login(ip, employee_id)
             return render_template('login.html', error=True)
 
         session['employee_id'] = employee_id
