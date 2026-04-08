@@ -16,12 +16,14 @@ from PIL import Image, ExifTags
 from datetime import datetime, date, timedelta
 
 # Register Thai font
-pdfmetrics.registerFont(TTFont('THSarabunNew', 'static/fonts/THSarabunNew.ttf'))
+# ✅ แก้เป็น (absolute path)
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+font_path = os.path.join(BASE_DIR, 'static', 'fonts', 'THSarabunNew.ttf')
+pdfmetrics.registerFont(TTFont('THSarabunNew', font_path))
 
 # Paths to static assets (เดิม)
 sas_logo_path  = 'static/logo_sas.png'
 qc_passed_path = 'static/qc_passed.png'
-
 SESSION = requests.Session()
 
 _QC_STICKER_READER = None
@@ -495,7 +497,7 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     c.line(1.5*cm, 2.5*cm, width-1.5*cm, 2.5*cm)
     c.setFillColor(black)
     c.drawString(2*cm, 1*cm, '📞 SAS Service: 096-2815161')
-    c.drawRightString(width-2*cm, 1*cm, '📞 SAS Sales: 081-9216225 คุณสมยศ')
+    c.drawRightString(width-2*cm, 1*cm, '📞 SAS Sales: 081-9216225 คุณโชติธนินท์')
 
     c.save()
     buffer.seek(0)

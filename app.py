@@ -26,7 +26,10 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 
 # ==== Load Firebase Credential from Environment ====
 # (ยังคงใช้ Firebase Realtime Database เหมือนเดิมทุกอย่าง)
-firebase_json = json.loads(os.environ.get("FIREBASE_CREDENTIAL_JSON"))
+firebase_cred_str = os.environ.get("FIREBASE_CREDENTIAL_JSON")
+if not firebase_cred_str:
+    raise ValueError("❌ FIREBASE_CREDENTIAL_JSON env variable is missing!")
+firebase_json = json.loads(firebase_cred_str)
 cred = credentials.Certificate(firebase_json)
 
 firebase_admin.initialize_app(cred, {
@@ -190,7 +193,7 @@ def _load_supplier_rows_cached():
             if code_s:
                 rows.append({
                     "code": code_s,
-                    "description": "Supplier ZD",
+                    "description": "Supplier",
                     "total": "" if total is None else str(total).strip()
                 })
 
