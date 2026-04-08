@@ -4,89 +4,86 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import cm
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
-from reportlab.lib.colors import red, black, gray
+from reportlab.lib.colors import Color, HexColor, white, black
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
 import io
 import os
 import requests
 from PIL import Image, ExifTags
-
-# ✅ NEW: for warranty end-date calculation
 from datetime import datetime, date, timedelta
 
-# Register Thai font
-# ✅ แก้เป็น (absolute path)
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-font_path = os.path.join(BASE_DIR, 'static', 'fonts', 'THSarabunNew.ttf')
-pdfmetrics.registerFont(TTFont('THSarabunNew', font_path))
+# ──────────────────────────────────────────────
+# DESIGN TOKENS  (Navy Blue theme)
+# ──────────────────────────────────────────────
+NAVY        = HexColor("#1A3A6B")   # แถบหัว / section bar
+NAVY_LIGHT  = HexColor("#2A5298")   # gradient ที่สอง / accent
+ACCENT      = HexColor("#E8F0FB")   # พื้นหลัง row สลับ
+GOLD        = HexColor("#C8A951")   # เส้น divider / highlight
+RED_WARN    = HexColor("#C0392B")   # ข้อความเตือน
+GRAY_LINE   = HexColor("#CBD5E1")   # เส้นบาง
+WHITE       = white
+BLACK       = HexColor("#1E293B")
 
-# Paths to static assets (เดิม)
-sas_logo_path  = 'static/logo_sas.png'
-qc_passed_path = 'static/qc_passed.png'
+# ──────────────────────────────────────────────
+# FONT REGISTRATION
+# ──────────────────────────────────────────────
+BASE_DIR   = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+font_path  = os.path.join(BASE_DIR, "static", "fonts", "THSarabunNew.ttf")
+pdfmetrics.registerFont(TTFont("THSarabunNew", font_path))
+
+sas_logo_path  = os.path.join(BASE_DIR, "static", "logo_sas.png")
+qc_passed_path = os.path.join(BASE_DIR, "static", "qc_passed.png")
+
 SESSION = requests.Session()
 
 _QC_STICKER_READER = None
-_QC_STICKER_SIZE = None
+_QC_STICKER_SIZE   = None
 
+INSPECTOR_MAP = {
+    "QC001": "คุณสมประสงค์",
+    "QC002": "คุณเกียรติศักดิ์",
+    "QC003": "คุณมัด",
+    "QC999": "คุณโชติธนินท์",
+}
+
+# ──────────────────────────────────────────────
+# HELPER: QC sticker cache
+# ──────────────────────────────────────────────
 def _get_qc_sticker_cached():
-    """
-    Load qc_passed.png once -> return (ImageReader, (w,h))
-    """
     global _QC_STICKER_READER, _QC_STICKER_SIZE
     if _QC_STICKER_READER is None:
         sticker = Image.open(qc_passed_path).convert("RGBA")
-        sw, sh = sticker.size
-        buf = io.BytesIO()
+        sw, sh  = sticker.size
+        buf     = io.BytesIO()
         sticker.save(buf, format="PNG")
         buf.seek(0)
         _QC_STICKER_READER = ImageReader(buf)
-        _QC_STICKER_SIZE = (sw, sh)
+        _QC_STICKER_SIZE   = (sw, sh)
     return _QC_STICKER_READER, _QC_STICKER_SIZE
+
 
 def _fetch_image_bytes(url: str) -> bytes:
     r = SESSION.get(url, timeout=8)
     r.raise_for_status()
     return r.content
 
-# ✅ NEW: Inspector mapping (ID -> ชื่อ) เผื่อข้อมูลเก่าเป็น ID
-INSPECTOR_MAP = {
-    "QC001": "คุณสมประสงค์",
-    "QC002": "คุณเกียรติศักดิ์",
-    "QC999": "คุณโชติธนินท์",
-}
 
-
-def _resolve_sas_logo_path():
-    """
-    ✅ NEW: หาไฟล์โลโก้ให้เจอแบบชัวร์ โดยอิงตำแหน่งไฟล์ generate_pdf.py
-    """
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-
-    candidates = [
-        os.path.join(base_dir, "static", "logo_sas.png"),
-        os.path.join(base_dir, "static", "logo_sas.PNG"),
-        os.path.join(base_dir, "static", "logos_sas.png"),
-        os.path.join(base_dir, "static", "logos_sas.PNG"),
-        os.path.join(base_dir, "logo_sas.png"),
-        os.path.join(base_dir, "logo_sas.PNG"),
-    ]
-
-    for p in candidates:
-        if os.path.exists(p):
-            return p
-
-    if os.path.exists(sas_logo_path):
-        return sas_logo_path
-
+def _resolve_logo():
+    for candidate in [
+        os.path.join(BASE_DIR, "static", "logo_sas.png"),
+        os.path.join(BASE_DIR, "static", "logo_sas.PNG"),
+        os.path.join(BASE_DIR, "static", "logos_sas.png"),
+        sas_logo_path,
+    ]:
+        if os.path.exists(candidate):
+            return candidate
     return None
 
 
-def _parse_th_date(s: str):
-    """
-    ✅ NEW: Parse date from 'dd/mm/yyyy' or ISO 'yyyy-mm-dd'
-    Return datetime.date or None
-    """
+# ──────────────────────────────────────────────
+# DATE UTILITIES
+# ──────────────────────────────────────────────
+def _parse_th_date(s):
     if not s:
         return None
     s = str(s).strip()
@@ -98,406 +95,434 @@ def _parse_th_date(s: str):
     return None
 
 
-def _add_months(d: date, months: int) -> date:
-    """
-    ✅ NEW: add months without external libs (relativedelta)
-    """
+def _add_months(d, months):
     y = d.year + (d.month - 1 + months) // 12
     m = (d.month - 1 + months) % 12 + 1
-
-    if m == 12:
-        next_month = date(y + 1, 1, 1)
-    else:
-        next_month = date(y, m + 1, 1)
-    last_day = next_month - timedelta(days=1)
-
-    day = min(d.day, last_day.day)
-    return date(y, m, day)
+    next_month = date(y + 1, 1, 1) if m == 12 else date(y, m + 1, 1)
+    last_day   = next_month - timedelta(days=1)
+    return date(y, m, min(d.day, last_day.day))
 
 
-def _format_th_date(d: date) -> str:
-    """
-    ✅ NEW: format dd/mm/yyyy
-    """
+def _format_th_date(d):
     return d.strftime("%d/%m/%Y")
 
 
-def _compute_warranty_end_date(data: dict):
-    """
-    ✅ NEW: เงื่อนไขสิ้นสุดการรับประกัน
-    - ใช้วันที่ทำเอกสาร (data['date']) ถ้าไม่มี ใช้วันนี้
-    - + 7 วัน = วันเริ่มนับ
-    - + N เดือน (18/24/36) = วันสิ้นสุด
-    """
-    w_raw = data.get('warranty')
-    months = None
-
+def _compute_warranty_end_date(data):
+    w_raw = data.get("warranty")
     try:
-        if w_raw is None:
-            months = None
-        else:
-            w_str = str(w_raw)
-            digits = ''.join(ch for ch in w_str if ch.isdigit())
-            months = int(digits) if digits else None
+        digits = "".join(ch for ch in str(w_raw) if ch.isdigit())
+        months = int(digits) if digits else None
     except Exception:
         months = None
-
     if months not in (18, 24, 36):
         return None
-
-    doc_date = _parse_th_date(data.get('date')) or date.today()
+    doc_date   = _parse_th_date(data.get("date")) or date.today()
     start_date = doc_date + timedelta(days=7)
-    end_date = _add_months(start_date, months)
-    return end_date
+    return _add_months(start_date, months)
 
 
-def draw_header(c, width, height):
-    """Draw the SAS logo in the top-right corner."""
+# ──────────────────────────────────────────────
+# DESIGN COMPONENTS
+# ──────────────────────────────────────────────
+def draw_header_bar(c, width, height):
+    """แถบหัวกระดาษสีน้ำเงินครามพร้อมโลโก้"""
+    bar_h = 2.8 * cm
+
+    # แถบพื้นหลังน้ำเงินคราม
+    c.setFillColor(NAVY)
+    c.rect(0, height - bar_h, width, bar_h, fill=1, stroke=0)
+
+    # เส้น gold บาง ๆ ด้านล่างแถบ
+    c.setStrokeColor(GOLD)
+    c.setLineWidth(2)
+    c.line(0, height - bar_h, width, height - bar_h)
+
+    # ชื่อบริษัท (ขาว)
+    c.setFillColor(WHITE)
+    c.setFont("THSarabunNew", 20)
+    c.drawString(1.8 * cm, height - 1.35 * cm, "SYNERGY ASIA SOLUTION CO., LTD.")
+    c.setFont("THSarabunNew", 13)
+    c.drawString(1.8 * cm, height - 2.0 * cm, "www.synergy-as.com  |  www.motorsas.com")
+
+    # โลโก้ขวา
     try:
-        logo_path = _resolve_sas_logo_path()
-        if not logo_path:
-            raise FileNotFoundError("SAS logo not found (static/logo_sas.png).")
-
-        logo = Image.open(logo_path).convert("RGBA")
-        lw, lh = logo.size
-
-        # ✅ ปรับเล็กลง + ขยับขึ้น
-        logo_w = 2.5 * cm
-        logo_h = logo_w * (lh / lw)
-
-        buf = io.BytesIO()
-        logo.save(buf, format="PNG")
-        buf.seek(0)
-
-        margin_top = 1.0 * cm
-        margin_right = 1.5 * cm
-        x = width - logo_w - margin_right
-        y = height - margin_top - logo_h
-
-        c.drawImage(
-            ImageReader(buf),
-            x, y,
-            width=logo_w,
-            height=logo_h,
-            mask='auto'
-        )
+        logo_path = _resolve_logo()
+        if logo_path:
+            logo   = Image.open(logo_path).convert("RGBA")
+            lw, lh = logo.size
+            logo_w = 2.8 * cm
+            logo_h = logo_w * (lh / lw)
+            buf    = io.BytesIO()
+            logo.save(buf, format="PNG")
+            buf.seek(0)
+            c.drawImage(
+                ImageReader(buf),
+                width - logo_w - 1.2 * cm,
+                height - bar_h + (bar_h - logo_h) / 2,
+                width=logo_w, height=logo_h, mask="auto",
+            )
     except Exception as e:
-        print("Logo load error:", e, flush=True)
+        print("Logo error:", e, flush=True)
+
+    c.setLineWidth(0.5)
 
 
-def draw_image(c, image_url, center_x, y_top, max_width):
-    """
-    Draw a photo (correctly oriented + scaled + centered),
-    then overlay a small “QC Passed” sticker on its bottom-right.
-    Returns the new y_top after drawing.
-    """
-    BOTTOM_MARGIN = 3 * cm
+def draw_section_bar(c, y, width, label, margin):
+    """แถบสีน้ำเงินเข้มสำหรับหัวข้อ section"""
+    bar_h = 0.65 * cm
+    c.setFillColor(NAVY_LIGHT)
+    c.roundRect(margin, y - bar_h + 4, width - 2 * margin, bar_h, 3, fill=1, stroke=0)
+    c.setFillColor(WHITE)
+    c.setFont("THSarabunNew", 15)
+    c.drawString(margin + 0.4 * cm, y - bar_h + 10, label)
+    return y - bar_h - 4
 
-    try:
-        # 1) Load and correct orientation (✅ faster: reuse session)
-        img_data = SESSION.get(image_url, timeout=5).content
-        img = Image.open(io.BytesIO(img_data))
 
-        # EXIF orientation
-        try:
-            exif = img._getexif() or {}
-            tag = next(k for k, v in ExifTags.TAGS.items() if v == "Orientation")
-            ori = exif.get(tag)
-            if ori == 3:
-                img = img.rotate(180, expand=True)
-            elif ori == 6:
-                img = img.rotate(270, expand=True)
-            elif ori == 8:
-                img = img.rotate(90, expand=True)
-        except Exception:
-            pass
+def draw_field_row(c, y, width, margin, label, value, shade=False, warn=False):
+    """แถวข้อมูล label: value พร้อม shading สลับ"""
+    row_h = 0.68 * cm
+    if shade:
+        c.setFillColor(ACCENT)
+        c.rect(margin, y - row_h + 4, width - 2 * margin, row_h, fill=1, stroke=0)
 
-        # ✅ NEW: resize before embedding (faster + smaller PDF)
-        img.thumbnail((1600, 1600))
+    c.setFillColor(HexColor("#475569"))
+    c.setFont("THSarabunNew", 14)
+    c.drawString(margin + 0.3 * cm, y - row_h + 14, label)
 
-        # 2) Scale to fit within max_width and available height
-        ow, oh = img.size
-        aspect = oh / ow if ow else 1
-        img_w = max_width
-        img_h = img_w * aspect
+    c.setFillColor(RED_WARN if warn else BLACK)
+    c.setFont("THSarabunNew", 15)
+    c.drawString(margin + 6.5 * cm, y - row_h + 14, str(value) if value else "-")
 
-        avail_h = y_top - BOTTOM_MARGIN
-        if img_h > avail_h:
-            img_h = avail_h
-            img_w = img_h / aspect if aspect else img_w
+    # เส้นแบ่งบาง
+    c.setStrokeColor(GRAY_LINE)
+    c.setLineWidth(0.3)
+    c.line(margin, y - row_h + 4, width - margin, y - row_h + 4)
+    c.setLineWidth(0.5)
+    return y - row_h
 
-        x = center_x - img_w / 2
-        y = y_top - img_h
 
-        # 3) Draw main image
-        mbuf = io.BytesIO()
-        img.save(mbuf, format="PNG")
-        mbuf.seek(0)
-        c.drawImage(
-            ImageReader(mbuf),
-            x, y,
-            width=img_w,
-            height=img_h,
-            mask="auto"
-        )
+def draw_footer(c, width, page_num=None):
+    """Footer สีน้ำเงินเรียบ"""
+    footer_h = 1.4 * cm
 
-        # 4) ✅ CHANGED: Overlay QC Passed sticker (cached)
-        sticker_reader, (sw, sh) = _get_qc_sticker_cached()
-        sticker_w = 2 * cm
-        sticker_h = sticker_w * (sh / sw) if sw else sticker_w
-        pad = 0.2 * cm
-        sx = x + img_w - sticker_w - pad
-        sy = y + pad
+    # เส้น gold
+    c.setStrokeColor(GOLD)
+    c.setLineWidth(1.5)
+    c.line(0, footer_h, width, footer_h)
 
-        c.drawImage(
-            sticker_reader,
-            sx, sy,
-            width=sticker_w,
-            height=sticker_h,
-            mask="auto"
-        )
+    c.setFillColor(NAVY)
+    c.rect(0, 0, width, footer_h, fill=1, stroke=0)
 
-        return y - 10
+    c.setFillColor(WHITE)
+    c.setFont("THSarabunNew", 13)
+    c.drawString(1.5 * cm, 0.45 * cm, "SAS Service: 096-2815161")
+    c.drawCentredString(width / 2, 0.45 * cm, "SAS QC Gear Motor Report")
+    if page_num:
+        c.drawRightString(width - 1.5 * cm, 0.45 * cm, f"Page {page_num}")
+    else:
+        c.drawRightString(width - 1.5 * cm, 0.45 * cm, "SAS Sales: 081-9216225")
 
-    except Exception as e:
-        print("Error loading image:", e, flush=True)
-        return y_top - 10
+    c.setLineWidth(0.5)
 
+
+def draw_image_label_bar(c, y, width, margin, label):
+    """แถบชื่อรูปสีน้ำเงินอ่อน"""
+    bar_h = 0.6 * cm
+    c.setFillColor(ACCENT)
+    c.roundRect(margin, y - bar_h + 2, width - 2 * margin, bar_h, 3, fill=1, stroke=0)
+    c.setStrokeColor(NAVY_LIGHT)
+    c.setLineWidth(0.8)
+    c.roundRect(margin, y - bar_h + 2, width - 2 * margin, bar_h, 3, fill=0, stroke=1)
+    c.setFillColor(NAVY)
+    c.setFont("THSarabunNew", 15)
+    c.drawCentredString(width / 2, y - bar_h + 9, label)
+    c.setLineWidth(0.5)
+    return y - bar_h - 6
+
+
+# ──────────────────────────────────────────────
+# IMAGE DRAWING
+# ──────────────────────────────────────────────
 def draw_image_bytes(c, img_bytes, center_x, y_top, max_width):
-    BOTTOM_MARGIN = 3 * cm
+    BOTTOM_MARGIN = 3.5 * cm
     try:
         img = Image.open(io.BytesIO(img_bytes))
-
-        # EXIF orientation
         try:
             exif = img._getexif() or {}
-            tag = next(k for k, v in ExifTags.TAGS.items() if v == "Orientation")
-            ori = exif.get(tag)
-            if ori == 3:
-                img = img.rotate(180, expand=True)
-            elif ori == 6:
-                img = img.rotate(270, expand=True)
-            elif ori == 8:
-                img = img.rotate(90, expand=True)
+            tag  = next(k for k, v in ExifTags.TAGS.items() if v == "Orientation")
+            ori  = exif.get(tag)
+            if ori == 3:   img = img.rotate(180, expand=True)
+            elif ori == 6: img = img.rotate(270, expand=True)
+            elif ori == 8: img = img.rotate(90, expand=True)
         except Exception:
             pass
 
-        # ลดขนาดก่อนฝัง (ปรับได้ 1200/1600)
         img.thumbnail((1100, 1100))
-
-        ow, oh = img.size
-        aspect = oh / ow if ow else 1
-        img_w = max_width
-        img_h = img_w * aspect
-
-        avail_h = y_top - BOTTOM_MARGIN
-        if img_h > avail_h:
-            img_h = avail_h
-            img_w = img_h / aspect if aspect else img_w
-
-        x = center_x - img_w / 2
-        y = y_top - img_h
-
-        # ✅ เร็วขึ้นอีก: ฝังเป็น JPEG (เร็ว+ไฟล์เล็กกว่า PNG)
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
 
-        mbuf = io.BytesIO()
-        img.save(mbuf, format="JPEG", quality=75, optimize=True)
-        mbuf.seek(0)
+        ow, oh    = img.size
+        aspect    = oh / ow if ow else 1
+        img_w     = max_width
+        img_h     = img_w * aspect
+        avail_h   = y_top - BOTTOM_MARGIN
+        if img_h > avail_h:
+            img_h = avail_h
+            img_w = img_h / aspect if aspect else img_w
 
+        x = center_x - img_w / 2
+        y = y_top - img_h
+
+        # เส้นกรอบรูป
+        c.setStrokeColor(GRAY_LINE)
+        c.setLineWidth(0.8)
+        c.rect(x - 2, y - 2, img_w + 4, img_h + 4, fill=0, stroke=1)
+
+        mbuf = io.BytesIO()
+        img.save(mbuf, format="JPEG", quality=78, optimize=True)
+        mbuf.seek(0)
         c.drawImage(ImageReader(mbuf), x, y, width=img_w, height=img_h)
 
-        # sticker cached
-        sticker_reader, (sw, sh) = _get_qc_sticker_cached()
-        sticker_w = 2 * cm
-        sticker_h = sticker_w * (sh / sw) if sw else sticker_w
-        pad = 0.2 * cm
-        sx = x + img_w - sticker_w - pad
-        sy = y + pad
-        c.drawImage(sticker_reader, sx, sy, width=sticker_w, height=sticker_h, mask="auto")
+        # QC Passed sticker
+        try:
+            sticker_reader, (sw, sh) = _get_qc_sticker_cached()
+            sticker_w = 2.2 * cm
+            sticker_h = sticker_w * (sh / sw) if sw else sticker_w
+            pad = 0.25 * cm
+            c.drawImage(
+                sticker_reader,
+                x + img_w - sticker_w - pad, y + pad,
+                width=sticker_w, height=sticker_h, mask="auto",
+            )
+        except Exception:
+            pass
 
-        return y - 10
+        c.setLineWidth(0.5)
+        return y - 14
+
     except Exception as e:
-        print("Error draw_image_bytes:", e, flush=True)
-        return y_top - 10
+        print("draw_image_bytes error:", e, flush=True)
+        return y_top - 14
 
-def _infer_image_label(url: str, fallback: str = "ภาพประกอบ"):
-    """
-    เดาจาก keyword ใน URL ให้ชื่อรูปตรงกับหัวข้อการตรวจสอบ
-    (ถ้า caller ไม่ส่ง image_labels มา)
-    """
+
+def _infer_image_label(url, fallback="ภาพประกอบ"):
     if not url:
         return fallback
     u = str(url).lower()
-
     mapping = [
-        # ✅ RFKS nameplate images
         ("rfks_nameplate_motor", "Name plate : Motor"),
-        ("rfks_nameplate_gear", "Name plate : Gear"),
-        ("nameplate_motor", "Name plate : Motor"),
-        ("nameplate_gear", "Name plate : Gear"),
-
-        ("current", "ภาพค่ากระแส"),
-        ("amp", "ภาพค่ากระแส"),
-        ("nameplate", "ภาพ Nameplate"),
-        ("motor", "ภาพมอเตอร์"),
-        ("gear", "ภาพเกียร์"),
-        ("sound", "ภาพเสียงเกียร์"),
-        ("noise", "ภาพเสียงเกียร์"),
-        ("install", "ภาพประกอบหน้างาน"),
-        ("site", "ภาพประกอบหน้างาน"),
-        ("controller", "ภาพ Controller"),
-
-        ("servo_motor", "ภาพ Servo Motor"),
-        ("servo_drive", "ภาพ Servo Drive"),
-        ("cable", "ภาพ Cable Wire"),
-        ("wire", "ภาพ Cable Wire"),
+        ("rfks_nameplate_gear",  "Name plate : Gear"),
+        ("nameplate_motor",      "Name plate : Motor"),
+        ("nameplate_gear",       "Name plate : Gear"),
+        ("current",              "ภาพค่ากระแส"),
+        ("amp",                  "ภาพค่ากระแส"),
+        ("nameplate",            "ภาพ Nameplate"),
+        ("motor",                "ภาพมอเตอร์"),
+        ("gear",                 "ภาพเกียร์"),
+        ("sound",                "ภาพเสียงเกียร์"),
+        ("noise",                "ภาพเสียงเกียร์"),
+        ("install",              "ภาพประกอบหน้างาน"),
+        ("assembly",             "ภาพประกอบหน้างาน"),
+        ("site",                 "ภาพประกอบหน้างาน"),
+        ("controller",           "ภาพ Controller"),
+        ("servo_motor",          "ภาพ Servo Motor"),
+        ("servo_drive",          "ภาพ Servo Drive"),
+        ("cable",                "ภาพ Cable Wire"),
+        ("wire",                 "ภาพ Cable Wire"),
     ]
-
     for key, label in mapping:
         if key in u:
             return label
     return fallback
 
 
+# ──────────────────────────────────────────────
+# MAIN PDF BUILDER
+# ──────────────────────────────────────────────
 def create_qc_pdf(data, image_urls=None, image_labels=None):
-    """
-    Builds a two-page QC report PDF:
-     - Page 1: header + textual QC data
-     - Page 2: header + photos overlaid with QC Passed sticker
-    Returns an io.BytesIO buffer.
-    """
-    image_urls = image_urls or []
+    image_urls   = image_urls   or []
     image_labels = image_labels or []
 
     buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
+    c      = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
-    margin = 2 * cm
-    line = height - margin
+    margin = 1.8 * cm
+    HEADER_H = 2.8 * cm
+    FOOTER_H = 1.4 * cm
+    content_top = height - HEADER_H - 0.5 * cm
 
-    def draw_text(txt, bold=False, color=None):
-        nonlocal line
-        c.setFont('THSarabunNew', 16)
-        c.setFillColor(color or black)
-        c.drawString(margin, line, txt)
-        line -= 22
+    ptype    = data.get("product_type", "").lower()
+    is_servo = "servo" in ptype
+    is_acdc  = "ac/dc" in ptype or "bldc" in ptype
 
-    # --- Page 1: Textual QC data ---
-    draw_header(c, width, height)
-    c.setFont('THSarabunNew', 22)
-    c.drawCentredString(width / 2, line, 'รายงานการตรวจเช็คสินค้า QC Report')
-    line -= 40
+    # ════════════════════════════════════════
+    # PAGE 1 — QC Data
+    # ════════════════════════════════════════
+    draw_header_bar(c, width, height)
 
-    draw_text(f"Serial Number: {data.get('serial','-')}")
-    raw_date = data.get('date', '-') or '-'
-    d = _parse_th_date(raw_date)  # ใช้ฟังก์ชัน parse ที่มีอยู่แล้ว
+    # ── ชื่อเอกสาร
+    c.setFillColor(NAVY)
+    c.setFont("THSarabunNew", 22)
+    c.drawCentredString(width / 2, content_top, "รายงานการตรวจเช็คสินค้า  QC Report")
+
+    # เส้นใต้ชื่อ
+    c.setStrokeColor(GOLD)
+    c.setLineWidth(1.5)
+    c.line(margin, content_top - 6, width - margin, content_top - 6)
+    c.setLineWidth(0.5)
+
+    y = content_top - 18
+
+    # ── SECTION: ข้อมูลเอกสาร ──────────────
+    y = draw_section_bar(c, y, width, "ข้อมูลเอกสาร", margin)
+    y -= 4
+
+    raw_date = data.get("date", "-") or "-"
+    d        = _parse_th_date(raw_date)
     date_str = _format_th_date(d) if d else str(raw_date)
-    draw_text(f"วันที่ตรวจสอบ: {date_str}")
-    draw_text(f"OR No.: {data.get('or_no','-') or '-'}")
-    draw_text(f"ชื่อบริษัท: {data.get('company_name','-') or '-'}")
-    draw_text(f"ประเภทสินค้า: {data.get('product_type','-')}")
-    draw_text(f"Model : {data.get('motor_nameplate','-')}")
 
-    ptype = data.get('product_type', '').lower()
-    is_servo = 'servo' in ptype
-    is_acdc  = 'ac/dc' in ptype or 'bldc' in ptype
+    rows_info = [
+        ("Serial Number",  data.get("serial", "-")),
+        ("วันที่ตรวจสอบ", date_str),
+        ("OR No.",         data.get("or_no", "-") or "-"),
+        ("ชื่อบริษัท",     data.get("company_name", "-") or "-"),
+        ("ประเภทสินค้า",   data.get("product_type", "-")),
+        ("Model",          data.get("motor_nameplate", "-")),
+    ]
+    for i, (lbl, val) in enumerate(rows_info):
+        y = draw_field_row(c, y, width, margin, lbl, val, shade=(i % 2 == 0))
+
+    y -= 10
+
+    # ── SECTION: ผลการตรวจสอบ ──────────────
+    y = draw_section_bar(c, y, width, "ผลการตรวจสอบ", margin)
+    y -= 4
 
     if is_servo:
-        draw_text('**ไม่ประกอบสินค้า', color=red)
-        draw_text('**ไม่เติมน้ำมันเกียร์', color=red)
+        for warn_txt in ["** ไม่ประกอบสินค้า", "** ไม่เติมน้ำมันเกียร์"]:
+            y = draw_field_row(c, y, width, margin, "", warn_txt, shade=False, warn=True)
 
-    draw_text('')  # spacer
+    check_rows = []
+    if data.get("motor_current"):
+        check_rows.append(("ค่ากระแสมอเตอร์", f"{data['motor_current']} A"))
+    if data.get("gear_ratio"):
+        check_rows.append(("อัตราทดเกียร์", data["gear_ratio"]))
+    if data.get("gear_sound"):
+        check_rows.append(("เสียงเกียร์", f"{data['gear_sound']} dB"))
 
-    if data.get('motor_current'):
-        draw_text(f"ค่ากระแสมอเตอร์: {data['motor_current']} A")
-    if data.get('gear_ratio'):
-        draw_text(f"อัตราทดเกียร์: {data['gear_ratio']}")
-    if data.get('gear_sound'):
-        draw_text(f"เสียงเกียร์: {data['gear_sound']} dB")
-
-    # ✅ FIXED: Indentation ต้องตรงทุกบรรทัดใน block นี้
     if not (is_servo or is_acdc):
-        draw_text(f"ชนิดของน้ำมันเกียร์: {data.get('oil_type','-') or '-'}")
-        draw_text(f"จำนวนน้ำมันเกียร์ (ลิตร): {data.get('oil_liters','-') or '-'}")
-        draw_text(f"สถานะการเติมน้ำมัน: {data.get('oil_filled','-')}")
+        check_rows.append(("ชนิดของน้ำมันเกียร์", data.get("oil_type") or "-"))
+        check_rows.append(("จำนวนน้ำมันเกียร์ (ลิตร)", data.get("oil_liters") or "-"))
+        check_rows.append(("สถานะการเติมน้ำมัน", data.get("oil_filled") or "-"))
     elif is_acdc:
-        draw_text('*ไม่ต้องเติมน้ำมันเกียร์', color=red)
+        check_rows.append(("หมายเหตุ", "* ไม่ต้องเติมน้ำมันเกียร์"))
 
-    draw_text(f"ระยะเวลารับประกัน: {data.get('warranty','-')} เดือน", color=red)
+    for i, (lbl, val) in enumerate(check_rows):
+        y = draw_field_row(c, y, width, margin, lbl, val, shade=(i % 2 == 0))
+
+    y -= 10
+
+    # ── SECTION: การรับประกัน ───────────────
+    y = draw_section_bar(c, y, width, "การรับประกัน", margin)
+    y -= 4
+
+    warranty_val = f"{data.get('warranty', '-')} เดือน"
+    y = draw_field_row(c, y, width, margin, "ระยะเวลารับประกัน", warranty_val, shade=False, warn=True)
 
     end_date = _compute_warranty_end_date(data)
     if end_date:
-        draw_text(f"สิ้นสุดการรับประกัน: {_format_th_date(end_date)}", color=red)
-
-    inspector_value = data.get('inspector', '-') or '-'
-    inspector_name = INSPECTOR_MAP.get(inspector_value, inspector_value)
-    draw_text(f"ผู้ตรวจสอบ: {inspector_name}")
+        y = draw_field_row(c, y, width, margin, "สิ้นสุดการรับประกัน",
+                           _format_th_date(end_date), shade=True, warn=True)
 
     if is_servo:
-        draw_text('')
-        draw_text('**การรับประกันสินค้า 18 เดือน', color=red)
+        y = draw_field_row(c, y, width, margin, "หมายเหตุ",
+                           "** การรับประกันสินค้า 18 เดือน", shade=False, warn=True)
 
-    # Footer
-    c.setFillColor(gray)
-    c.line(1.5*cm, 3.5*cm, width-1.5*cm, 3.5*cm)
-    c.setFont('THSarabunNew', 18)
-    c.setFillColor(black)
-    c.drawString(2*cm, 1*cm, '📞 SAS Service: 096-2815161')
-    c.drawRightString(width-2*cm, 1*cm, '📞 SAS Sales: 081-9216225 คุณโชติธนินท์')
+    y -= 10
 
+    # ── SECTION: ผู้ตรวจสอบ ────────────────
+    y = draw_section_bar(c, y, width, "ผู้ตรวจสอบ", margin)
+    y -= 4
+
+    inspector_value = data.get("inspector", "-") or "-"
+    inspector_name  = INSPECTOR_MAP.get(inspector_value, inspector_value)
+    y = draw_field_row(c, y, width, margin, "ผู้ตรวจสอบ", inspector_name, shade=False)
+
+    # กล่องลายเซ็น
+    y -= 20
+    sig_w, sig_h = 6 * cm, 2.2 * cm
+    sig_x = margin
+    c.setStrokeColor(GRAY_LINE)
+    c.setLineWidth(0.5)
+    c.rect(sig_x, y - sig_h, sig_w, sig_h, fill=0, stroke=1)
+    c.setFillColor(HexColor("#94A3B8"))
+    c.setFont("THSarabunNew", 12)
+    c.drawCentredString(sig_x + sig_w / 2, y - sig_h + 8, "ลายเซ็นผู้ตรวจสอบ")
+
+    draw_footer(c, width, page_num=1)
     c.showPage()
 
-    # --- Page 2: Images + QC Passed sticker ---
-    draw_header(c, width, height)
-    c.setFont('THSarabunNew', 18)
-    c.drawString(margin, height - margin - 20, 'ภาพประกอบ:')
-    y_top    = height - margin - 60
-    center_x = width / 2
+    # ════════════════════════════════════════
+    # PAGE 2+ — Images
+    # ════════════════════════════════════════
+    if image_urls:
+        # โหลดรูปทั้งหมดแบบ parallel
+        fetched = [None] * len(image_urls)
+        with ThreadPoolExecutor(max_workers=5) as ex:
+            future_map = {ex.submit(_fetch_image_bytes, u): idx
+                          for idx, u in enumerate(image_urls)}
+        for fut in as_completed(future_map):
+            idx = future_map[fut]
+            try:
+                fetched[idx] = fut.result()
+            except Exception as e:
+                print("Fetch image failed:", image_urls[idx], e, flush=True)
 
-    # ✅ รูปใหญ่ขึ้น ~2 เท่า แต่ไม่ล้นหน้า
-    max_w = min(16 * cm, width - (2 * margin))
+        draw_header_bar(c, width, height)
+        c.setFillColor(NAVY)
+        c.setFont("THSarabunNew", 20)
+        c.drawCentredString(width / 2, content_top, "ภาพประกอบการตรวจสอบ")
+        c.setStrokeColor(GOLD)
+        c.setLineWidth(1.5)
+        c.line(margin, content_top - 6, width - margin, content_top - 6)
+        c.setLineWidth(0.5)
 
-    fetched = [None] * len(image_urls)
-    with ThreadPoolExecutor(max_workers=5) as ex:
-        future_map = {ex.submit(_fetch_image_bytes, u): idx for idx, u in enumerate(image_urls)}
-    for fut in as_completed(future_map):
-        idx = future_map[fut]
-        try:
-            fetched[idx] = fut.result()
-        except Exception as e:
-            print("Fetch image failed:", image_urls[idx], e, flush=True)
-            fetched[idx] = None
+        y_top    = content_top - 22
+        center_x = width / 2
+        max_w    = min(15.5 * cm, width - 2 * margin)
+        page_num = 2
 
-    for i, url in enumerate(image_urls):
-        if i < len(image_labels) and image_labels[i]:
-            label = image_labels[i]
-        else:
-            label = _infer_image_label(url, fallback=f'ภาพที่ {i+1}')
+        for i, url in enumerate(image_urls):
+            label = (image_labels[i] if i < len(image_labels) and image_labels[i]
+                     else _infer_image_label(url, fallback=f"ภาพที่ {i+1}"))
 
-        if y_top - max_w * 0.9 < 3 * cm:
-            c.showPage()
-            draw_header(c, width, height)
-            c.setFont('THSarabunNew', 18)
-            c.drawString(margin, height - margin - 20, 'ภาพประกอบ (ต่อ):')
-            y_top = height - margin - 60
+            needed_h = max_w * 0.85 + 1.2 * cm
+            if y_top - needed_h < FOOTER_H + 0.5 * cm:
+                draw_footer(c, width, page_num=page_num)
+                c.showPage()
+                page_num += 1
+                draw_header_bar(c, width, height)
+                c.setFillColor(NAVY)
+                c.setFont("THSarabunNew", 20)
+                c.drawCentredString(width / 2, content_top, "ภาพประกอบการตรวจสอบ (ต่อ)")
+                c.setStrokeColor(GOLD)
+                c.setLineWidth(1.5)
+                c.line(margin, content_top - 6, width - margin, content_top - 6)
+                c.setLineWidth(0.5)
+                y_top = content_top - 22
 
-        c.setFont('THSarabunNew', 16)
-        c.drawCentredString(center_x, y_top, label)
-        y_top -= 20
+            y_top = draw_image_label_bar(c, y_top, width, margin, label)
+            if fetched[i]:
+                y_top = draw_image_bytes(c, fetched[i], center_x, y_top, max_w)
+            else:
+                c.setFillColor(HexColor("#94A3B8"))
+                c.setFont("THSarabunNew", 14)
+                c.drawCentredString(center_x, y_top - 0.8 * cm, "ไม่พบรูปภาพ")
+                y_top -= 1.5 * cm
 
-        if fetched[i]:
-            y_top = draw_image_bytes(c, fetched[i], center_x, y_top, max_w)
-        else:
-            y_top -= 10
+            y_top -= 12
 
-    # Final footer on last page
-    c.setFillColor(gray)
-    c.line(1.5*cm, 2.5*cm, width-1.5*cm, 2.5*cm)
-    c.setFillColor(black)
-    c.drawString(2*cm, 1*cm, '📞 SAS Service: 096-2815161')
-    c.drawRightString(width-2*cm, 1*cm, '📞 SAS Sales: 081-9216225 คุณโชติธนินท์')
+        draw_footer(c, width, page_num=page_num)
 
     c.save()
     buffer.seek(0)
