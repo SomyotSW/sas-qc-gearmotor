@@ -46,6 +46,12 @@ INSPECTOR_MAP = {
     "QC999": "คุณโชติธนินท์",
 }
 
+# ── Signature image mapping (inspector ID -> filename in static/Sign/)
+SIGNATURE_MAP = {
+    "QC001": "001.png",
+    "QC002": "002.png",
+}
+
 # ──────────────────────────────────────────────
 # HELPER: QC sticker cache
 # ──────────────────────────────────────────────
@@ -455,9 +461,35 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     c.setStrokeColor(GRAY_LINE)
     c.setLineWidth(0.5)
     c.rect(sig_x, y - sig_h, sig_w, sig_h, fill=0, stroke=1)
-    c.setFillColor(HexColor("#94A3B8"))
-    c.setFont("THSarabunNew", 12)
-    c.drawCentredString(sig_x + sig_w / 2, y - sig_h + 8, "ลายเซ็นผู้ตรวจสอบ")
+
+    # วาดลายเซ็นจริง (ถ้ามี)
+    sig_filename = SIGNATURE_MAP.get(inspector_value)
+    sig_drawn = False
+    if sig_filename:
+        sig_path = os.path.join(BASE_DIR, "static", "Sign", sig_filename)
+        if os.path.exists(sig_path):
+            try:
+                sig_img = Image.open(sig_path).convert("RGBA")
+                sig_buf = io.BytesIO()
+                sig_img.save(sig_buf, format="PNG")
+                sig_buf.seek(0)
+                pad = 0.15 * cm
+                draw_w = sig_w - pad * 2
+                draw_h = sig_h - pad * 2
+                iw, ih = sig_img.size
+                ratio = min(draw_w / iw, draw_h / ih)
+                rw, rh = iw * ratio, ih * ratio
+                rx = sig_x + (sig_w - rw) / 2
+                ry = y - sig_h + (sig_h - rh) / 2
+                c.drawImage(ImageReader(sig_buf), rx, ry, width=rw, height=rh, mask="auto")
+                sig_drawn = True
+            except Exception as e:
+                print(f"Signature draw error: {e}", flush=True)
+
+    if not sig_drawn:
+        c.setFillColor(HexColor("#94A3B8"))
+        c.setFont("THSarabunNew", 12)
+        c.drawCentredString(sig_x + sig_w / 2, y - sig_h + 8, "ลายเซ็นผู้ตรวจสอบ")
 
     draw_footer(c, width, page_num=1)
     c.showPage()
