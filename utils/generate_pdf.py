@@ -462,12 +462,26 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     c.setLineWidth(0.5)
     c.rect(sig_x, y - sig_h, sig_w, sig_h, fill=0, stroke=1)
 
-    # วาดลายเซ็นจริง (ถ้ามี)
+    # วาดลายเซ็นจริง (ถ้ามี) — ลองหลาย path เพื่อรองรับทั้ง local และ Render
     sig_filename = SIGNATURE_MAP.get(inspector_value)
     sig_drawn = False
     if sig_filename:
-        sig_path = os.path.join(BASE_DIR, "static", "Sign", sig_filename)
-        if os.path.exists(sig_path):
+        # รายการ path ที่เป็นไปได้ทั้งหมด
+        candidate_paths = [
+            os.path.join(BASE_DIR, "static", "Sign", sig_filename),
+            os.path.join(os.path.dirname(__file__), "..", "static", "Sign", sig_filename),
+            os.path.join("/opt/render/project/src", "static", "Sign", sig_filename),
+            os.path.join(os.getcwd(), "static", "Sign", sig_filename),
+        ]
+        sig_path = None
+        for p in candidate_paths:
+            p = os.path.normpath(p)
+            print(f"[SIG] checking: {p} -> exists={os.path.exists(p)}", flush=True)
+            if os.path.exists(p):
+                sig_path = p
+                break
+
+        if sig_path:
             try:
                 sig_img = Image.open(sig_path).convert("RGBA")
                 sig_buf = io.BytesIO()
@@ -483,8 +497,11 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
                 ry = y - sig_h + (sig_h - rh) / 2
                 c.drawImage(ImageReader(sig_buf), rx, ry, width=rw, height=rh, mask="auto")
                 sig_drawn = True
+                print(f"[SIG] ✅ drawn from {sig_path}", flush=True)
             except Exception as e:
-                print(f"Signature draw error: {e}", flush=True)
+                print(f"[SIG] ❌ draw error: {e}", flush=True)
+        else:
+            print(f"[SIG] ❌ ไม่พบไฟล์ลายเซ็น {sig_filename} ในทุก path", flush=True)
 
     if not sig_drawn:
         c.setFillColor(HexColor("#94A3B8"))
