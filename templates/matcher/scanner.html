@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0a1828">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self'; script-src 'self' 'unsafe-inline';">
+  <title>Scanner — SAS Matcher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ink: #0a1828;
+      --ink-soft: #324a63;
+      --paper: #f6f4ee;
+      --surface: #ffffff;
+      --accent: #169c4a;
+      --accent-bright: #34d270;
+      --blue: #2f79d8;
+      --warn: #d97706;
+      --danger: #dc2626;
+      --border: #d9d4c7;
+    }
+
+    html, body {
+      height: 100dvh;
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ============== Header ============== */
+    header {
+      padding: 14px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    header .logo {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.25em;
+      color: var(--ink-soft);
+    }
+    header .logo strong { color: var(--ink); }
+    header .back {
+      font-size: 0.85rem;
+      color: var(--ink-soft);
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: 8px;
+    }
+    header .back:hover { background: rgba(0,0,0,0.04); color: var(--ink); }
+
+    /* ============== Brand selection row ============== */
+    .brand-row {
+      padding: 18px 16px 8px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 8px;
+      align-items: stretch;
+    }
+    .brand-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.64rem;
+      letter-spacing: 0.18em;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .brand-btn {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 14px;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s, transform 0.08s;
+      font-family: inherit;
+      color: var(--ink);
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      min-height: 76px;
+      position: relative;
+    }
+    .brand-btn:hover { border-color: var(--ink); }
+    .brand-btn:active { transform: scale(0.98); }
+    .brand-btn.from-brand .brand-label { color: var(--blue); }
+    .brand-btn.to-brand   .brand-label { color: var(--accent); }
+    .brand-btn.to-brand   { border-color: rgba(22,156,74,0.3); }
+    .brand-btn .brand-value {
+      font-weight: 700;
+      font-size: 1rem;
+      margin-top: auto;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .brand-btn .brand-value.empty {
+      color: var(--ink-soft);
+      font-weight: 500;
+      font-style: italic;
+    }
+    .arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ink-soft);
+      padding: 0 4px;
+    }
+    .arrow svg { width: 20px; height: 20px; }
+
+    /* ============== Preview area ============== */
+    .preview {
+      flex: 1;
+      margin: 8px 16px 16px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 18px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+    }
+    .preview.empty::before {
+      content: "ถ่ายรูปเนมเพลทเพื่อเริ่มต้น";
+      color: var(--ink-soft);
+      font-size: 0.9rem;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 0.05em;
+    }
+    .preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+    .preview .corners {
+      position: absolute;
+      inset: 20px;
+      pointer-events: none;
+    }
+    .preview.empty .corners::before,
+    .preview.empty .corners::after {
+      content: "";
+      position: absolute;
+      width: 28px; height: 28px;
+      border: 2.5px solid var(--accent);
+      opacity: 0.8;
+    }
+    .preview.empty .corners::before { top: 0; left: 0; border-right: none; border-bottom: none; }
+    .preview.empty .corners::after { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+    /* ============== Capture button ============== */
+    .capture-row {
+      padding: 0 16px calc(18px + env(safe-area-inset-bottom));
+      display: flex;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .capture-btn {
+      flex: 1;
+      background: var(--ink);
+      color: var(--paper);
+      border: none;
+      border-radius: 16px;
+      padding: 20px;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      transition: transform 0.08s, box-shadow 0.15s;
+      box-shadow: 0 12px 24px rgba(10,24,40,0.22);
+      position: relative;
+      overflow: hidden;
+    }
+    .capture-btn::before {
+      content: "";
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg, var(--accent-bright), var(--accent));
+      transform: translateY(101%);
+      transition: transform 0.3s cubic-bezier(0.22,1,0.36,1);
+    }
+    .capture-btn > * { position: relative; z-index: 1; }
+    .capture-btn:not(:disabled):hover::before { transform: translateY(0); }
+    .capture-btn:not(:disabled):active { transform: scale(0.98); }
+    .capture-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+    .capture-btn svg { width: 22px; height: 22px; }
+
+    .upload-btn {
+      background: var(--surface);
+      color: var(--ink);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      width: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: border-color 0.15s, transform 0.08s;
+    }
+    .upload-btn:hover { border-color: var(--ink); }
+    .upload-btn:active { transform: scale(0.95); }
+    .upload-btn svg { width: 22px; height: 22px; stroke: currentColor; }
+
+    /* ============== Bottom sheet (brand picker + result) ============== */
+    .sheet-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(10,24,40,0.5);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 90;
+    }
+    .sheet-backdrop.open { opacity: 1; pointer-events: auto; }
+
+    .sheet {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      background: var(--surface);
+      border-radius: 24px 24px 0 0;
+      box-shadow: 0 -20px 40px rgba(10,24,40,0.25);
+      max-height: 85dvh;
+      z-index: 100;
+      transform: translateY(101%);
+      transition: transform 0.28s cubic-bezier(0.22,1,0.36,1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sheet.open { transform: translateY(0); }
+    .sheet-handle {
+      width: 44px; height: 5px;
+      background: var(--border);
+      border-radius: 999px;
+      margin: 10px auto 6px;
+      flex-shrink: 0;
+    }
+    .sheet-head {
+      padding: 10px 20px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .sheet-head h2 {
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+    .sheet-close {
+      background: none; border: none;
+      color: var(--ink-soft);
+      font-size: 1.6rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      line-height: 1;
+    }
+    .sheet-body {
+      padding: 16px 20px 28px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      flex: 1;
+    }
+
+    /* Brand picker list */
+    .brand-list { display: flex; flex-direction: column; gap: 8px; }
+    .brand-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      background: var(--paper);
+      border: 1.5px solid transparent;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      font-family: inherit;
+      color: var(--ink);
+      width: 100%;
+      text-align: left;
+      font-size: inherit;
+    }
+    .brand-item:hover { border-color: var(--ink); }
+    .brand-item.selected {
+      background: rgba(22,156,74,0.08);
+      border-color: var(--accent);
+    }
+    .brand-item .brand-logo {
+      width: 44px; height: 44px;
+      border-radius: 10px;
+      background: var(--ink);
+      color: var(--paper);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 0.8rem;
+      flex-shrink: 0;
+    }
+    .brand-item .brand-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .brand-item .brand-info .name {
+      font-weight: 700;
+      font-size: 0.97rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .brand-item .brand-info .meta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--ink-soft);
+      margin-top: 2px;
+    }
+
+    /* ============== Result sheet ============== */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+      gap: 20px;
+    }
+    .spinner {
+      width: 48px; height: 48px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text {
+      color: var(--ink-soft);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      letter-spacing: 0.08em;
+    }
+
+    .spec-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 16px;
+      background: var(--paper);
+      border-radius: 12px;
+      margin-bottom: 18px;
+    }
+    .spec-grid .item .k {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--ink-soft);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+    .spec-grid .item .v {
+      font-weight: 700;
+      font-size: 0.95rem;
+      margin-top: 2px;
+      word-break: break-word;
+    }
+
+    .section-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.18em;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .match-card {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .match-card.top {
+      border-color: var(--accent);
+      background: linear-gradient(180deg, rgba(52,210,112,0.05), transparent);
+    }
+    .match-card.top::before {
+      content: "BEST MATCH";
+      position: absolute;
+      top: -9px; left: 14px;
+      background: var(--accent);
+      color: white;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.15em;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+    .match-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .match-head .model {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .score-badge {
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 0.78rem;
+      flex-shrink: 0;
+    }
+    .score-badge.high { background: rgba(22,156,74,0.15); color: var(--accent); }
+    .score-badge.med  { background: rgba(217,119,6,0.15);  color: var(--warn); }
+    .score-badge.low  { background: rgba(220,38,38,0.15);  color: var(--danger); }
+
+    .match-body {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px 14px;
+      font-size: 0.87rem;
+    }
+    .match-body .k {
+      color: var(--ink-soft);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .match-body .v { font-weight: 700; margin-top: 1px; }
+    .match-body .row { }
+
+    .match-warning {
+      margin-top: 10px;
+      padding: 8px 10px;
+      background: rgba(217,119,6,0.08);
+      border-left: 3px solid var(--warn);
+      border-radius: 4px;
+      font-size: 0.82rem;
+      color: var(--warn);
+    }
+
+    .variants {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .variants .chip {
+      padding: 2px 8px;
+      background: var(--ink);
+      color: var(--paper);
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+    }
+
+    .error-box {
+      padding: 16px;
+      background: rgba(220,38,38,0.08);
+      border: 1px solid rgba(220,38,38,0.3);
+      border-radius: 12px;
+      color: var(--danger);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .no-match {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--ink-soft);
+    }
+    .no-match-icon {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+
+    /* Flash overlay when capturing */
+    .flash {
+      position: fixed;
+      inset: 0;
+      background: white;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 999;
+    }
+    .flash.active { animation: flash 0.3s ease-out; }
+    @keyframes flash { 0% {opacity:0.9} 100% {opacity:0} }
+
+    .hidden-input { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo"><strong>SAS</strong> · GEAR MOTOR MATCHER</div>
+    <a href="/matcher/" class="back" aria-label="Back">✕</a>
+  </header>
+
+  <!-- Brand selection -->
+  <div class="brand-row">
+    <button class="brand-btn from-brand" id="btnFromBrand" type="button" aria-label="Select nameplate brand">
+      <span class="brand-label">📷 BRAND ON NAMEPLATE</span>
+      <span class="brand-value empty" id="fromBrandValue">เลือกแบรนด์...</span>
+    </button>
+
+    <div class="arrow" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 12h14M13 5l7 7-7 7"/>
+      </svg>
+    </div>
+
+    <button class="brand-btn to-brand" id="btnToBrand" type="button" aria-label="Select match target brand">
+      <span class="brand-label">🎯 MATCH TO</span>
+      <span class="brand-value" id="toBrandValue">SAS</span>
+    </button>
+  </div>
+
+  <!-- Preview -->
+  <div class="preview empty" id="preview">
+    <div class="corners"></div>
+  </div>
+
+  <!-- Capture controls -->
+  <div class="capture-row">
+    <button class="capture-btn" id="btnCapture" type="button" disabled aria-label="Take photo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+        <circle cx="12" cy="13" r="4"/>
+      </svg>
+      <span>ถ่ายรูปเนมเพลท</span>
+    </button>
+    <button class="upload-btn" id="btnUpload" type="button" aria-label="Upload image">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+      </svg>
+    </button>
+  </div>
+
+  <input type="file" class="hidden-input" id="cameraInput" accept="image/*" capture="environment">
+  <input type="file" class="hidden-input" id="uploadInput" accept="image/*">
+
+  <!-- Sheet backdrop -->
+  <div class="sheet-backdrop" id="sheetBackdrop"></div>
+
+  <!-- Brand picker sheet -->
+  <div class="sheet" id="brandSheet" role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h2 id="brandSheetTitle">Select Brand</h2>
+      <button class="sheet-close" type="button" data-close>✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="brand-list" id="brandList">
+        <div style="text-align:center;padding:40px 0;color:var(--ink-soft)" class="loading-text">กำลังโหลดแบรนด์...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result sheet -->
+  <div class="sheet" id="resultSheet" role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h2>Scan Result</h2>
+      <button class="sheet-close" type="button" data-close>✕</button>
+    </div>
+    <div class="sheet-body" id="resultBody">
+      <div class="loading">
+        <div class="spinner"></div>
+        <div class="loading-text">กำลังอ่านเนมเพลท...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flash" id="flash"></div>
+
+  <script>
+  (function() {
+    'use strict';
+
+    // ============== State ==============
+    const state = {
+      brands: [],
+      fromBrand: null,     // {id, name}
+      toBrand: { id: 'sas', name: 'SAS (Synergy Asia Solution)' },
+      pickerFor: null,     // 'from' or 'to'
+    };
+
+    // ============== DOM ==============
+    const $ = (id) => document.getElementById(id);
+    const el = {
+      fromValue: $('fromBrandValue'),
+      toValue:   $('toBrandValue'),
+      btnFrom:   $('btnFromBrand'),
+      btnTo:     $('btnToBrand'),
+      preview:   $('preview'),
+      capture:   $('btnCapture'),
+      upload:    $('btnUpload'),
+      cameraIn:  $('cameraInput'),
+      uploadIn:  $('uploadInput'),
+      backdrop:  $('sheetBackdrop'),
+      brandSheet:  $('brandSheet'),
+      brandTitle:  $('brandSheetTitle'),
+      brandList:   $('brandList'),
+      resultSheet: $('resultSheet'),
+      resultBody:  $('resultBody'),
+      flash:       $('flash'),
+    };
+
+    // ============== Brand loading ==============
+    async function loadBrands() {
+      try {
+        const res = await fetch('/matcher/api/brands');
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'API error');
+        state.brands = data.brands || [];
+        // Auto-pick SAS as to-brand if present
+        const sas = state.brands.find(b => b.id === 'sas');
+        if (sas) state.toBrand = { id: sas.id, name: sas.name };
+        updateBrandDisplay();
+      } catch (err) {
+        console.error('loadBrands failed:', err);
+      }
+    }
+
+    function updateBrandDisplay() {
+      if (state.fromBrand) {
+        el.fromValue.textContent = state.fromBrand.name;
+        el.fromValue.classList.remove('empty');
+      } else {
+        el.fromValue.textContent = 'เลือกแบรนด์...';
+        el.fromValue.classList.add('empty');
+      }
+      el.toValue.textContent = state.toBrand ? state.toBrand.name : 'SAS';
+      updateCaptureAvailability();
+    }
+
+    function updateCaptureAvailability() {
+      el.capture.disabled = !state.fromBrand || !state.toBrand;
+    }
+
+    // ============== Sheets ==============
+    function openSheet(sheet) {
+      el.backdrop.classList.add('open');
+      sheet.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeSheet() {
+      el.backdrop.classList.remove('open');
+      el.brandSheet.classList.remove('open');
+      el.resultSheet.classList.remove('open');
+      document.body.style.overflow = '';
+    }
+    el.backdrop.addEventListener('click', closeSheet);
+    document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeSheet));
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
+
+    // ============== Brand picker ==============
+    function openBrandPicker(which) {
+      state.pickerFor = which;
+      el.brandTitle.textContent = which === 'from'
+        ? 'เลือกแบรนด์เนมเพลท'
+        : 'เทียบเป็นรุ่นของแบรนด์ไหน';
+      renderBrandList();
+      openSheet(el.brandSheet);
+    }
+
+    function renderBrandList() {
+      if (!state.brands.length) {
+        el.brandList.innerHTML = `
+          <div style="text-align:center;padding:40px 20px;color:var(--ink-soft)">
+            <div style="font-size:2rem;margin-bottom:12px;">📦</div>
+            <div>ยังไม่มีแบรนด์ในระบบ</div>
+            <div class="loading-text" style="margin-top:8px;font-size:0.72rem;">
+              อัปโหลด catalog PDF ไปที่ R2 bucket ที่ prefix<br>
+              <code>catalogs/&lt;brand_id&gt;/</code> เพื่อเพิ่มแบรนด์
+            </div>
+          </div>`;
+        return;
+      }
+      const target = state.pickerFor === 'from' ? state.fromBrand : state.toBrand;
+      el.brandList.innerHTML = state.brands.map(b => {
+        const isSelected = target && target.id === b.id;
+        const catalogs = (b.catalogs || []).length;
+        const initials = (b.name.match(/[A-Z]/g) || []).slice(0,3).join('') || b.name.slice(0,2).toUpperCase();
+        return `
+          <button class="brand-item ${isSelected ? 'selected' : ''}" data-brand-id="${escapeAttr(b.id)}" type="button">
+            <div class="brand-logo">${escapeHtml(initials)}</div>
+            <div class="brand-info">
+              <div class="name">${escapeHtml(b.name)}</div>
+              <div class="meta">${catalogs} catalog${catalogs === 1 ? '' : 's'}</div>
+            </div>
+          </button>`;
+      }).join('');
+
+      el.brandList.querySelectorAll('.brand-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const id = item.dataset.brandId;
+          const brand = state.brands.find(b => b.id === id);
+          if (!brand) return;
+          if (state.pickerFor === 'from') state.fromBrand = { id: brand.id, name: brand.name };
+          else state.toBrand = { id: brand.id, name: brand.name };
+          updateBrandDisplay();
+          closeSheet();
+        });
+      });
+    }
+
+    el.btnFrom.addEventListener('click', () => openBrandPicker('from'));
+    el.btnTo.addEventListener('click', () => openBrandPicker('to'));
+
+    // ============== Image capture ==============
+    el.capture.addEventListener('click', () => {
+      if (el.capture.disabled) return;
+      el.cameraIn.click();
+    });
+    el.upload.addEventListener('click', () => el.uploadIn.click());
+
+    el.cameraIn.addEventListener('change', (e) => handleFile(e.target.files?.[0]));
+    el.uploadIn.addEventListener('change', (e) => handleFile(e.target.files?.[0]));
+
+    function handleFile(file) {
+      if (!file) return;
+      const maxSize = 10 * 1024 * 1024;
+      if (file.size > maxSize) {
+        alert('รูปใหญ่เกิน 10MB');
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        alert('ไฟล์ไม่ใช่รูปภาพ');
+        return;
+      }
+      // Flash effect
+      el.flash.classList.remove('active');
+      void el.flash.offsetWidth;
+      el.flash.classList.add('active');
+
+      // Show preview
+      const url = URL.createObjectURL(file);
+      el.preview.classList.remove('empty');
+      el.preview.innerHTML = `<img src="${url}" alt="Nameplate preview">`;
+
+      // Start scan
+      scanNameplate(file);
+    }
+
+    // ============== Scan API ==============
+    async function scanNameplate(file) {
+      showResultLoading();
+
+      const fd = new FormData();
+      fd.append('image', file);
+      fd.append('from_brand', state.fromBrand?.id || '');
+      fd.append('to_brand',   state.toBrand?.id   || 'sas');
+
+      try {
+        const res = await fetch('/matcher/api/scan', {
+          method: 'POST',
+          body: fd,
+        });
+
+        let data;
+        try { data = await res.json(); }
+        catch { throw new Error('เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง'); }
+
+        if (res.status === 429) {
+          renderError('คุณสแกนบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่');
+          return;
+        }
+        if (res.status === 404) {
+          renderError(`ยังไม่มีฐานข้อมูลของแบรนด์ ${state.toBrand?.name}<br>
+                       กรุณา extract catalog PDF ของแบรนด์นี้เข้าระบบก่อน`);
+          return;
+        }
+        if (res.status === 422) {
+          renderError(`อ่านเนมเพลทไม่สำเร็จ<br><small>${escapeHtml(data.detail || '')}</small>`);
+          return;
+        }
+        if (!data.ok) {
+          renderError(escapeHtml(data.error || 'เกิดข้อผิดพลาด'));
+          return;
+        }
+
+        renderResult(data);
+      } catch (err) {
+        console.error(err);
+        renderError('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ต');
+      }
+    }
+
+    // ============== Render result ==============
+    function showResultLoading() {
+      el.resultBody.innerHTML = `
+        <div class="loading">
+          <div class="spinner"></div>
+          <div class="loading-text">กำลังอ่านเนมเพลท...</div>
+        </div>`;
+      openSheet(el.resultSheet);
+    }
+
+    function renderError(htmlMsg) {
+      el.resultBody.innerHTML = `<div class="error-box">${htmlMsg}</div>`;
+    }
+
+    function renderResult(data) {
+      const spec = data.spec || {};
+      const matches = data.matches || [];
+
+      const specHtml = `
+        <div class="section-title">Extracted specs</div>
+        <div class="spec-grid">
+          ${specItem('MODEL', spec.full_model_code)}
+          ${specItem('POWER', spec.power_kw ? spec.power_kw + ' kW' : null)}
+          ${specItem('RATIO', spec.ratio)}
+          ${specItem('TORQUE', spec.torque_nm ? spec.torque_nm + ' Nm' : null)}
+          ${specItem('OUTPUT RPM', spec.output_rpm)}
+          ${specItem('FRAME', spec.frame_size ? spec.frame_size + (spec.poles ? ' / ' + spec.poles + 'P' : '') : null)}
+          ${specItem('MOUNTING', spec.mounting_position)}
+          ${specItem('IP / FREQ', [spec.ip_rating, spec.frequency_hz ? spec.frequency_hz + 'Hz' : null].filter(Boolean).join(' · ') || null)}
+        </div>`;
+
+      let matchesHtml = '';
+      if (!matches.length) {
+        matchesHtml = `
+          <div class="no-match">
+            <div class="no-match-icon">🤔</div>
+            <div><strong>ไม่พบรุ่นที่เข้ากัน</strong></div>
+            <div class="loading-text" style="margin-top:6px;">
+              ลองตรวจสอบค่า ratio / power อีกครั้ง<br>
+              หรืออาจอยู่นอกช่วงที่ SAS ผลิต
+            </div>
+          </div>`;
+      } else {
+        matchesHtml = `
+          <div class="section-title" style="margin-top:8px;">
+            Top ${matches.length} matches in ${escapeHtml(state.toBrand?.name || 'SAS')}
+          </div>
+          ${matches.map((m, i) => matchCard(m, i === 0)).join('')}`;
+      }
+
+      el.resultBody.innerHTML = specHtml + matchesHtml;
+    }
+
+    function specItem(label, value) {
+      return `
+        <div class="item">
+          <div class="k">${escapeHtml(label)}</div>
+          <div class="v">${value == null || value === '' ? '—' : escapeHtml(String(value))}</div>
+        </div>`;
+    }
+
+    function matchCard(m, isTop) {
+      const score = m.total_score;
+      const scoreClass = score >= 90 ? 'high' : score >= 75 ? 'med' : 'low';
+      const warnings = (m.warnings || []).filter(Boolean);
+      return `
+        <div class="match-card ${isTop ? 'top' : ''}">
+          <div class="match-head">
+            <div class="model">${escapeHtml(m.sas_model || '')}</div>
+            <div class="score-badge ${scoreClass}">${score}/100</div>
+          </div>
+          <div class="match-body">
+            <div class="row"><div class="k">Power</div><div class="v">${m.power_kw ?? '—'} kW</div></div>
+            <div class="row"><div class="k">Ratio</div><div class="v">${m.ratio ?? '—'} <small style="color:var(--ink-soft)">(${m.ratio_match_pct}%)</small></div></div>
+            <div class="row"><div class="k">Output</div><div class="v">${m.output_speed_rpm ?? '—'} rpm</div></div>
+            <div class="row"><div class="k">Torque</div><div class="v">${m.output_torque_nm ?? '—'} Nm</div></div>
+          </div>
+          ${m.variants && m.variants.length ? `
+            <div class="variants">
+              ${m.variants.map(v => `<span class="chip">${escapeHtml(v)}</span>`).join('')}
+            </div>` : ''}
+          ${warnings.map(w => `<div class="match-warning">⚠ ${escapeHtml(w)}</div>`).join('')}
+        </div>`;
+    }
+
+    // ============== Utils ==============
+    function escapeHtml(s) {
+      return String(s ?? '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+    }
+    function escapeAttr(s) { return escapeHtml(s); }
+
+    // ============== Init ==============
+    loadBrands();
+    updateBrandDisplay();
+  })();
+  </script>
+</body>
+</html>

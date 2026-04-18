@@ -270,6 +270,23 @@ def r2_get_mtime(key):
     resp = r2.head_object(Bucket=R2_BUCKET_NAME, Key=key)
     return str(resp.get("LastModified", ""))
 
+
+# ============================================================
+# 🎯 Gear Motor Matcher Integration
+# ============================================================
+# Import และเปิดใช้งาน Matcher blueprint
+# ใช้ R2 client เดิม + security middleware เดิมของระบบ
+# ต้องตั้ง env var: ANTHROPIC_API_KEY
+from utils.gear_matcher import init_matcher, matcher_bp
+
+init_matcher(
+    r2_client=r2,
+    bucket=R2_BUCKET_NAME,
+    public_url=R2_PUBLIC_URL,
+    anthropic_key=os.environ.get("ANTHROPIC_API_KEY", ""),
+)
+app.register_blueprint(matcher_bp, url_prefix='/matcher')
+
 # =========================
 # Stock on shelf (FAST + SIMPLE)
 # =========================
