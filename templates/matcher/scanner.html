@@ -486,6 +486,233 @@
       letter-spacing: 0.05em;
     }
 
+    /* ============== SAS Composer Card ============== */
+    .composer-card {
+      background: linear-gradient(135deg, rgba(22,156,74,0.08) 0%, rgba(47,121,216,0.05) 100%);
+      border: 2px solid var(--accent);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 18px;
+      position: relative;
+    }
+    .composer-card::before {
+      content: "SAS MODEL CODE";
+      position: absolute;
+      top: -10px; left: 14px;
+      background: var(--accent);
+      color: white;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.64rem;
+      letter-spacing: 0.18em;
+      padding: 3px 10px;
+      border-radius: 4px;
+    }
+    .composer-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--ink);
+      padding: 12px 14px;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin: 8px 0 12px;
+      word-break: break-all;
+      position: relative;
+      padding-right: 48px;
+      min-height: 46px;
+      display: flex;
+      align-items: center;
+      letter-spacing: 0.02em;
+    }
+    .copy-btn {
+      position: absolute;
+      top: 50%;
+      right: 8px;
+      transform: translateY(-50%);
+      background: var(--ink);
+      color: var(--paper);
+      border: none;
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 0.72rem;
+      font-family: inherit;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: background 0.15s;
+    }
+    .copy-btn:hover { background: var(--accent); }
+    .copy-btn.copied { background: var(--accent); }
+
+    .composer-options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 12px;
+    }
+    .composer-options .opt {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .composer-options .opt label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.15em;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+    }
+    .composer-options .opt select {
+      padding: 8px 10px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.88rem;
+      font-weight: 700;
+      background: white;
+      cursor: pointer;
+      color: var(--ink);
+      transition: border-color 0.15s;
+    }
+    .composer-options .opt select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .composer-options .opt .hint {
+      font-size: 0.68rem;
+      color: var(--ink-soft);
+      margin-top: 2px;
+    }
+
+    /* ============== Competitor Features Card ============== */
+    .features-card {
+      background: white;
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 18px;
+      position: relative;
+    }
+    .features-card.has-critical {
+      border-color: var(--warn);
+      background: linear-gradient(180deg, rgba(217,119,6,0.04), transparent);
+    }
+    .features-card::before {
+      content: attr(data-label);
+      position: absolute;
+      top: -9px; left: 14px;
+      background: var(--ink);
+      color: white;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.15em;
+      padding: 3px 9px;
+      border-radius: 4px;
+    }
+    .features-card.has-critical::before {
+      background: var(--warn);
+    }
+    .features-decoded-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--ink);
+      padding: 8px 10px;
+      background: var(--paper);
+      border-radius: 8px;
+      margin-bottom: 12px;
+      word-break: break-all;
+    }
+    .features-decoded-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 0.78rem;
+      color: var(--ink-soft);
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px dashed var(--border);
+    }
+    .features-decoded-meta span strong {
+      color: var(--ink);
+      font-weight: 700;
+    }
+    .features-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .feature-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--paper);
+      border-radius: 10px;
+      border-left: 3px solid var(--ink-soft);
+    }
+    .feature-row.critical {
+      border-left-color: var(--warn);
+      background: rgba(217,119,6,0.06);
+    }
+    .feature-row.atex {
+      border-left-color: var(--danger);
+      background: rgba(220,38,38,0.06);
+    }
+    .feature-row .icon {
+      font-size: 1.15rem;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .feature-row .body {
+      flex: 1;
+      min-width: 0;
+    }
+    .feature-row .body .title {
+      font-size: 0.72rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--ink-soft);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .feature-row .body .detail {
+      font-size: 0.88rem;
+      font-weight: 700;
+      margin-top: 2px;
+      line-height: 1.35;
+    }
+    .feature-row .body .code-chip {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 1px 6px;
+      background: var(--ink);
+      color: var(--paper);
+      border-radius: 3px;
+      margin-right: 6px;
+      letter-spacing: 0.04em;
+    }
+    .features-empty {
+      padding: 12px;
+      color: var(--ink-soft);
+      font-size: 0.85rem;
+      text-align: center;
+      font-style: italic;
+    }
+    .features-alert {
+      margin-top: 14px;
+      padding: 10px 12px;
+      background: rgba(47,121,216,0.08);
+      border-left: 3px solid var(--blue);
+      border-radius: 4px;
+      font-size: 0.82rem;
+      color: var(--ink);
+      line-height: 1.45;
+    }
+    .features-alert strong { color: var(--blue); }
+
     .error-box {
       padding: 16px;
       background: rgba(220,38,38,0.08);
@@ -616,6 +843,7 @@
       fromBrand: null,     // {id, name}
       toBrand: { id: 'sas', name: 'SAS (Synergy Asia Solution)' },
       pickerFor: null,     // 'from' or 'to'
+      currentCompose: null,  // last composed model spec, updated on dropdown change
     };
 
     // ============== DOM ==============
@@ -837,6 +1065,8 @@
     function renderResult(data) {
       const spec = data.spec || {};
       const matches = data.matches || [];
+      const composed = data.composed_sas_model || null;
+      const decoded = data.decoded_competitor || null;
 
       const specHtml = `
         <div class="section-title">Extracted specs</div>
@@ -851,6 +1081,26 @@
           ${specItem('IP / FREQ', [spec.ip_rating, spec.frequency_hz ? spec.frequency_hz + 'Hz' : null].filter(Boolean).join(' · ') || null)}
         </div>`;
 
+      // ---- Competitor features decoded (SEW suffix codes etc.) ----
+      const featuresHtml = decoded ? renderFeaturesCard(decoded, state.fromBrand?.name || '') : '';
+
+      // ---- SAS Composer Card ----
+      let composerHtml = '';
+      if (composed) {
+        state.currentCompose = {
+          gear: composed.parts.gear,
+          motor: composed.parts.motor,
+          power_kw: spec.power_kw,
+          poles: spec.poles,
+          ratio: spec.ratio,
+          mounting: composed.parts.mounting,
+          terminal_box: composed.parts.terminal_box,
+          cable_outlet: composed.parts.cable_outlet,
+        };
+        composerHtml = renderComposerCard(composed);
+      }
+
+      // ---- Matches ----
       let matchesHtml = '';
       if (!matches.length) {
         matchesHtml = `
@@ -865,12 +1115,200 @@
       } else {
         matchesHtml = `
           <div class="section-title" style="margin-top:8px;">
-            Top ${matches.length} matches in ${escapeHtml(state.toBrand?.name || 'SAS')}
+            All matches in ${escapeHtml(state.toBrand?.name || 'SAS')}
           </div>
           ${matches.map((m, i) => matchCard(m, i === 0)).join('')}`;
       }
 
-      el.resultBody.innerHTML = specHtml + matchesHtml;
+      // Order: Specs → Features (what customer has) → Composer (what SAS offers) → Matches
+      el.resultBody.innerHTML = specHtml + featuresHtml + composerHtml + matchesHtml;
+
+      if (composed) bindComposerDropdowns();
+    }
+
+    function renderFeaturesCard(decoded, brandName) {
+      const d = decoded.decoded || {};
+      const features = decoded.features_display || [];
+      const summary = d.summary || {};
+      const gear = d.gear_unit || {};
+      const motor = d.motor || {};
+
+      // Decide criticality: ATEX / special bearings / mechatronics = warn label
+      const hasCritical =
+        summary.is_ex_proof ||
+        summary.has_mechatronics ||
+        summary.has_special_bearing ||
+        summary.has_backstop;
+
+      // Build meta row: gear type + motor efficiency + poles
+      const metaParts = [];
+      if (gear.label) metaParts.push(`<span><strong>${escapeHtml(gear.label)}</strong></span>`);
+      if (motor.series_label) metaParts.push(`<span>Motor: <strong>${escapeHtml(motor.series || '')}</strong> ${escapeHtml(motor.series_label || '')}</span>`);
+      if (motor.efficiency) metaParts.push(`<span>Eff: <strong>${escapeHtml(motor.efficiency)}</strong></span>`);
+
+      const featuresHtml = features.length ? `
+        <div class="features-list">
+          ${features.map(f => renderFeatureRow(f)).join('')}
+        </div>
+      ` : `
+        <div class="features-empty">
+          — ไม่พบ suffix codes ในรหัสรุ่น —<br>
+          อาจเป็นมอเตอร์รุ่นมาตรฐาน ไม่มี option เพิ่มเติม
+        </div>
+      `;
+
+      // Alert if any critical features (helps sale prepare quote)
+      let alertHtml = '';
+      const alerts = [];
+      if (summary.is_ex_proof)
+        alerts.push('มอเตอร์ <strong>Ex-proof (ATEX)</strong> — ต้องเช็ค zone/category กับลูกค้า');
+      if (summary.has_mechatronics)
+        alerts.push('มี <strong>MOVIMOT/MOVI-SWITCH</strong> — อาจต้องเสนอ inverter แยก');
+      if (summary.has_encoder)
+        alerts.push('มี <strong>Encoder</strong> — ต้องเช็ค interface (sin/cos / HTL / absolute)');
+      if (summary.has_special_bearing)
+        alerts.push('<strong>Bearing พิเศษ</strong> — เฉพาะ DR.250/280/315 frame ใหญ่');
+      if (summary.has_backstop)
+        alerts.push('มี <strong>Backstop</strong> — ระบุทิศทางหมุนที่ block กับโรงงาน');
+
+      if (alerts.length) {
+        alertHtml = `
+          <div class="features-alert">
+            <strong>💡 ข้อควรพิจารณาสำหรับ Sale:</strong><br>
+            ${alerts.map(a => '• ' + a).join('<br>')}
+          </div>`;
+      }
+
+      const label = brandName ? `${brandName.toUpperCase()} FEATURES` : 'COMPETITOR FEATURES';
+
+      return `
+        <div class="features-card ${hasCritical ? 'has-critical' : ''}" data-label="${escapeAttr(label)}">
+          ${d.original ? `<div class="features-decoded-code">${escapeHtml(d.original)}</div>` : ''}
+          ${metaParts.length ? `<div class="features-decoded-meta">${metaParts.join('')}</div>` : ''}
+          ${featuresHtml}
+          ${alertHtml}
+          ${(d.unknown && d.unknown.length) ? `
+            <div class="features-alert" style="background:rgba(217,119,6,0.08);border-left-color:var(--warn);margin-top:10px;">
+              <strong>⚠ Suffix ที่ยังไม่รู้จัก:</strong> ${d.unknown.map(escapeHtml).join(', ')}
+            </div>` : ''}
+        </div>`;
+    }
+
+    function renderFeatureRow(f) {
+      const isCritical = f.category === 'atex';
+      const isWarning = ['encoder', 'mechatronics', 'bearing'].includes(f.category);
+      const cls = isCritical ? 'atex' : (isWarning ? 'critical' : '');
+      return `
+        <div class="feature-row ${cls}">
+          <div class="icon">${f.icon || '•'}</div>
+          <div class="body">
+            <div class="title">${escapeHtml(f.title)}</div>
+            <div class="detail">
+              <span class="code-chip">${escapeHtml(f.code)}</span>
+              ${escapeHtml(f.detail)}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function renderComposerCard(composed) {
+      const parts = composed.parts || {};
+      const opts = composed.options || {};
+      const help = composed.help || {};
+
+      const buildSelect = (id, current, options, hint) => {
+        const optsHtml = options.map(o =>
+          `<option value="${escapeAttr(o)}" ${o === current ? 'selected' : ''}>${escapeHtml(o)}</option>`
+        ).join('');
+        return `
+          <div class="opt">
+            <label for="${id}">${escapeHtml(labelFor(id))}</label>
+            <select id="${id}" data-field="${escapeAttr(fieldFor(id))}">${optsHtml}</select>
+            ${hint ? `<div class="hint">${escapeHtml(hint)}</div>` : ''}
+          </div>`;
+      };
+
+      return `
+        <div class="composer-card">
+          <div class="composer-code" id="composerCode">
+            <span id="composerCodeText">${escapeHtml(composed.full_code)}</span>
+            <button class="copy-btn" id="btnCopy" type="button">Copy</button>
+          </div>
+          <div class="composer-options">
+            ${buildSelect('opt-motor',   parts.motor,        opts.motor_codes,  help.motor)}
+            ${buildSelect('opt-mount',   parts.mounting,     opts.mounting,     'Mounting position')}
+            ${buildSelect('opt-tb',      parts.terminal_box, opts.terminal_box, help.terminal_box)}
+            ${buildSelect('opt-co',      parts.cable_outlet, opts.cable_outlet, help.cable_outlet)}
+          </div>
+        </div>`;
+    }
+
+    function labelFor(id) {
+      return {
+        'opt-motor': 'MOTOR',
+        'opt-mount': 'MOUNTING (IM)',
+        'opt-tb':    'TERMINAL BOX',
+        'opt-co':    'CABLE OUTLET',
+      }[id] || id;
+    }
+    function fieldFor(id) {
+      return {
+        'opt-motor': 'motor',
+        'opt-mount': 'mounting',
+        'opt-tb':    'terminal_box',
+        'opt-co':    'cable_outlet',
+      }[id] || id;
+    }
+
+    function bindComposerDropdowns() {
+      document.querySelectorAll('.composer-options select').forEach(sel => {
+        sel.addEventListener('change', onComposerChange);
+      });
+      const btnCopy = document.getElementById('btnCopy');
+      btnCopy?.addEventListener('click', copyComposedCode);
+    }
+
+    async function onComposerChange(e) {
+      const field = e.target.dataset.field;
+      const value = e.target.value;
+      state.currentCompose[field] = value;
+
+      try {
+        const res = await fetch('/matcher/api/compose', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(state.currentCompose),
+        });
+        const data = await res.json();
+        if (data.ok && data.composed) {
+          const txt = document.getElementById('composerCodeText');
+          if (txt) txt.textContent = data.composed.full_code;
+        }
+      } catch (err) {
+        console.error('Recompose failed:', err);
+      }
+    }
+
+    function copyComposedCode() {
+      const txt = document.getElementById('composerCodeText')?.textContent || '';
+      if (!txt) return;
+      navigator.clipboard.writeText(txt).then(() => {
+        const btn = document.getElementById('btnCopy');
+        if (!btn) return;
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'Copy';
+          btn.classList.remove('copied');
+        }, 1800);
+      }).catch(() => {
+        // Fallback: select the text
+        const range = document.createRange();
+        range.selectNodeContents(document.getElementById('composerCodeText'));
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      });
     }
 
     function specItem(label, value) {

@@ -505,9 +505,167 @@ def read_nameplate(image_bytes: bytes, mime_type: str) -> NameplateSpec:
 # Matching engine
 # ============================================================
 
+# ============================================================
+# SAS Model Composer — สร้าง SAS model code จาก spec เนมเพลท
+# ============================================================
+# รูปแบบ: {gear_code}-{motor_code}-{kw}-{poles}P-{ratio}-{IM}-{terminal_box}-{cable_outlet}
+# ตัวอย่าง: R107-YEJ-5.5-4P-115.63-M6-270-X
+
+# Mounting position อ่านจากเนมเพลท SEW และ map เป็น SAS M1-M6
+# SEW ใช้ B3/B5/V1/V3/M1-M6, SAS ใช้ M1-M6 อย่างเดียว
+_SEW_MOUNTING_MAP = {
+    "B3": "M1", "B5": "M1", "B6": "M2", "B7": "M3", "B8": "M4",
+    "V1": "M5", "V3": "M6",
+    "M1": "M1", "M2": "M2", "M3": "M3", "M4": "M4", "M5": "M5", "M6": "M6",
+    "M1A": "M1", "M1B": "M1",
+}
+
+VALID_TERMINAL_BOX_ANGLES = ["0", "90", "180", "270"]
+VALID_CABLE_OUTLETS = ["X", "1", "2", "3"]
+
+
+def detect_motor_code(spec) -> str:
+    """
+    Decide motor code based on nameplate.
+
+    - Has brake (detected via SEW decoder, or BMG/Brake V visible) → YEJ
+    - No brake → YE3 (SAS sells IE3+ motors only)
+    """
+    # Try SEW decoder first (most accurate)
+    if spec.full_model_code:
+        try:
+            from utils.sew_decoder import decode_sew_model
+            decoded = decode_sew_model(spec.full_model_code)
+            if decoded.get("summary", {}).get("has_brake"):
+                return "YEJ"
+        except Exception:
+            pass
+
+    # Fallback: check full model code for BMG/BE (SEW brake designations)
+    model_str = (spec.full_model_code or "").upper()
+    tokens = re.split(r"[/\s-]", model_str)
+    for t in tokens:
+        if t.startswith("BMG") or t.startswith("BM") or t.startswith("BE"):
+            return "YEJ"
+
+    # Fallback: check raw text for "Brake V" keyword
+    raw_str = json.dumps(spec.raw or {}, ensure_ascii=False).upper()
+    if "BRAKE V" in raw_str or '"BRAKE"' in raw_str or "BRAKE:" in raw_str:
+        return "YEJ"
+
+    # Default: IE3+ motor without brake
+    return "YE3"
+
+
+def map_mounting_to_sas(im_value: Optional[str]) -> str:
+    """Map SEW/generic mounting position to SAS M1-M6. Default M1."""
+    if not im_value:
+        return "M1"
+    # Normalize: strip spaces, uppercase
+    v = str(im_value).strip().upper().replace(" ", "")
+    # Try direct map
+    if v in _SEW_MOUNTING_MAP:
+        return _SEW_MOUNTING_MAP[v]
+    # Try substring (e.g. "IM M6" → "M6")
+    for key, val in _SEW_MOUNTING_MAP.items():
+        if key in v:
+            return val
+    return "M1"
+
+
+def _format_number(n) -> str:
+    """Format number: remove trailing .0, keep decimals as shown."""
+    if n is None:
+        return "?"
+    if isinstance(n, float):
+        if n == int(n):
+            return str(int(n))
+        return f"{n:g}"
+    return str(n)
+
+
+def compose_sas_model(spec, gear_size: str,
+                      terminal_box: str = "270",
+                      cable_outlet: str = "X") -> dict:
+    """
+    Compose SAS model code from nameplate spec + matched gear_size.
+
+    Returns dict with:
+      - full_code:  "R107-YEJ-5.5-4P-115.63-M6-270-X"
+      - parts:      dict of each component (for dropdown display)
+      - options:    valid values for dropdowns (terminal_box, cable_outlet)
+    """
+    motor_code = detect_motor_code(spec)
+    kw_str = _format_number(spec.power_kw) if spec.power_kw else "?"
+    poles_str = f"{spec.poles}P" if spec.poles else "4P"  # default 4P
+    ratio_str = _format_number(spec.ratio) if spec.ratio else "?"
+    mounting = map_mounting_to_sas(spec.mounting_position)
+
+    tb = str(terminal_box) if str(terminal_box) in VALID_TERMINAL_BOX_ANGLES else "270"
+    co = str(cable_outlet) if str(cable_outlet) in VALID_CABLE_OUTLETS else "X"
+
+    full = f"{gear_size}-{motor_code}-{kw_str}-{poles_str}-{ratio_str}-{mounting}-{tb}-{co}"
+
+    return {
+        "full_code": full,
+        "parts": {
+            "gear": gear_size,
+            "motor": motor_code,
+            "power_kw": kw_str,
+            "poles": poles_str,
+            "ratio": ratio_str,
+            "mounting": mounting,
+            "terminal_box": tb,
+            "cable_outlet": co,
+        },
+        "options": {
+            "motor_codes": ["YE3", "YEJ", "YB", "YVP", "YD"],
+            "mounting": ["M1", "M2", "M3", "M4", "M5", "M6"],
+            "terminal_box": VALID_TERMINAL_BOX_ANGLES,
+            "cable_outlet": VALID_CABLE_OUTLETS,
+        },
+        "help": {
+            "motor": "YE3=standard IE3, YEJ=มีเบรค, YB=flameproof, YVP=variable frequency, YD=multi-speed",
+            "terminal_box": "มุมกล่องไฟ (องศา)",
+            "cable_outlet": "ทิศทางสายไฟออก (X=default)",
+        },
+    }
+
+
+def _score_candidate(r: float, t: Optional[float], kw: Optional[float],
+                     target_ratio: float, target_torque: Optional[float],
+                     target_kw: Optional[float]) -> tuple[float, float, list[str]]:
+    """Compute (total_score, ratio_match_pct, warnings) for a single candidate."""
+    ratio_diff_pct = abs(r - target_ratio) / target_ratio * 100
+    ratio_score = max(0.0, 100 - ratio_diff_pct * 3)
+
+    warnings: list[str] = []
+    torque_score = 100.0
+    if target_torque and t:
+        if t < target_torque:
+            torque_score = 40.0
+            warnings.append(f"Gearbox rating {t} Nm < required {target_torque} Nm")
+        elif t > target_torque * 3:
+            torque_score = 80.0
+            warnings.append("Gearbox significantly oversized")
+
+    power_score = 100.0
+    if target_kw and kw:
+        power_score = max(0.0, 100 - abs(kw - target_kw) / max(target_kw, 0.01) * 200)
+
+    total = ratio_score * 0.5 + torque_score * 0.3 + power_score * 0.2
+    return total, round(100 - ratio_diff_pct, 1), warnings
+
+
 def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) -> list[MatchResult]:
     """
     Rank models in `database` against the input `spec`.
+
+    Searches 3 sources in order of preference:
+      1. selection_tables (best — has power_kw + model explicitly)
+      2. ratio_torque_tables (fallback — has gear_size, infer model)
+      3. model_index.applications (last resort — pre-built index)
+
     Returns top_n MatchResult objects sorted by score desc.
     """
     if not spec.ratio or not database:
@@ -519,13 +677,14 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
     target_type = (spec.gear_type_hint or "").upper()[:1]
 
     candidates: list[MatchResult] = []
+
+    # ========== Source 1: selection_tables (best source) ==========
     for st in database.get("selection_tables", []):
         for table in st.get("tables", []):
             kw = table.get("power_kw")
-            # Power filter (skip if too far)
             if target_kw and kw:
                 diff = abs(kw - target_kw)
-                if diff > 0.3 and (target_kw > 0 and diff / target_kw > 0.25):
+                if diff > 0.5 and (target_kw > 0 and diff / target_kw > 0.3):
                     continue
 
             for row in table.get("rows", []):
@@ -534,33 +693,15 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
                 model = row.get("full_model") or row.get("model_code")
                 if not r or not model:
                     continue
-
-                # Gear type filter
                 if target_type and not model.upper().startswith(target_type):
                     continue
 
                 ratio_diff_pct = abs(r - target_ratio) / target_ratio * 100
-                if ratio_diff_pct > 15:
+                if ratio_diff_pct > 20:
                     continue
 
-                ratio_score = max(0.0, 100 - ratio_diff_pct * 3)
-
-                warnings: list[str] = []
-                torque_score = 100.0
-                if target_torque and t:
-                    if t < target_torque:
-                        torque_score = 40.0
-                        warnings.append(
-                            f"Gearbox rating {t} Nm < required {target_torque} Nm")
-                    elif t > target_torque * 3:
-                        torque_score = 80.0
-                        warnings.append("Gearbox significantly oversized")
-
-                power_score = 100.0
-                if target_kw and kw:
-                    power_score = max(0.0, 100 - abs(kw - target_kw) / max(target_kw, 0.01) * 200)
-
-                total = ratio_score * 0.5 + torque_score * 0.3 + power_score * 0.2
+                total, ratio_pct, warnings = _score_candidate(
+                    r, t, kw, target_ratio, target_torque, target_kw)
 
                 candidates.append(MatchResult(
                     sas_model=model,
@@ -570,7 +711,87 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
                     output_torque_nm=t,
                     variants=row.get("variants", []),
                     service_factor=row.get("service_factor"),
-                    ratio_match_pct=round(100 - ratio_diff_pct, 1),
+                    ratio_match_pct=ratio_pct,
+                    total_score=round(total, 1),
+                    warnings=warnings,
+                ))
+
+    # ========== Source 2: ratio_torque_tables (fallback) ==========
+    # Used when catalog doesn't have "selection by kW" tables.
+    # Row gives (gear_size, ratio, output_rpm, torque, radial_load).
+    # We infer model from gear_size + a reasonable motor frame for the power.
+    if not candidates:
+        for rt in database.get("ratio_torque_tables", []):
+            input_speed = rt.get("input_speed_rpm")
+            for table in rt.get("tables", []):
+                gear_size = table.get("gear_size") or ""
+                if not gear_size:
+                    continue
+                if target_type and not gear_size.upper().startswith(target_type):
+                    continue
+
+                for row in table.get("rows", []):
+                    r = row.get("ratio")
+                    t = row.get("max_torque_nm")
+                    out_rpm = row.get("output_speed_rpm")
+                    if not r:
+                        continue
+
+                    ratio_diff_pct = abs(r - target_ratio) / target_ratio * 100
+                    if ratio_diff_pct > 20:
+                        continue
+
+                    # Check if this gear can handle the required torque
+                    if target_torque and t and t < target_torque * 0.9:
+                        # Gear too small — skip
+                        continue
+
+                    total, ratio_pct, warnings = _score_candidate(
+                        r, t, None, target_ratio, target_torque, None)
+                    # Penalize slightly — we don't have confirmed kW match here
+                    total *= 0.92
+
+                    candidates.append(MatchResult(
+                        sas_model=gear_size,  # e.g. "R107"
+                        power_kw=None,
+                        ratio=r,
+                        output_speed_rpm=out_rpm,
+                        output_torque_nm=t,
+                        variants=[],
+                        service_factor=None,
+                        ratio_match_pct=ratio_pct,
+                        total_score=round(total, 1),
+                        warnings=warnings,
+                    ))
+
+    # ========== Source 3: model_index.applications (last resort) ==========
+    if not candidates:
+        for model, info in database.get("model_index", {}).items():
+            if target_type and not model.upper().startswith(target_type):
+                continue
+            for app in info.get("applications", []):
+                r = app.get("ratio")
+                t = app.get("output_torque_nm")
+                kw = app.get("power_kw")
+                if not r:
+                    continue
+
+                ratio_diff_pct = abs(r - target_ratio) / target_ratio * 100
+                if ratio_diff_pct > 20:
+                    continue
+
+                total, ratio_pct, warnings = _score_candidate(
+                    r, t, kw, target_ratio, target_torque, target_kw)
+
+                candidates.append(MatchResult(
+                    sas_model=model,
+                    power_kw=kw,
+                    ratio=r,
+                    output_speed_rpm=app.get("output_speed_rpm"),
+                    output_torque_nm=t,
+                    variants=app.get("variants", []),
+                    service_factor=None,
+                    ratio_match_pct=ratio_pct,
                     total_score=round(total, 1),
                     warnings=warnings,
                 ))
@@ -578,7 +799,7 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
     # Deduplicate by (model, ratio) keeping highest score
     seen: dict[tuple, MatchResult] = {}
     for c in sorted(candidates, key=lambda x: -x.total_score):
-        key = (c.sas_model, c.ratio)
+        key = (c.sas_model, round(c.ratio or 0, 2))
         if key not in seen:
             seen[key] = c
     return list(seen.values())[:top_n]
@@ -674,6 +895,62 @@ def api_brands_refresh():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@matcher_bp.route("/api/compose", methods=["POST"])
+def api_compose():
+    """
+    Recompose SAS model when Sale changes dropdown options (terminal box / cable outlet / IM / motor code).
+    No image upload — just takes current spec + new choices.
+    
+    JSON body:
+      {
+        "gear": "R107",
+        "motor": "YEJ",           (optional)
+        "power_kw": 5.5,
+        "poles": 4,
+        "ratio": 115.63,
+        "mounting": "M6",
+        "terminal_box": "270",    (optional, default 270)
+        "cable_outlet": "X"       (optional, default X)
+      }
+    """
+    data = request.get_json(silent=True) or {}
+
+    gear = (data.get("gear") or "").strip()
+    if not gear or not re.fullmatch(r"[A-Za-z0-9]{1,10}", gear):
+        return jsonify({"ok": False, "error": "Invalid gear code"}), 400
+
+    motor = data.get("motor")
+    if motor and not re.fullmatch(r"[A-Z]{1,4}[0-9]?", str(motor)):
+        return jsonify({"ok": False, "error": "Invalid motor code"}), 400
+
+    # Build minimal spec-like object
+    class _S:
+        pass
+    s = _S()
+    s.full_model_code = None
+    s.raw = {}
+    s.power_kw = data.get("power_kw")
+    s.poles = data.get("poles")
+    s.ratio = data.get("ratio")
+    s.mounting_position = data.get("mounting")
+
+    tb = str(data.get("terminal_box") or "270")
+    co = str(data.get("cable_outlet") or "X")
+
+    composed = compose_sas_model(s, gear, terminal_box=tb, cable_outlet=co)
+
+    # If motor override provided, replace it
+    if motor:
+        composed["parts"]["motor"] = motor
+        parts = composed["parts"]
+        composed["full_code"] = (
+            f"{parts['gear']}-{parts['motor']}-{parts['power_kw']}-{parts['poles']}-"
+            f"{parts['ratio']}-{parts['mounting']}-{parts['terminal_box']}-{parts['cable_outlet']}"
+        )
+
+    return jsonify({"ok": True, "composed": composed})
+
+
 @matcher_bp.route("/api/scan", methods=["POST"])
 def api_scan():
     """
@@ -751,6 +1028,30 @@ def api_scan():
 
     top_score = matches[0].total_score if matches else 0.0
 
+    # Step 3.5: Compose SAS model code from top match (ถ้ามี และ target เป็น SAS)
+    composed = None
+    if to_brand == "sas" and matches:
+        top_gear = matches[0].sas_model
+        # ดึงเฉพาะส่วน gear code (เช่น "R107" จาก "R107 D132S4")
+        gear_code = top_gear.split()[0] if top_gear else ""
+        if gear_code:
+            composed = compose_sas_model(spec, gear_code)
+
+    # Step 3.6: Decode competitor model features (SEW suffix codes etc.)
+    # Sale ต้องรู้ features ที่ลูกค้าใช้งานเพื่อเสนอ SAS ให้ครบ
+    decoded_competitor = None
+    if spec.full_model_code and from_brand == "sew":
+        try:
+            from utils.sew_decoder import decode_sew_model, format_features_for_display
+            decoded = decode_sew_model(spec.full_model_code)
+            decoded_competitor = {
+                "brand": "sew",
+                "decoded": decoded,
+                "features_display": format_features_for_display(decoded),
+            }
+        except Exception as e:
+            print(f"[matcher] SEW decoder failed: {e}", flush=True)
+
     # Step 4: Archive if low confidence
     archived = False
     if top_score < LOW_CONFIDENCE_THRESHOLD:
@@ -766,6 +1067,8 @@ def api_scan():
         "spec": spec.to_dict(),
         "spec_raw": spec.raw,
         "matches": [m.to_dict() for m in matches],
+        "composed_sas_model": composed,
+        "decoded_competitor": decoded_competitor,
         "from_brand": from_brand,
         "to_brand": to_brand,
         "timing": {"read_ms": int(t_read * 1000), "match_ms": int(t_match * 1000)},
