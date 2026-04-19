@@ -1288,11 +1288,26 @@
       fd.append('from_brand', state.fromBrand?.id || '');
       fd.append('to_brand',   state.toBrand?.id   || 'sas');
 
+      // v10.1: 60-second timeout (Claude vision typically takes 5-15s,
+      // but slow mobile networks + image upload can add 10-30s)
+      const TIMEOUT_MS = 60000;
+
+      async function fetchWithTimeout(url, opts, timeoutMs) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const res = await fetch(url, { ...opts, signal: controller.signal });
+          return res;
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+
       try {
-        const res = await fetch('/matcher/api/scan', {
+        const res = await fetchWithTimeout('/matcher/api/scan', {
           method: 'POST',
           body: fd,
-        });
+        }, TIMEOUT_MS);
 
         let data;
         try { data = await res.json(); }
@@ -1311,6 +1326,11 @@
           renderError(`อ่านเนมเพลทไม่สำเร็จ<br><small>${escapeHtml(data.detail || '')}</small>`);
           return;
         }
+        if (res.status >= 500) {
+          renderError(`เซิร์ฟเวอร์ขัดข้อง (${res.status}) — ลองสแกนใหม่อีกครั้ง<br>
+                       <small>ถ้ายังไม่ได้ ลองถ่ายภาพเนมเพลทให้ชัดขึ้นและลดขนาดลง</small>`);
+          return;
+        }
         if (!data.ok) {
           renderError(escapeHtml(data.error || 'เกิดข้อผิดพลาด'));
           return;
@@ -1319,7 +1339,15 @@
         renderResult(data);
       } catch (err) {
         console.error(err);
-        renderError('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ต');
+        if (err.name === 'AbortError') {
+          renderError(`การสแกนใช้เวลานานเกินไป (>${TIMEOUT_MS/1000}s)<br>
+                       <small>ลองถ่ายภาพใหม่ให้เล็กลง (≤5 MB) หรือเช็คสัญญาณเน็ต</small>`);
+        } else if (err.message && err.message.includes('Failed to fetch')) {
+          renderError(`ไม่สามารถส่งข้อมูลไปยังเซิร์ฟเวอร์<br>
+                       <small>โปรดตรวจสอบสัญญาณเน็ต แล้วลองใหม่</small>`);
+        } else {
+          renderError('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ต<br><small>' + escapeHtml(err.message || '') + '</small>');
+        }
       }
     }
 
@@ -1509,6 +1537,9 @@
     }
 
     function renderTorqueWarning(spec, specRaw) {
+      if (!specRaw) return '';
+      const mm = specRaw._torque_mismatch;
+      const src = specRaw._torque_source;
 
       if (mm) {
         const reason = mm.reason === 'extracted_torque_equals_ratio'
