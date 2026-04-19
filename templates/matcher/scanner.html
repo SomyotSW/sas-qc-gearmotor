@@ -873,6 +873,22 @@
       color: var(--ink);
       border: 1px solid var(--border);
     }
+    .override-btn {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 8px 14px;
+      background: var(--warn);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    .override-btn:hover { transform: translateY(-1px); }
+    .override-btn:active { transform: translateY(0); }
 
     /* ============== Torque Auto-correction Warning ============== */
     .torque-warning {
@@ -1322,6 +1338,7 @@
     }
 
     function renderResult(data) {
+      state.lastScanData = data;  // v9: save for ratio override
       const spec = data.spec || {};
       const specRaw = data.spec_raw || {};
       const matches = data.matches || [];
@@ -1347,7 +1364,7 @@
               : null)}
         </div>`;
 
-      const ratioWarnHtml = renderRatioWarning(spec, specRaw);
+      const ratioWarnHtml = renderRatioWarning(spec, specRaw, composed);
       const torqueWarnHtml = renderTorqueWarning(spec, specRaw);
       const featuresHtml = decoded ? renderFeaturesCard(decoded, state.fromBrand?.name || '') : '';
       const dimHtml = dimCompare ? renderDimensionCard(dimCompare) : '';
@@ -1396,7 +1413,30 @@
       if (composed) bindComposerDropdowns();
     }
 
-    function renderRatioWarning(spec, specRaw) {
+    function renderRatioWarning(spec, specRaw, composed) {
+      // v9: Prefer reporting catalog snap if composed provides it
+      if (composed && composed.ratio_snapped) {
+        const nameplate_r = composed.nameplate_ratio;
+        const catalog_r = composed.catalog_ratio;
+        const score = composed.top_match_score;
+        const uncertain = composed.is_uncertain;
+        const bgClass = uncertain ? 'ratio-warning' : 'torque-warning';
+        const iconMsg = uncertain
+          ? '⚠ ระบบไม่แน่ใจค่า Ratio จากเนมเพลท — ใช้ค่าที่ใกล้ที่สุดใน Catalog'
+          : 'ℹ ระบบใช้ค่า Ratio จาก Catalog (แม่นยำกว่า)';
+        const overrideBtn = uncertain ? `
+          <button type="button" class="override-btn" onclick="openRatioOverride()">
+            🔢 กรอก Ratio เอง
+          </button>` : '';
+        return `
+          <div class="${bgClass}">
+            <strong>${iconMsg}</strong><br>
+            เนมเพลท: <code>${escapeHtml(String(nameplate_r))}</code>
+            → Catalog: <code>${escapeHtml(String(catalog_r))}</code>
+            (match ${escapeHtml(String(score))}%)<br>
+            ${uncertain ? '<div style="margin-top:8px;"><strong style="color:var(--warn)">กรุณาตรวจสอบกับเนมเพลทจริงอีกครั้ง หรือถ่ายภาพใหม่ให้ชัดขึ้น</strong></div>' + overrideBtn : ''}
+          </div>`;
+      }
       const mismatch = specRaw && specRaw._ratio_mismatch;
       if (!mismatch) return '';
       return `
@@ -1405,6 +1445,51 @@
           อ่านจากเนมเพลทได้ <code>${escapeHtml(String(mismatch.extracted))}</code> แต่คำนวณจาก input/output RPM ได้ <code>${escapeHtml(String(mismatch.computed))}</code> (ต่าง ${escapeHtml(String(mismatch.diff_pct))}%)<br>
           ใช้ค่าคำนวณ <code>${escapeHtml(String(mismatch.computed))}</code> แทน เพื่อความแม่นยำ
         </div>`;
+    }
+
+    // v9: Manual ratio override dialog
+    window.openRatioOverride = function() {
+      const nameplate = state.lastScanData?.composed_sas_model?.nameplate_ratio || '';
+      const catalog = state.lastScanData?.composed_sas_model?.catalog_ratio || '';
+      const input = prompt(
+        `กรอกค่า Ratio ที่ถูกต้อง (จากเนมเพลทจริง หรือ Catalog):\n\n` +
+        `ระบบอ่านได้: ${nameplate}\n` +
+        `Catalog ใกล้สุด: ${catalog}\n\n` +
+        `โปรดกรอกตัวเลข เช่น 92.70`,
+        String(catalog)
+      );
+      if (input === null) return;
+      const newRatio = parseFloat(input);
+      if (isNaN(newRatio) || newRatio <= 0) {
+        alert('ค่า Ratio ต้องเป็นตัวเลขมากกว่า 0');
+        return;
+      }
+      // Update state and recompose
+      if (state.currentCompose) {
+        state.currentCompose.ratio = newRatio;
+        recomposeAndUpdate();
+      }
+    };
+
+    async function recomposeAndUpdate() {
+      try {
+        const res = await fetch('/matcher/api/compose', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(state.currentCompose),
+        });
+        const data = await res.json();
+        if (data.ok && data.composed) {
+          const txt = document.getElementById('composerCodeText');
+          if (txt) txt.textContent = data.composed.full_code;
+          // Update ratio input field if present
+          const ratioInput = document.querySelector('[data-field="ratio"]');
+          if (ratioInput) ratioInput.value = state.currentCompose.ratio;
+        }
+      } catch (err) {
+        console.error('Recompose failed:', err);
+        alert('ไม่สามารถอัปเดต Model Code ได้');
+      }
     }
 
     function renderTorqueWarning(spec, specRaw) {

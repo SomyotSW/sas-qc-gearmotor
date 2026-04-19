@@ -807,19 +807,30 @@ def _format_number(n) -> str:
 
 def compose_sas_model(spec, gear_size: str,
                       terminal_box: str = "270",
-                      cable_outlet: str = "X") -> dict:
+                      cable_outlet: str = "X",
+                      catalog_ratio: Optional[float] = None,
+                      catalog_kw: Optional[float] = None) -> dict:
     """
     Compose SAS model code from nameplate spec + matched gear_size.
 
+    v9: catalog_ratio/catalog_kw override spec values when provided. This is
+    critical because the catalog values are AUTHORITATIVE — the nameplate may
+    be misread or physically damaged, but every model that can actually be
+    ordered has a ratio listed in the catalog.
+
     Returns dict with:
-      - full_code:  "R107-YEJ-5.5-4P-115.63-M6-270-X"
+      - full_code:  "R107-YEJ-7.5-4P-92.70-M1-270-X"
       - parts:      dict of each component (for dropdown display)
       - options:    valid values for dropdowns (terminal_box, cable_outlet)
     """
     motor_code = detect_motor_code(spec)
-    kw_str = _format_number(spec.power_kw) if spec.power_kw else "?"
-    poles_str = f"{spec.poles}P" if spec.poles else "4P"  # default 4P
-    ratio_str = _format_number(spec.ratio) if spec.ratio else "?"
+    # v9: prefer catalog values over nameplate-extracted values
+    effective_kw = catalog_kw if catalog_kw is not None else spec.power_kw
+    effective_ratio = catalog_ratio if catalog_ratio is not None else spec.ratio
+
+    kw_str = _format_number(effective_kw) if effective_kw else "?"
+    poles_str = f"{spec.poles}P" if spec.poles else "4P"
+    ratio_str = _format_number(effective_ratio) if effective_ratio else "?"
     mounting = map_mounting_to_sas(spec.mounting_position)
 
     tb = str(terminal_box) if str(terminal_box) in VALID_TERMINAL_BOX_ANGLES else "270"
@@ -1631,14 +1642,45 @@ def api_scan():
 
     top_score = matches[0].total_score if matches else 0.0
 
-    # Step 3.5: Compose SAS model code from top match (ถ้ามี และ target เป็น SAS)
+    # Step 3.5: Compose SAS model code from top match (use CATALOG values)
     composed = None
+    ratio_snapped = False
+    composed_is_uncertain = False
     if to_brand == "sas" and matches:
-        top_gear = matches[0].sas_model
-        # ดึงเฉพาะส่วน gear code (เช่น "R107" จาก "R107 D132S4")
+        top = matches[0]
+        top_gear = top.sas_model
         gear_code = top_gear.split()[0] if top_gear else ""
         if gear_code:
-            composed = compose_sas_model(spec, gear_code)
+            # v9: snap ratio+kW to catalog values when available
+            catalog_ratio = top.ratio if top.ratio is not None else None
+            catalog_kw = top.power_kw if top.power_kw is not None else None
+
+            # Did we snap? (any meaningful difference counts as snap)
+            if (catalog_ratio is not None and spec.ratio is not None):
+                ratio_diff_pct = abs(catalog_ratio - spec.ratio) / max(spec.ratio, 0.01) * 100
+                if ratio_diff_pct > 0.3:
+                    ratio_snapped = True
+
+            # Uncertain = low confidence:
+            #   - top score < 95 (not a strong match)
+            #   - OR ratio snap exceeded 2% (nameplate materially differed from catalog)
+            if top.total_score < 95.0:
+                composed_is_uncertain = True
+            if (spec.ratio is not None and catalog_ratio is not None):
+                ratio_diff_pct = abs(catalog_ratio - spec.ratio) / max(spec.ratio, 0.01) * 100
+                if ratio_diff_pct > 2.0:
+                    composed_is_uncertain = True
+
+            composed = compose_sas_model(
+                spec, gear_code,
+                catalog_ratio=catalog_ratio,
+                catalog_kw=catalog_kw,
+            )
+            composed["ratio_snapped"] = ratio_snapped
+            composed["is_uncertain"] = composed_is_uncertain
+            composed["nameplate_ratio"] = spec.ratio
+            composed["catalog_ratio"] = catalog_ratio
+            composed["top_match_score"] = top.total_score
 
     # Step 3.6: Decode competitor model features (SEW suffix codes etc.)
     # Sale ต้องรู้ features ที่ลูกค้าใช้งานเพื่อเสนอ SAS ให้ครบ
