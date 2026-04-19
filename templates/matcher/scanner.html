@@ -1341,6 +1341,7 @@
           ${specItem('OUTPUT RPM', spec.output_rpm)}
           ${specItem('FRAME', spec.frame_size ? spec.frame_size + (spec.poles ? ' / ' + spec.poles + 'P' : '') : null)}
           ${specItem('MOUNTING', spec.mounting_position)}
+          ${specItem('SERVICE FACTOR', spec.service_factor ? 'fB ' + spec.service_factor : null)}
         </div>`;
 
       const ratioWarnHtml = renderRatioWarning(spec, specRaw);
@@ -1763,6 +1764,8 @@
       const score = m.total_score;
       const scoreClass = score >= 90 ? 'high' : score >= 75 ? 'med' : 'low';
       const warnings = (m.warnings || []).filter(Boolean);
+      const pwr = (m.power_kw !== null && m.power_kw !== undefined) ? (m.power_kw + ' kW') : '—';
+      const sf = (m.service_factor !== null && m.service_factor !== undefined) ? ('fB ' + m.service_factor) : '—';
       return `
         <div class="match-card ${isTop ? 'top' : ''}">
           <div class="match-head">
@@ -1770,10 +1773,11 @@
             <div class="score-badge ${scoreClass}">${score}/100</div>
           </div>
           <div class="match-body">
-            <div class="row"><div class="k">Power</div><div class="v">${m.power_kw ?? '—'} kW</div></div>
+            <div class="row"><div class="k">Power</div><div class="v">${pwr}</div></div>
             <div class="row"><div class="k">Ratio</div><div class="v">${m.ratio ?? '—'} <small style="color:var(--ink-soft)">(${m.ratio_match_pct}%)</small></div></div>
             <div class="row"><div class="k">Output</div><div class="v">${m.output_speed_rpm ?? '—'} rpm</div></div>
             <div class="row"><div class="k">Torque</div><div class="v">${m.output_torque_nm ?? '—'} Nm</div></div>
+            <div class="row"><div class="k">Service Factor</div><div class="v">${sf}</div></div>
           </div>
           ${m.variants && m.variants.length ? `
             <div class="variants">

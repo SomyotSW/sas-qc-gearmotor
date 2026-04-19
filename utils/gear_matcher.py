@@ -575,10 +575,32 @@ def read_nameplate(image_bytes: bytes, mime_type: str) -> NameplateSpec:
         gear_size = re.sub(r"\s+", "", str(gear_size)).upper()
 
     # v6: Derive power_kw from hp if only hp provided
+    # v7: Snap to nearest catalog-standard kW value (IEC gearbox catalogs use
+    # fixed steps: 0.12, 0.18, 0.25, 0.37, 0.55, 0.75, 1.1, 1.5, 2.2, 3.0,
+    # 4.0, 5.5, 7.5, 11, 15, 18.5, 22, 30, 37, 45, 55, 75, 90, 110, 132, 160, 200, 250)
+    # Raw conversion gives 0.56 kW from 0.75 hp but catalog only lists 0.55.
     power_kw = _num(raw.get("power_kw"))
     power_hp = _num(raw.get("power_hp"))
+    _IEC_KW_STEPS = [
+        0.06, 0.09, 0.12, 0.18, 0.25, 0.37, 0.55, 0.75, 1.1, 1.5,
+        2.2, 3.0, 4.0, 5.5, 7.5, 11.0, 15.0, 18.5, 22.0, 30.0,
+        37.0, 45.0, 55.0, 75.0, 90.0, 110.0, 132.0, 160.0, 200.0, 250.0,
+    ]
+
+    def _snap_to_iec_kw(v: float) -> float:
+        """Snap kW value to nearest IEC catalog step (within 10% tolerance)."""
+        if v is None or v <= 0:
+            return v
+        best = min(_IEC_KW_STEPS, key=lambda s: abs(s - v))
+        return best if abs(best - v) / v < 0.10 else v
+
     if not power_kw and power_hp:
-        power_kw = round(power_hp * 0.7457, 2)
+        # Convert hp to kW and snap to IEC step
+        raw_kw = power_hp * 0.7457
+        power_kw = _snap_to_iec_kw(raw_kw)
+    elif power_kw:
+        # Snap even if AI read kW directly (in case it read 0.56 off a USA plate)
+        power_kw = _snap_to_iec_kw(power_kw)
 
     spec = NameplateSpec(
         brand=raw.get("brand"),
@@ -1180,22 +1202,41 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
                     total, ratio_pct, warnings = _score_candidate(
                         r, t, kw, target_ratio, target_torque, target_kw)
 
-                    cand_size = extract_gear_size(model)
+                    # v7: Rewrite model to use competitor's prefix (RF47 not R47)
+                    # when: (a) competitor has a specific variant prefix, AND
+                    #       (b) the row's variants list contains that variant
+                    display_model = model
+                    row_variants = row.get("variants", []) or []
+                    row_variants_upper = [v.upper() for v in row_variants if v]
+                    if (competitor_gear_full and competitor_gear_full != competitor_gear_base
+                            and competitor_gear_base):
+                        # Extract competitor's prefix letter(s): "RF" from "RF47"
+                        m = _GEAR_SIZE_RE.match(competitor_gear_full)
+                        if m:
+                            comp_prefix = m.group(1).upper()  # "RF"
+                            if comp_prefix in row_variants_upper:
+                                # Rewrite model: "R47 D71S4" -> "RF47 D71S4"
+                                cand_size = extract_gear_size(model) or ""
+                                if cand_size:
+                                    display_model = model.replace(
+                                        cand_size, competitor_gear_full, 1)
+
+                    cand_size = extract_gear_size(display_model)
                     dims = get_dimensions(cand_size) if cand_size else None
 
                     candidates.append(MatchResult(
-                        sas_model=model,
+                        sas_model=display_model,
                         power_kw=kw,
                         ratio=r,
                         output_speed_rpm=row.get("output_speed_rpm"),
                         output_torque_nm=t,
-                        variants=row.get("variants", []),
+                        variants=row_variants,
                         service_factor=row.get("service_factor"),
                         ratio_match_pct=ratio_pct,
                         total_score=round(total, 1),
                         warnings=warnings,
                         dimensions=dims,
-                        exact_size_match=True,   # already filtered
+                        exact_size_match=True,
                     ))
 
     # ========== Source 2: ratio_torque_tables ==========
@@ -1221,22 +1262,37 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
 
                     if target_torque and t and t < target_torque * 0.9:
                         continue
+                    # v7: Reject massively oversized gears (ratio_torque shows the
+                    # gearbox's rated torque, not required torque — if rated is 15x
+                    # what customer needs, it's the wrong size class)
+                    if target_torque and t and t > target_torque * 10:
+                        continue
 
                     total, ratio_pct, warnings = _score_candidate(
                         r, t, None, target_ratio, target_torque, None)
 
+                    # v7: Override gear_size with competitor's full prefix (RF47 not R47)
+                    display_size = gear_size
+                    if (competitor_gear_full and competitor_gear_full != competitor_gear_base):
+                        # Rewrite R47 -> RF47
+                        mg = _GEAR_SIZE_RE.match(gear_size)
+                        if mg:
+                            cand_base_letter = mg.group(1).upper()[0]
+                            if cand_base_letter == competitor_gear_full[0].upper():
+                                display_size = competitor_gear_full + gear_size[len(mg.group(0)):]
+
                     candidates.append(MatchResult(
-                        sas_model=gear_size,
-                        power_kw=None,
+                        sas_model=display_size,
+                        power_kw=target_kw,     # use input kW (row doesn't have it)
                         ratio=r,
                         output_speed_rpm=out_rpm,
                         output_torque_nm=t,
-                        variants=[],
-                        service_factor=None,
+                        variants=row.get("variants", []) or [],
+                        service_factor=row.get("service_factor"),
                         ratio_match_pct=ratio_pct,
                         total_score=round(total, 1),
                         warnings=warnings,
-                        dimensions=get_dimensions(gear_size),
+                        dimensions=get_dimensions(display_size),
                         exact_size_match=True,
                     ))
 
@@ -1279,7 +1335,15 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
         key = (c.sas_model, round(c.ratio or 0, 2))
         if key not in seen:
             seen[key] = c
-    return list(seen.values())[:top_n]
+    results = list(seen.values())
+
+    # v7: Only show matches >= 75 score (or the top 1 if none qualify so user sees
+    # at least something). Respects top_n as a hard cap.
+    qualified = [r for r in results if r.total_score >= 75.0]
+    if not qualified and results:
+        qualified = [results[0]]
+
+    return qualified[:top_n]
 
 
 def match_spec_to_database_loose(spec: NameplateSpec, database: dict, top_n: int = 5) -> list[MatchResult]:
@@ -1557,7 +1621,7 @@ def api_scan():
 
     # Step 3: Match
     t1 = time.time()
-    matches = match_spec_to_database(spec, db, top_n=5)
+    matches = match_spec_to_database(spec, db, top_n=3)
     t_match = time.time() - t1
 
     top_score = matches[0].total_score if matches else 0.0
