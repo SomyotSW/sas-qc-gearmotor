@@ -361,25 +361,26 @@ def get_database(brand_id: str) -> Optional[dict]:
 # Claude Vision — nameplate reader
 # ============================================================
 
-NAMEPLATE_PROMPT = """You are reading a gear motor nameplate photo.
+NAMEPLATE_PROMPT = """You are reading a gear motor nameplate photo. Read carefully and distinguish
+every field — mistakes here cascade through the whole system.
 
-Extract the specifications into JSON with this EXACT shape (use null for fields
-you cannot read clearly):
+Extract into JSON with this EXACT shape (use null for fields you cannot read clearly):
 
 {
   "brand": "e.g. SEW-EURODRIVE",
-  "full_model_code": "full model code shown, e.g. R37 DRE90L4 or R107 DV132S4/BMG/HR/EV1A",
-  "gear_type_hint": "R|S|K|F|W (single letter — first char of gear type from full_model_code)",
-  "gear_size_code": "full gear size with prefix, e.g. R37, R107, S67, K87 (MUST be letter(s)+2-3 digits)",
+  "full_model_code": "full model code INCLUDING flange prefix, e.g. 'RF47 DRS71S4', 'R67 DRS71M4', 'R107 DV132S4/BMG/HR/EV1A'",
+  "gear_type_hint": "R|S|K|F|W (single letter — first char of gear type)",
+  "gear_size_code": "gear code with full prefix — e.g. R37, RF47, RX57, RXF77, K87, KAF77, SF37. MUST include flange/variant letters if present.",
   "power_kw": number,
   "power_hp": number,
   "input_rpm": number,
   "output_rpm": number,
   "ratio": number,
   "torque_nm": number,
+  "torque_lb_in": number,
   "voltage": "e.g. 460V 3ph",
   "frequency_hz": 50 or 60,
-  "frame_size": "e.g. 90L",
+  "frame_size": "e.g. 90L or 71M",
   "poles": number,
   "mounting_position": "e.g. M1, M1A, B3",
   "ip_rating": "e.g. IP66",
@@ -387,46 +388,82 @@ you cannot read clearly):
   "service_factor": number,
   "serial_number": "if visible",
   "_confidence": { "<field_name>": "high|medium|low" },
-  "_ratio_consistent": true|false
+  "_is_sew_usa": true|false,
+  "_ratio_consistent": true|false,
+  "_torque_source": "extracted|computed|lb_in_converted"
 }
 
-CRITICAL READING RULES — SEW-EURODRIVE nameplates especially:
+CRITICAL READING RULES:
 
-1. NUMBER FORMAT (European decimal notation):
-   - SEW uses COMMA as decimal separator. "10,11" means 10.11 (ten point eleven), NOT 1011 or two numbers!
-   - Always convert commas in numbers to periods: "10,11" → 10.11
-   - Exception: "1430/141" with slash = TWO separate numbers
+1. NUMBER FORMAT (Europe vs USA):
+   - European SEW plates: COMMA is decimal. "10,11" → 10.11
+   - USA SEW plates (look for 'SEW-EURODRIVE INC. USA'): period is decimal. "128.97" → 128.97
+   - Exception: "1430/141" with slash = TWO numbers (motor rpm / output rpm)
 
-2. RATIO FIELD (labeled "i" or "i=" on SEW plates):
-   - Look for the lowercase "i" label, usually on its own line
-   - "i 10,11" or "i=10,11" means ratio = 10.11
-   - Do NOT confuse ratio with torque, RPM, or efficiency values
+2. MODEL CODE — PRESERVE THE FULL GEAR TYPE PREFIX (CRITICAL!):
+   - "R 47"   → gear_size_code="R47"   (Foot mount)
+   - "RF 47"  → gear_size_code="RF47"  (Flange B5 mount — DO NOT DROP the F!)
+   - "RX 57"  → gear_size_code="RX57"  (Single-stage)
+   - "RXF 77" → gear_size_code="RXF77" (Single-stage flange)
+   - "RM 87"  → gear_size_code="RM87"  (Agitator)
+   - "KAF 77" → gear_size_code="KAF77" (Bevel, hollow shaft, flange)
+   - "SF 37"  → gear_size_code="SF37"  (Worm, flange)
+   The prefix determines MOUNTING TYPE. Dropping the F will cause the system to
+   recommend foot-mount when the customer has a flange-mount → DIFFERENT PRODUCT.
 
-3. RPM FIELDS ("r/min" or "min^-1"):
-   - "r/min 1430/141" means input_rpm=1430, output_rpm=141
-   - Different lines may show 50Hz and 60Hz values — report 50Hz primary
-   - NEVER put torque values in RPM fields
+3. RATIO FIELD (labeled "i" or "i=") — NEVER CONFUSE WITH TORQUE:
+   - "i 128.97" means ratio = 128.97 (this is a BIG ratio, not a torque value!)
+   - "i 5.82"   means ratio = 5.82
+   - "i 10,11"  means ratio = 10.11
+   - The "i" label is often on a line by itself at the bottom of the plate.
+   - ⚠ ANTI-PATTERN: Never put a ratio value in torque_nm. If you see "i 128.97",
+     this number NEVER belongs in torque. Torque 128.97 Nm at 0.55 kW is physically
+     impossible — always cross-check with T = 9550 × kW / output_rpm.
 
-4. TORQUE FIELD (labeled "Nm"):
-   - "Nm 101/83" means 101 Nm @ 50Hz, 83 Nm @ 60Hz — use 101 as primary
-   - NEVER put this in output_rpm field
+4. TORQUE FIELDS — read the UNIT carefully:
+   - "Nm 101/83"   → torque_nm = 101 (50Hz primary)
+   - "lb-in 3540"  → torque_lb_in = 3540 (USA plates use lb-in, not Nm!)
+     Conversion: 1 Nm ≈ 8.85 lb-in, so 3540 lb-in ÷ 8.85 ≈ 400 Nm
+   - If you see BOTH lb-in and Nm, record both.
+   - If you see ONLY lb-in (USA plate): set torque_nm = round(lb_in / 8.85, 0)
+     and _torque_source = "lb_in_converted"
+   - If you see NEITHER but you have power_kw and output_rpm:
+     set torque_nm = round(9550 × power_kw / output_rpm, 0)
+     and _torque_source = "computed"
+   - ⚠ Sanity check: if extracted torque_nm equals (or is very close to) the
+     ratio value you read, something is WRONG — you probably misread the ratio
+     label as torque. Re-read carefully.
 
-5. MODEL CODE READING:
-   - "R37 DRE90L4" → full_model_code="R37 DRE90L4", gear_size_code="R37"
-   - "R107 DV132S4/BMG/HR" → gear_size_code="R107" (NOT R17 or R7)
-   - Capture everything after gear code (motor type + suffixes) in full_model_code
+5. RPM FIELDS ("rpm" or "r/min"):
+   - "rpm 1690/13" means input_rpm=1690, output_rpm=13
+   - "rpm 1430/141" means input_rpm=1430, output_rpm=141
+   - NEVER put torque values here.
 
-6. CONSISTENCY CHECK (VERY IMPORTANT):
-   After reading, verify: input_rpm / output_rpm ≈ ratio
-   - Example: 1430/141 = 10.14 ≈ 10.11 ✅ (set _ratio_consistent=true)
-   - If they don't match within 5%, you likely misread something → re-read carefully
-   - If still inconsistent, set _ratio_consistent=false and lower confidence
+6. POWER (hp vs kW):
+   - USA plates use "hp" (horsepower). 1 hp = 0.7457 kW
+   - "hp 0.75" → power_hp=0.75, power_kw = round(0.75 × 0.7457, 2) = 0.56 kW
+   - "hp 0.50" → power_hp=0.50, power_kw ≈ 0.37 kW
+   - "kW 1.5" → power_kw=1.5 directly
 
-CRITICAL RULES:
-- Only read what is CLEARLY VISIBLE. Do not guess or infer.
-- If the image is blurry, not a nameplate, or unreadable, return:
-  {"_error": "explain why", "_is_nameplate": false}
-- Return ONLY the JSON. No markdown fences, no explanation.
+7. CONSISTENCY CHECKS (do these AFTER reading):
+   a) ratio ≈ input_rpm / output_rpm (within 5%)
+      - 1430/141 = 10.14 vs i=10.11 ✅
+      - 1690/13  = 130   vs i=128.97 ✅
+   b) torque ≈ 9550 × kW / output_rpm (within 20%)
+      - 9550 × 0.55 / 13 = 404 Nm vs torque=128.97 → ❌ MISMATCH (you misread ratio as torque!)
+      - 9550 × 0.55 / 13 = 404 Nm vs torque=400 (from lb-in 3540) → ✅ MATCH
+   If torque fails this check, set torque_nm = round(9550 × kW / output_rpm, 0)
+   and _torque_source = "computed" (prefer the computed value over the extracted one).
+
+8. MOUNTING POSITION:
+   - IM M1 | IM M2 | ... | IM M6
+   - MtgPos M1 | B3 | B5 | V1 | V3
+   - Capture as "M1", "B3", "V1" etc.
+
+FINAL RULE:
+- Only read what is CLEARLY VISIBLE. Do not guess.
+- If unreadable, return {"_error": "...", "_is_nameplate": false}.
+- Return ONLY the JSON. No markdown, no explanation.
 """
 
 
@@ -531,15 +568,25 @@ def read_nameplate(image_bytes: bytes, mime_type: str) -> NameplateSpec:
                 return None
 
     # Extract gear size from full_model_code (or explicit field from AI)
+    # v6: preserve full prefix including flange/variant (RF47 not R47)
     gear_size = raw.get("gear_size_code") or extract_gear_size(raw.get("full_model_code"))
+    # Normalize whitespace in gear_size (AI sometimes returns "RF 47")
+    if gear_size:
+        gear_size = re.sub(r"\s+", "", str(gear_size)).upper()
+
+    # v6: Derive power_kw from hp if only hp provided
+    power_kw = _num(raw.get("power_kw"))
+    power_hp = _num(raw.get("power_hp"))
+    if not power_kw and power_hp:
+        power_kw = round(power_hp * 0.7457, 2)
 
     spec = NameplateSpec(
         brand=raw.get("brand"),
         full_model_code=raw.get("full_model_code"),
         gear_type_hint=(raw.get("gear_type_hint") or "").upper()[:1] or None,
         gear_size_code=gear_size,
-        power_kw=_num(raw.get("power_kw")),
-        power_hp=_num(raw.get("power_hp")),
+        power_kw=power_kw,
+        power_hp=power_hp,
         input_rpm=_num(raw.get("input_rpm")),
         output_rpm=_num(raw.get("output_rpm")),
         ratio=_num(raw.get("ratio")),
@@ -563,25 +610,87 @@ def read_nameplate(image_bytes: bytes, mime_type: str) -> NameplateSpec:
         if spec.ratio:
             diff_pct = abs(spec.ratio - computed) / max(spec.ratio, 0.01) * 100
             spec.ratio_consistent = diff_pct <= 5.0
-            # If they disagree significantly, PREFER computed ratio
-            # (AI often mis-reads the "i" label; rpm readings are usually clearer)
             if not spec.ratio_consistent:
-                # Flag in raw for UI display
                 spec.raw["_ratio_mismatch"] = {
                     "extracted": spec.ratio,
                     "computed": spec.ratio_computed,
                     "diff_pct": round(diff_pct, 1),
                     "action": "using_computed",
                 }
-                # Over-write the extracted ratio with the computed one
                 spec.ratio = spec.ratio_computed
         else:
-            # No ratio extracted — use computed
             spec.ratio = spec.ratio_computed
             spec.ratio_consistent = True
     elif spec.ratio and not spec.ratio_computed:
-        # Can't verify without both rpms
         spec.ratio_consistent = None
+
+    # ========== v6: Torque sanity check + auto-compute ==========
+    # Detect the classic "ratio-as-torque" AI mistake AND fallback-compute torque
+    # from T = 9550 × kW / output_rpm when torque is missing/wrong.
+    torque_lb_in = _num(raw.get("torque_lb_in"))
+
+    computed_torque = None
+    if spec.power_kw and spec.output_rpm and spec.output_rpm > 0:
+        computed_torque = round(9550 * spec.power_kw / spec.output_rpm, 0)
+
+    lb_converted_torque = None
+    if torque_lb_in:
+        lb_converted_torque = round(torque_lb_in / 8.85, 0)
+
+    torque_source = "extracted"
+    original_torque = spec.torque_nm
+
+    # Anti-pattern detection: if torque_nm looks suspiciously equal to ratio
+    torque_equals_ratio = False
+    if spec.torque_nm and spec.ratio:
+        if abs(spec.torque_nm - spec.ratio) / max(spec.ratio, 0.01) < 0.02:
+            torque_equals_ratio = True
+
+    if torque_equals_ratio:
+        # Catastrophic misread — AI put ratio into torque field.
+        if computed_torque:
+            spec.torque_nm = computed_torque
+            torque_source = "computed"
+        elif lb_converted_torque:
+            spec.torque_nm = lb_converted_torque
+            torque_source = "lb_in_converted"
+        spec.raw["_torque_mismatch"] = {
+            "reason": "extracted_torque_equals_ratio",
+            "original": original_torque,
+            "ratio": spec.ratio,
+            "corrected_to": spec.torque_nm,
+            "source": torque_source,
+        }
+    elif not spec.torque_nm:
+        # No torque read — fall back to computed or lb-in converted
+        if lb_converted_torque:
+            spec.torque_nm = lb_converted_torque
+            torque_source = "lb_in_converted"
+        elif computed_torque:
+            spec.torque_nm = computed_torque
+            torque_source = "computed"
+        if torque_source != "extracted":
+            spec.raw["_torque_source"] = torque_source
+    else:
+        # Sanity check: compare extracted vs computed
+        if computed_torque and spec.torque_nm > 0:
+            diff_pct = abs(spec.torque_nm - computed_torque) / max(computed_torque, 0.01) * 100
+            if diff_pct > 30:
+                # Extracted value disagrees strongly with physics — prefer computed
+                spec.raw["_torque_mismatch"] = {
+                    "reason": "extracted_disagrees_with_computed",
+                    "original": spec.torque_nm,
+                    "computed": computed_torque,
+                    "diff_pct": round(diff_pct, 1),
+                    "corrected_to": computed_torque,
+                    "source": "computed",
+                }
+                spec.torque_nm = computed_torque
+                torque_source = "computed"
+
+    spec.raw["_torque_source"] = torque_source
+    spec.raw["_torque_computed"] = computed_torque
+    spec.raw["_torque_lb_in"] = torque_lb_in
 
     return spec
 
@@ -613,8 +722,8 @@ def detect_motor_code(spec) -> str:
     """
     Decide motor code based on nameplate.
 
-    - Has brake (detected via SEW decoder, or BMG/Brake V visible) → YEJ
-    - No brake → YE3 (SAS sells IE3+ motors only)
+    - Has brake (detected via SEW decoder, or BMG/Brake V visible) -> YEJ
+    - No brake -> YE3 (SAS sells IE3+ motors only)
     """
     # Try SEW decoder first (most accurate)
     if spec.full_model_code:
@@ -748,19 +857,113 @@ R_SERIES_DIMENSIONS = {
     "R167": {"d":"120m6", "d_mm":120, "h": 400, "b_foot": 580, "e": 675, "a": None, "f_foot": 635, "shaft_length": 210, "key": "M36"},
 }
 
+# ============================================================
+# RF-series flange dimensions (IEC B5 mounting)
+# ============================================================
+# Source: SAS catalog page 52 / SEW DRE-GM page 134
+# Each RF model has multiple flange options (small/medium/large).
+# "a" fields are the outer flange diameter (Ø in mm).
+# "b" fields are the register bore diameter (j6 tolerance).
+# This is CRITICAL — customer picks the flange that matches their machine.
+
+RF_FLANGE_DIMENSIONS = {
+    "RF17": [
+        {"option": "a",  "diameter": 120, "bore": "80j6",  "bolt_pcd": 100, "label": "IEC B5 small"},
+        {"option": "a2", "diameter": 140, "bore": "95j6",  "bolt_pcd": 115, "label": "IEC B5 medium"},
+    ],
+    "RF27": [
+        {"option": "a",  "diameter": 120, "bore": "80j6",  "bolt_pcd": 100, "label": "IEC B5 small"},
+        {"option": "a2", "diameter": 140, "bore": "95j6",  "bolt_pcd": 115, "label": "IEC B5 medium"},
+        {"option": "a3", "diameter": 160, "bore": "110j6", "bolt_pcd": 130, "label": "IEC B5 large"},
+    ],
+    "RF37": [
+        {"option": "a",  "diameter": 120, "bore": "80j6",  "bolt_pcd": 100, "label": "IEC B5 small"},
+        {"option": "a2", "diameter": 160, "bore": "110j6", "bolt_pcd": 130, "label": "IEC B5 medium"},
+        {"option": "a3", "diameter": 200, "bore": "130j6", "bolt_pcd": 165, "label": "IEC B5 large"},
+    ],
+    "RF47": [
+        {"option": "a",  "diameter": 140, "bore": "95j6",  "bolt_pcd": 115, "label": "IEC B5 small"},
+        {"option": "a2", "diameter": 160, "bore": "110j6", "bolt_pcd": 130, "label": "IEC B5 medium"},
+        {"option": "a3", "diameter": 200, "bore": "130j6", "bolt_pcd": 165, "label": "IEC B5 large"},
+    ],
+    "RF57": [
+        {"option": "a",  "diameter": 160, "bore": "110j6", "bolt_pcd": 130, "label": "IEC B5 small"},
+        {"option": "a2", "diameter": 200, "bore": "130j6", "bolt_pcd": 165, "label": "IEC B5 medium"},
+        {"option": "a3", "diameter": 250, "bore": "180j6", "bolt_pcd": 215, "label": "IEC B5 large"},
+    ],
+    "RF67": [
+        {"option": "a",  "diameter": 160, "bore": "110j6", "bolt_pcd": 130, "label": "IEC B5 small"},
+        {"option": "a2", "diameter": 200, "bore": "130j6", "bolt_pcd": 165, "label": "IEC B5 medium"},
+        {"option": "a3", "diameter": 250, "bore": "180j6", "bolt_pcd": 215, "label": "IEC B5 large"},
+    ],
+    "RF77": [
+        {"option": "a",  "diameter": 200, "bore": "130j6", "bolt_pcd": 165, "label": "IEC B5 small"},
+        {"option": "a2", "diameter": 250, "bore": "180j6", "bolt_pcd": 215, "label": "IEC B5 medium"},
+        {"option": "a3", "diameter": 300, "bore": "230j6", "bolt_pcd": 265, "label": "IEC B5 large"},
+    ],
+    "RF87": [
+        {"option": "a",  "diameter": 250, "bore": "180j6", "bolt_pcd": 215, "label": "IEC B5 small"},
+        {"option": "a2", "diameter": 300, "bore": "230j6", "bolt_pcd": 265, "label": "IEC B5 medium"},
+        {"option": "a3", "diameter": 350, "bore": "250j6", "bolt_pcd": 300, "label": "IEC B5 large"},
+    ],
+    "RF97": [
+        {"option": "a",  "diameter": 300, "bore": "230j6", "bolt_pcd": 265, "label": "IEC B5 small"},
+        {"option": "a2", "diameter": 350, "bore": "250j6", "bolt_pcd": 300, "label": "IEC B5 medium"},
+        {"option": "a3", "diameter": 450, "bore": "350j6", "bolt_pcd": 400, "label": "IEC B5 large"},
+    ],
+    "RF107": [
+        {"option": "a",  "diameter": 350, "bore": "250j6", "bolt_pcd": 300, "label": "IEC B5 small"},
+        {"option": "a2", "diameter": 450, "bore": "350j6", "bolt_pcd": 400, "label": "IEC B5 medium"},
+        {"option": "a3", "diameter": 550, "bore": "450j6", "bolt_pcd": 500, "label": "IEC B5 large"},
+    ],
+    "RF137": [
+        {"option": "a",  "diameter": 450, "bore": "350j6", "bolt_pcd": 400, "label": "IEC B5 small"},
+        {"option": "a2", "diameter": 550, "bore": "450j6", "bolt_pcd": 500, "label": "IEC B5 medium"},
+    ],
+    "RF147": [
+        {"option": "a",  "diameter": 550, "bore": "450j6", "bolt_pcd": 500, "label": "IEC B5 large"},
+        {"option": "a2", "diameter": 660, "bore": "550j6", "bolt_pcd": 600, "label": "IEC B5 XL"},
+    ],
+    "RF167": [
+        {"option": "a",  "diameter": 660, "bore": "550j6", "bolt_pcd": 600, "label": "IEC B5 XL"},
+        {"option": "a2", "diameter": 800, "bore": "680j6", "bolt_pcd": 740, "label": "IEC B5 XXL"},
+    ],
+}
+
+
+def get_flange_options(gear_size: Optional[str]) -> Optional[list]:
+    """
+    Return flange options for an RF-series model (or None if not flange-mounted).
+    
+    Accepts: "RF47", "RF47F", "R47" (returns None if not flange), etc.
+    """
+    if not gear_size:
+        return None
+    gs = gear_size.upper()
+    # Only RF, SF, KF, FF variants have flange dimensions
+    if gs in RF_FLANGE_DIMENSIONS:
+        return RF_FLANGE_DIMENSIONS[gs]
+    # Try base form: "RF47F" → "RF47"
+    m = re.match(r"^(R[FXM])?(\d{2,3})", gs)
+    if m and m.group(1):
+        base = f"{m.group(1)}{m.group(2)}"
+        if base in RF_FLANGE_DIMENSIONS:
+            return RF_FLANGE_DIMENSIONS[base]
+    return None
+
 
 _GEAR_SIZE_RE = re.compile(r"^([RSKFW][A-Z]*)(\d{2,3})", re.IGNORECASE)
 
 
 def extract_gear_size(code: Optional[str]) -> Optional[str]:
     """
-    ดึง gear size (เช่น 'R37', 'R107') จาก full model code.
+    Extract gear size (e.g. 'R37', 'R107') from full model code.
     
     Examples:
-        'R37 DRE90L4' → 'R37'
-        'R107 DV132S4/BMG/HR' → 'R107'
-        'RF47 D90L4' → 'RF47'  (flange variant)
-        'R37' → 'R37'
+        'R37 DRE90L4' -> 'R37'
+        'R107 DV132S4/BMG/HR' -> 'R107'
+        'RF47 D90L4' -> 'RF47'  (flange variant preserved)
+        'R37' -> 'R37'
     """
     if not code:
         return None
@@ -775,12 +978,34 @@ def extract_gear_size(code: Optional[str]) -> Optional[str]:
 
 
 def get_dimensions(gear_size: Optional[str]) -> Optional[dict]:
-    """Look up dimension info for a gear size. Returns None if not in reference."""
+    """
+    Look up dimension info for a gear size. Returns None if not in reference.
+    
+    Handles variant prefixes:
+      - "R37"   -> R37 directly
+      - "RF47"  -> R47 base dimensions (foot part same; flange info separate)
+      - "RX57"  -> R57 base dimensions (single-stage uses same housing)
+      - "RM87"  -> R87 base dimensions
+      - "R37F"  -> R37F (legacy explicit flange form)
+    """
     if not gear_size:
         return None
-    # Normalize: R37F → R37F, R37 → R37
     gs = gear_size.upper()
-    return R_SERIES_DIMENSIONS.get(gs)
+    # Direct hit first
+    if gs in R_SERIES_DIMENSIONS:
+        return R_SERIES_DIMENSIONS[gs]
+    # Variant handling: RF47, RX57, RM87, RXF77 -> R47, R57, R87, R77
+    m = re.match(r"^R([FXM]{1,2}F?)(\d{2,3})", gs)
+    if m:
+        base_size = f"R{m.group(2)}"
+        base = R_SERIES_DIMENSIONS.get(base_size)
+        if base:
+            # Return a copy with the variant noted (dimensions identical)
+            result = dict(base)
+            result["_base_size"] = base_size
+            result["_variant"] = gs
+            return result
+    return None
 
 
 def compare_dimensions(competitor_size: Optional[str], sas_size: Optional[str]) -> dict:
@@ -869,14 +1094,14 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
     """
     Rank SAS models against the competitor nameplate spec.
 
-    CORE PRINCIPLE (v5 — fixed):
+    CORE PRINCIPLE (v5 - fixed):
     ============================================================
     SAS makes gear boxes with dimensions IDENTICAL to SEW (and most
     European brands) for R-series R17-R167, S-series S37-S97, K-series K37-K97.
     Therefore:
-      - SEW R57  →  SAS R57  (direct size mapping)
-      - SEW R37  →  SAS R37
-      - SEW R107 →  SAS R107
+      - SEW R57  ->  SAS R57  (direct size mapping)
+      - SEW R37  ->  SAS R37
+      - SEW R107 ->  SAS R107
 
     The ratio/torque from the database is used ONLY to:
       - Confirm the exact model exists (e.g. R57 D100M4 at ratio 5.82)
@@ -894,14 +1119,20 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
     target_torque = spec.torque_nm
     target_type = (spec.gear_type_hint or "").upper()[:1]
 
-    # Extract competitor gear size (e.g. "R57" from "R57 DRE100M4/AND8")
+    # Extract competitor gear size (e.g. "RF47" or "R57" from full_model_code)
     competitor_gear_size = (
         spec.gear_size_code
         or extract_gear_size(spec.full_model_code)
     )
+    if competitor_gear_size:
+        competitor_gear_size = re.sub(r"\s+", "", str(competitor_gear_size)).upper()
 
-    # Normalize to base (R57, K57, S57 — drop F/A/M variants for matching)
-    competitor_gear_base = None
+    # Full form preserved for output (RF47) AND base form used for matching (R47)
+    # Rationale: SAS uses the SAME prefix convention as SEW, so RF47 stays RF47.
+    # But rows in catalog may list just "47" + variants=["R","RF"], so we match
+    # on base for database lookup.
+    competitor_gear_full = competitor_gear_size   # "RF47"
+    competitor_gear_base = None                    # "R47" for database search
     if competitor_gear_size:
         m = _GEAR_SIZE_RE.match(competitor_gear_size)
         if m:
@@ -911,12 +1142,12 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
     candidates: list[MatchResult] = []
 
     def _accept_model_size(model_str: str) -> bool:
-        """Strict: candidate's gear size must match competitor's."""
+        """Match on base: R47 candidate matches R47, RF47, RX47 competitor (same base)."""
         if not competitor_gear_base:
             return True
         cand_size = extract_gear_size(model_str)
         if not cand_size:
-            return False   # ไม่รู้ขนาด = ไม่รับ
+            return False
         m = _GEAR_SIZE_RE.match(cand_size)
         if not m:
             return False
@@ -1009,25 +1240,34 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
                         exact_size_match=True,
                     ))
 
-    # ========== Source 3: DIRECT MAPPING (no database hit — v5 core fix) ==========
-    # If we know the competitor gear size (e.g. R57) and SAS makes R57 with
-    # identical dimensions, we can synthesize a match without needing the
-    # exact row in the database.
-    if not candidates and competitor_gear_base:
-        dims = get_dimensions(competitor_gear_base)
+    # ========== Source 3: DIRECT MAPPING (no database hit — v6 core) ==========
+    # If we know the competitor gear size (e.g. RF47) and SAS makes RF47 with
+    # identical dimensions, synthesize a match without needing an exact DB row.
+    # CRITICAL: preserve the full prefix (RF47, not R47) so the output correctly
+    # reflects flange mounting.
+    if not candidates and competitor_gear_full:
+        dims = get_dimensions(competitor_gear_full)
         if dims:
-            # Compose synthesized match
+            # Preserve full form in the output model
+            sas_model_out = competitor_gear_full   # "RF47" stays "RF47"
+            # Flange options if applicable
+            flange_opts = get_flange_options(competitor_gear_full)
+
+            warning_msg = f"🎯 SAS {sas_model_out} uses IDENTICAL dimensions as SEW {sas_model_out} — drop-in replacement"
+            if flange_opts:
+                warning_msg += f" (has {len(flange_opts)} flange options — check customer's actual flange Ø)"
+
             synth = MatchResult(
-                sas_model=competitor_gear_base,
+                sas_model=sas_model_out,
                 power_kw=target_kw,
                 ratio=target_ratio,
                 output_speed_rpm=spec.output_rpm,
                 output_torque_nm=target_torque,
-                variants=["R", "RF"],
+                variants=[competitor_gear_full[:-len(competitor_gear_base)+1]] if competitor_gear_full != competitor_gear_base else ["R"],
                 service_factor=spec.service_factor,
                 ratio_match_pct=100.0,
-                total_score=95.0,   # high confidence: exact size match
-                warnings=["🎯 SAS " + competitor_gear_base + " uses IDENTICAL dimensions as SEW " + competitor_gear_base + " — drop-in replacement"],
+                total_score=95.0,
+                warnings=[warning_msg],
                 dimensions=dims,
                 exact_size_match=True,
             )
@@ -1045,7 +1285,7 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
 def match_spec_to_database_loose(spec: NameplateSpec, database: dict, top_n: int = 5) -> list[MatchResult]:
     """
     Legacy loose match (no gear size enforcement). Used by tests only.
-    In v5, the main function never falls back to loose matching — it synthesizes
+    In v5, the main function never falls back to loose matching - it synthesizes
     a result from the dimension reference table instead.
     """
     if not spec.ratio or not database:
@@ -1193,7 +1433,7 @@ def api_brands_refresh():
 def api_compose():
     """
     Recompose SAS model when Sale changes dropdown options (terminal box / cable outlet / IM / motor code).
-    No image upload — just takes current spec + new choices.
+    No image upload - just takes current spec + new choices.
     
     JSON body:
       {
@@ -1248,7 +1488,7 @@ def api_compose():
 @matcher_bp.route("/api/scan", methods=["POST"])
 def api_scan():
     """
-    Main endpoint: upload nameplate → get matches.
+    Main endpoint: upload nameplate -> get matches.
     
     Form data:
         image:       file upload (JPEG/PNG/WEBP)
@@ -1347,8 +1587,8 @@ def api_scan():
             print(f"[matcher] SEW decoder failed: {e}", flush=True)
 
     # Step 3.7: Dimension comparison (competitor gear size vs top SAS match)
-    # For R-series, critical dimensions must match or customer can't install SAS as drop-in
     dimension_compare = None
+    flange_options = None
     competitor_gear = spec.gear_size_code or extract_gear_size(spec.full_model_code)
     if competitor_gear and matches:
         top_sas_gear = extract_gear_size(matches[0].sas_model)
@@ -1356,6 +1596,14 @@ def api_scan():
             dimension_compare = compare_dimensions(competitor_gear, top_sas_gear)
             dimension_compare["competitor_size"] = competitor_gear
             dimension_compare["sas_size"] = top_sas_gear
+
+        # v6: Flange options for RF/SF/KF models — sale must pick matching Ø
+        flange_options = get_flange_options(competitor_gear)
+        if flange_options:
+            flange_options = {
+                "gear_size": competitor_gear,
+                "options": flange_options,
+            }
 
     # Step 4: Archive if low confidence
     archived = False
@@ -1375,6 +1623,7 @@ def api_scan():
         "composed_sas_model": composed,
         "decoded_competitor": decoded_competitor,
         "dimension_compare": dimension_compare,
+        "flange_options": flange_options,
         "from_brand": from_brand,
         "to_brand": to_brand,
         "timing": {"read_ms": int(t_read * 1000), "match_ms": int(t_match * 1000)},

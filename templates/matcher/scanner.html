@@ -874,6 +874,104 @@
       border: 1px solid var(--border);
     }
 
+    /* ============== Torque Auto-correction Warning ============== */
+    .torque-warning {
+      background: rgba(47,121,216,0.08);
+      border: 1.5px solid var(--blue);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      font-size: 0.85rem;
+      color: var(--ink);
+      line-height: 1.5;
+    }
+    .torque-warning strong { color: var(--blue); }
+    .torque-warning code {
+      display: inline-block;
+      padding: 1px 6px;
+      background: white;
+      border-radius: 3px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      border: 1px solid var(--border);
+    }
+
+    /* ============== Flange Options Card ============== */
+    .flange-card {
+      background: white;
+      border: 1.5px solid var(--blue);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 18px;
+      position: relative;
+    }
+    .flange-card::before {
+      content: "FLANGE OPTIONS (IEC B5)";
+      position: absolute;
+      top: -9px; left: 14px;
+      background: var(--blue);
+      color: white;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.15em;
+      padding: 3px 9px;
+      border-radius: 4px;
+    }
+    .flange-intro {
+      font-size: 0.82rem;
+      color: var(--ink-soft);
+      margin-bottom: 12px;
+      line-height: 1.5;
+      padding: 10px 12px;
+      background: rgba(47,121,216,0.06);
+      border-radius: 8px;
+      border-left: 3px solid var(--blue);
+    }
+    .flange-intro strong { color: var(--ink); }
+    .flange-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+    }
+    .flange-opt {
+      padding: 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: var(--paper);
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .flange-opt .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      background: var(--ink);
+      color: white;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.08em;
+      border-radius: 3px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    .flange-opt .diameter {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--ink);
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 4px;
+    }
+    .flange-opt .bore {
+      font-size: 0.75rem;
+      color: var(--ink-soft);
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 2px;
+    }
+    .flange-opt .label {
+      font-size: 0.72rem;
+      color: var(--ink-soft);
+      font-style: italic;
+    }
+
     .error-box {
       padding: 16px;
       background: rgba(220,38,38,0.08);
@@ -1230,6 +1328,7 @@
       const composed = data.composed_sas_model || null;
       const decoded = data.decoded_competitor || null;
       const dimCompare = data.dimension_compare || null;
+      const flangeOptions = data.flange_options || null;
 
       const specHtml = `
         <div class="section-title">Extracted specs</div>
@@ -1244,14 +1343,11 @@
           ${specItem('MOUNTING', spec.mounting_position)}
         </div>`;
 
-      // ---- Ratio sanity warning (v4) ----
       const ratioWarnHtml = renderRatioWarning(spec, specRaw);
-
-      // ---- Competitor features decoded (SEW suffix codes etc.) ----
+      const torqueWarnHtml = renderTorqueWarning(spec, specRaw);
       const featuresHtml = decoded ? renderFeaturesCard(decoded, state.fromBrand?.name || '') : '';
-
-      // ---- Dimension Comparison Card (v4) ----
       const dimHtml = dimCompare ? renderDimensionCard(dimCompare) : '';
+      const flangeHtml = flangeOptions ? renderFlangeCard(flangeOptions) : '';
 
       // ---- SAS Composer Card ----
       let composerHtml = '';
@@ -1289,15 +1385,14 @@
           ${matches.map((m, i) => matchCard(m, i === 0)).join('')}`;
       }
 
-      // Order: Specs → Ratio warning → Features → Dimension compare → Composer → Matches
+      // Order: Specs -> Warnings -> Features -> Dimension -> Flange -> Composer -> Matches
       el.resultBody.innerHTML =
-        specHtml + ratioWarnHtml + featuresHtml + dimHtml + composerHtml + matchesHtml;
+        specHtml + ratioWarnHtml + torqueWarnHtml + featuresHtml + dimHtml + flangeHtml + composerHtml + matchesHtml;
 
       if (composed) bindComposerDropdowns();
     }
 
     function renderRatioWarning(spec, specRaw) {
-      // Show warning if ratio extracted doesn't match computed input/output
       const mismatch = specRaw && specRaw._ratio_mismatch;
       if (!mismatch) return '';
       return `
@@ -1305,6 +1400,68 @@
           <strong>⚠ ระบบปรับค่า Ratio อัตโนมัติ</strong><br>
           อ่านจากเนมเพลทได้ <code>${escapeHtml(String(mismatch.extracted))}</code> แต่คำนวณจาก input/output RPM ได้ <code>${escapeHtml(String(mismatch.computed))}</code> (ต่าง ${escapeHtml(String(mismatch.diff_pct))}%)<br>
           ใช้ค่าคำนวณ <code>${escapeHtml(String(mismatch.computed))}</code> แทน เพื่อความแม่นยำ
+        </div>`;
+    }
+
+    function renderTorqueWarning(spec, specRaw) {
+      if (!specRaw) return '';
+      const mm = specRaw._torque_mismatch;
+      const src = specRaw._torque_source;
+
+      if (mm) {
+        const reason = mm.reason === 'extracted_torque_equals_ratio'
+          ? 'ระบบตรวจพบว่าอ่าน Torque เท่ากับ Ratio (มักเป็น AI สับสน i label กับ Nm)'
+          : 'ค่า Torque ที่อ่านได้ไม่สอดคล้องกับสูตร T = 9550 × kW / rpm';
+        return `
+          <div class="torque-warning">
+            <strong>ℹ ระบบปรับค่า Torque อัตโนมัติ</strong><br>
+            ${escapeHtml(reason)}<br>
+            ค่าเดิม: <code>${escapeHtml(String(mm.original || '—'))} Nm</code>
+            → ค่าที่ใช้: <code>${escapeHtml(String(mm.corrected_to))} Nm</code>
+            (คำนวณจาก <code>T = 9550 × ${spec.power_kw} / ${spec.output_rpm}</code>)
+          </div>`;
+      }
+      if (src === 'computed') {
+        return `
+          <div class="torque-warning">
+            <strong>ℹ Torque คำนวณอัตโนมัติ</strong><br>
+            ไม่พบ Torque บนเนมเพลท → คำนวณจาก <code>T = 9550 × ${spec.power_kw} / ${spec.output_rpm} = ${spec.torque_nm} Nm</code>
+          </div>`;
+      }
+      if (src === 'lb_in_converted') {
+        const lbIn = specRaw._torque_lb_in;
+        return `
+          <div class="torque-warning">
+            <strong>ℹ แปลงหน่วย Torque อัตโนมัติ</strong><br>
+            เนมเพลท SEW USA ใช้ <code>lb-in</code> → แปลงเป็น <code>${escapeHtml(String(lbIn))} lb-in ÷ 8.85 ≈ ${escapeHtml(String(spec.torque_nm))} Nm</code>
+          </div>`;
+      }
+      return '';
+    }
+
+    function renderFlangeCard(flangeData) {
+      const gear = flangeData.gear_size || '';
+      const opts = flangeData.options || [];
+      if (!opts.length) return '';
+
+      const optsHtml = opts.map(o => `
+        <div class="flange-opt">
+          <div class="tag">${escapeHtml(o.option || '')}</div>
+          <div class="diameter">Ø ${escapeHtml(String(o.diameter))} mm</div>
+          <div class="bore">Bore ${escapeHtml(o.bore || '—')}</div>
+          <div class="bore">PCD ${escapeHtml(String(o.bolt_pcd || '—'))} mm</div>
+          <div class="label">${escapeHtml(o.label || '')}</div>
+        </div>
+      `).join('');
+
+      return `
+        <div class="flange-card">
+          <div class="flange-intro">
+            <strong>${escapeHtml(gear)}</strong> เป็นหัวเกียร์แบบ <strong>Flange (IEC B5)</strong> ซึ่งมีหลายขนาดให้เลือก<br>
+            <strong>ต้องวัดเส้นผ่านศูนย์กลาง flange ของเครื่องลูกค้า</strong> แล้วเลือก option ที่ตรง —
+            ถ้าเลือกผิด ใส่ไม่ได้ทันที
+          </div>
+          <div class="flange-grid">${optsHtml}</div>
         </div>`;
     }
 
