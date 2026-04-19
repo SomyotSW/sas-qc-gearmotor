@@ -1341,7 +1341,10 @@
           ${specItem('OUTPUT RPM', spec.output_rpm)}
           ${specItem('FRAME', spec.frame_size ? spec.frame_size + (spec.poles ? ' / ' + spec.poles + 'P' : '') : null)}
           ${specItem('MOUNTING', spec.mounting_position)}
-          ${specItem('SERVICE FACTOR', spec.service_factor ? 'fB ' + spec.service_factor : null)}
+          ${specItem('SERVICE FACTOR (fB)',
+            (matches[0] && matches[0].service_factor != null)
+              ? 'fB ' + matches[0].service_factor + '  (จาก catalog)'
+              : null)}
         </div>`;
 
       const ratioWarnHtml = renderRatioWarning(spec, specRaw);

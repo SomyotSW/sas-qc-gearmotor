@@ -385,13 +385,18 @@ Extract into JSON with this EXACT shape (use null for fields you cannot read cle
   "mounting_position": "e.g. M1, M1A, B3",
   "ip_rating": "e.g. IP66",
   "efficiency_class": "e.g. IE3",
-  "service_factor": number,
   "serial_number": "if visible",
   "_confidence": { "<field_name>": "high|medium|low" },
   "_is_sew_usa": true|false,
   "_ratio_consistent": true|false,
   "_torque_source": "extracted|computed|lb_in_converted"
 }
+
+NOTE: Do NOT extract "S.F." from the nameplate as service_factor!
+The "S.F." shown on the nameplate is the MOTOR service factor (typically 1.0 or 1.15),
+which is different from the GEARBOX service factor (fB) in the catalog.
+The gear fB comes from the catalog selection table based on ratio + kW and
+is looked up separately. We only need motor-related data from the nameplate.
 
 CRITICAL READING RULES:
 
