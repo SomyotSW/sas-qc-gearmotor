@@ -713,6 +713,167 @@
     }
     .features-alert strong { color: var(--blue); }
 
+    /* ============== Dimension Comparison Card ============== */
+    .dim-card {
+      background: white;
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 18px;
+      position: relative;
+    }
+    .dim-card.has-mismatch {
+      border-color: var(--danger);
+      background: linear-gradient(180deg, rgba(220,38,38,0.04), transparent);
+    }
+    .dim-card.compatible {
+      border-color: var(--accent);
+      background: linear-gradient(180deg, rgba(22,156,74,0.04), transparent);
+    }
+    .dim-card::before {
+      content: attr(data-label);
+      position: absolute;
+      top: -9px; left: 14px;
+      background: var(--ink);
+      color: white;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.15em;
+      padding: 3px 9px;
+      border-radius: 4px;
+    }
+    .dim-card.has-mismatch::before { background: var(--danger); }
+    .dim-card.compatible::before { background: var(--accent); }
+
+    .dim-verdict {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      margin-bottom: 14px;
+    }
+    .dim-verdict.compatible {
+      background: rgba(22,156,74,0.08);
+      color: var(--accent);
+    }
+    .dim-verdict.mismatch {
+      background: rgba(220,38,38,0.08);
+      color: var(--danger);
+    }
+    .dim-verdict.unknown {
+      background: rgba(217,119,6,0.08);
+      color: var(--warn);
+    }
+    .dim-verdict .icon { font-size: 1.25rem; }
+
+    .dim-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.87rem;
+    }
+    .dim-table thead th {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.66rem;
+      letter-spacing: 0.12em;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1.5px solid var(--border);
+      background: var(--paper);
+    }
+    .dim-table thead th:first-child { border-radius: 8px 0 0 0; }
+    .dim-table thead th:last-child { border-radius: 0 8px 0 0; text-align: right; }
+    .dim-table tbody td {
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .dim-table tbody tr:last-child td { border-bottom: none; }
+    .dim-table td.label {
+      color: var(--ink-soft);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.74rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      width: 40%;
+    }
+    .dim-table td.value {
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--ink);
+    }
+    .dim-table td.value.sas { text-align: right; }
+    .dim-table tr.mismatch td { background: rgba(220,38,38,0.05); }
+    .dim-table tr.mismatch td.value { color: var(--danger); }
+    .dim-table .critical-mark {
+      display: inline-block;
+      padding: 1px 6px;
+      background: var(--danger);
+      color: white;
+      font-size: 0.62rem;
+      font-weight: 700;
+      border-radius: 3px;
+      margin-left: 6px;
+      letter-spacing: 0.05em;
+    }
+    .dim-headers {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px dashed var(--border);
+    }
+    .dim-headers .h-box {
+      padding: 8px 10px;
+      border-radius: 8px;
+      text-align: center;
+      font-weight: 700;
+    }
+    .dim-headers .h-box .label {
+      display: block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.15em;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+    .dim-headers .h-box .gear-name {
+      font-size: 1rem;
+      color: var(--ink);
+    }
+    .dim-headers .competitor { background: rgba(47,121,216,0.08); border: 1px solid rgba(47,121,216,0.2); }
+    .dim-headers .sas { background: rgba(22,156,74,0.08); border: 1px solid rgba(22,156,74,0.2); }
+
+    /* ============== Ratio Sanity Warning ============== */
+    .ratio-warning {
+      background: rgba(217,119,6,0.1);
+      border: 1.5px solid var(--warn);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      font-size: 0.85rem;
+      color: var(--ink);
+      line-height: 1.5;
+    }
+    .ratio-warning strong { color: var(--warn); }
+    .ratio-warning code {
+      display: inline-block;
+      padding: 1px 6px;
+      background: white;
+      border-radius: 3px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      color: var(--ink);
+      border: 1px solid var(--border);
+    }
+
     .error-box {
       padding: 16px;
       background: rgba(220,38,38,0.08);
@@ -1064,9 +1225,11 @@
 
     function renderResult(data) {
       const spec = data.spec || {};
+      const specRaw = data.spec_raw || {};
       const matches = data.matches || [];
       const composed = data.composed_sas_model || null;
       const decoded = data.decoded_competitor || null;
+      const dimCompare = data.dimension_compare || null;
 
       const specHtml = `
         <div class="section-title">Extracted specs</div>
@@ -1075,14 +1238,20 @@
           ${specItem('POWER', spec.power_kw ? spec.power_kw + ' kW' : null)}
           ${specItem('RATIO', spec.ratio)}
           ${specItem('TORQUE', spec.torque_nm ? spec.torque_nm + ' Nm' : null)}
+          ${specItem('INPUT RPM', spec.input_rpm)}
           ${specItem('OUTPUT RPM', spec.output_rpm)}
           ${specItem('FRAME', spec.frame_size ? spec.frame_size + (spec.poles ? ' / ' + spec.poles + 'P' : '') : null)}
           ${specItem('MOUNTING', spec.mounting_position)}
-          ${specItem('IP / FREQ', [spec.ip_rating, spec.frequency_hz ? spec.frequency_hz + 'Hz' : null].filter(Boolean).join(' · ') || null)}
         </div>`;
+
+      // ---- Ratio sanity warning (v4) ----
+      const ratioWarnHtml = renderRatioWarning(spec, specRaw);
 
       // ---- Competitor features decoded (SEW suffix codes etc.) ----
       const featuresHtml = decoded ? renderFeaturesCard(decoded, state.fromBrand?.name || '') : '';
+
+      // ---- Dimension Comparison Card (v4) ----
+      const dimHtml = dimCompare ? renderDimensionCard(dimCompare) : '';
 
       // ---- SAS Composer Card ----
       let composerHtml = '';
@@ -1120,10 +1289,124 @@
           ${matches.map((m, i) => matchCard(m, i === 0)).join('')}`;
       }
 
-      // Order: Specs → Features (what customer has) → Composer (what SAS offers) → Matches
-      el.resultBody.innerHTML = specHtml + featuresHtml + composerHtml + matchesHtml;
+      // Order: Specs → Ratio warning → Features → Dimension compare → Composer → Matches
+      el.resultBody.innerHTML =
+        specHtml + ratioWarnHtml + featuresHtml + dimHtml + composerHtml + matchesHtml;
 
       if (composed) bindComposerDropdowns();
+    }
+
+    function renderRatioWarning(spec, specRaw) {
+      // Show warning if ratio extracted doesn't match computed input/output
+      const mismatch = specRaw && specRaw._ratio_mismatch;
+      if (!mismatch) return '';
+      return `
+        <div class="ratio-warning">
+          <strong>⚠ ระบบปรับค่า Ratio อัตโนมัติ</strong><br>
+          อ่านจากเนมเพลทได้ <code>${escapeHtml(String(mismatch.extracted))}</code> แต่คำนวณจาก input/output RPM ได้ <code>${escapeHtml(String(mismatch.computed))}</code> (ต่าง ${escapeHtml(String(mismatch.diff_pct))}%)<br>
+          ใช้ค่าคำนวณ <code>${escapeHtml(String(mismatch.computed))}</code> แทน เพื่อความแม่นยำ
+        </div>`;
+    }
+
+    function renderDimensionCard(dc) {
+      const comp = dc.competitor;
+      const sas = dc.sas;
+      const compSize = dc.competitor_size || '—';
+      const sasSize = dc.sas_size || '—';
+      const diffs = dc.differences || [];
+      const hasCritical = diffs.some(d => d.critical);
+      const installOk = dc.installation_compatible;
+
+      let cardClass = 'dim-card';
+      let verdictClass = 'unknown';
+      let verdictIcon = '❓';
+      let verdictText = 'ยังไม่มีข้อมูลขนาด';
+
+      if (!comp || !sas) {
+        cardClass += ' has-mismatch';
+        verdictText = 'ยังไม่มีข้อมูลขนาดของ ' + (!comp ? compSize : sasSize);
+      } else if (installOk) {
+        cardClass += ' compatible';
+        verdictClass = 'compatible';
+        verdictIcon = '✅';
+        verdictText = `ขนาดเทียบกันได้ — สวมแทนได้ (Drop-in replacement)`;
+      } else {
+        cardClass += ' has-mismatch';
+        verdictClass = 'mismatch';
+        verdictIcon = '❌';
+        verdictText = `ขนาดไม่ตรงกัน — ไม่สามารถใส่แทนโดยตรง!`;
+      }
+
+      // Build comparison rows
+      const dimFields = [
+        {key: 'd', label: 'เส้นผ่านศูนย์กลางเพลา (d)', unit: '', critical: true},
+        {key: 'h', label: 'ความสูงจากพื้นถึงแกนเพลา (h)', unit: 'mm', critical: true},
+        {key: 'f_foot', label: 'ระยะห่างรูยึดขา-ยาว (f)', unit: 'mm', critical: true},
+        {key: 'b_foot', label: 'ระยะห่างรูยึดขา-กว้าง (b)', unit: 'mm', critical: false},
+        {key: 'shaft_length', label: 'ความยาวเพลา (l)', unit: 'mm', critical: false},
+        {key: 'key', label: 'เกลียวรูเพลา (s)', unit: '', critical: false},
+      ];
+
+      let rowsHtml = '';
+      if (comp && sas) {
+        rowsHtml = dimFields.map(f => {
+          const cv = comp[f.key];
+          const sv = sas[f.key];
+          if (cv == null && sv == null) return '';
+          const mismatch = (cv != null && sv != null && String(cv) !== String(sv));
+          const mismatchCls = mismatch ? ' mismatch' : '';
+          const critBadge = mismatch && f.critical ? '<span class="critical-mark">CRITICAL</span>' : '';
+          const formatVal = v => v == null ? '—' : escapeHtml(String(v) + (f.unit && !String(v).match(/[a-zA-Z]/) ? ' ' + f.unit : ''));
+          return `
+            <tr class="${mismatchCls}">
+              <td class="label">${escapeHtml(f.label)}${critBadge}</td>
+              <td class="value">${formatVal(cv)}</td>
+              <td class="value sas">${formatVal(sv)}</td>
+            </tr>`;
+        }).join('');
+      }
+
+      const hint = !installOk && comp && sas ?
+        `<div class="features-alert" style="background:rgba(220,38,38,0.08);border-left-color:var(--danger);margin-top:14px;">
+          <strong>💡 คำแนะนำ:</strong> ไม่สามารถเสนอรุ่นนี้เป็น drop-in replacement ได้ —
+          shaft/mounting ไม่ตรงกัน ต้องเลือก gear size ที่ตรงกับของเดิม หรือแจ้งลูกค้าให้ทราบเรื่องการดัดแปลง
+        </div>` : '';
+
+      return `
+        <div class="${cardClass}" data-label="ขนาดเปรียบเทียบ / DIMENSIONS">
+          <div class="dim-verdict ${verdictClass}">
+            <span class="icon">${verdictIcon}</span>
+            <span>${escapeHtml(verdictText)}</span>
+          </div>
+          ${(comp && sas) ? `
+            <div class="dim-headers">
+              <div class="h-box competitor">
+                <span class="label">${escapeHtml((state.fromBrand?.name || 'COMPETITOR').toUpperCase())}</span>
+                <span class="gear-name">${escapeHtml(compSize)}</span>
+              </div>
+              <div class="h-box sas">
+                <span class="label">SAS</span>
+                <span class="gear-name">${escapeHtml(sasSize)}</span>
+              </div>
+            </div>
+            <table class="dim-table">
+              <thead>
+                <tr>
+                  <th>Specification</th>
+                  <th style="text-align:left">Competitor</th>
+                  <th>SAS</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          ` : `
+            <div style="text-align:center;padding:16px;color:var(--ink-soft);font-size:0.85rem;">
+              ไม่มีข้อมูล dimension สำหรับ <strong>${escapeHtml(!comp ? compSize : sasSize)}</strong> ในฐานข้อมูล<br>
+              <small>(ขนาด R-series รองรับเฉพาะ R17–R167)</small>
+            </div>
+          `}
+          ${hint}
+        </div>`;
     }
 
     function renderFeaturesCard(decoded, brandName) {

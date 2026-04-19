@@ -114,6 +114,7 @@ class NameplateSpec:
     brand: Optional[str] = None
     full_model_code: Optional[str] = None
     gear_type_hint: Optional[str] = None
+    gear_size_code: Optional[str] = None     # e.g. "R37", "R107"
     power_kw: Optional[float] = None
     power_hp: Optional[float] = None
     input_rpm: Optional[float] = None
@@ -129,6 +130,8 @@ class NameplateSpec:
     efficiency_class: Optional[str] = None
     service_factor: Optional[float] = None
     serial_number: Optional[str] = None
+    ratio_consistent: Optional[bool] = None  # set by sanity check
+    ratio_computed: Optional[float] = None   # from input_rpm / output_rpm
     raw: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -147,6 +150,10 @@ class MatchResult:
     ratio_match_pct: float
     total_score: float
     warnings: list[str] = field(default_factory=list)
+    # v4: dimensions for side-by-side comparison
+    dimensions: Optional[dict] = None       # SAS dims (d, h, b, ...) from hardcoded ref table
+    exact_size_match: bool = False           # True if gear size matches competitor exactly (e.g. both R37)
+    dimension_warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return self.__dict__
@@ -361,8 +368,9 @@ you cannot read clearly):
 
 {
   "brand": "e.g. SEW-EURODRIVE",
-  "full_model_code": "full model code shown",
-  "gear_type_hint": "R|S|K|F|W (single letter — first char of gear type)",
+  "full_model_code": "full model code shown, e.g. R37 DRE90L4 or R107 DV132S4/BMG/HR/EV1A",
+  "gear_type_hint": "R|S|K|F|W (single letter — first char of gear type from full_model_code)",
+  "gear_size_code": "full gear size with prefix, e.g. R37, R107, S67, K87 (MUST be letter(s)+2-3 digits)",
   "power_kw": number,
   "power_hp": number,
   "input_rpm": number,
@@ -378,8 +386,41 @@ you cannot read clearly):
   "efficiency_class": "e.g. IE3",
   "service_factor": number,
   "serial_number": "if visible",
-  "_confidence": { "<field_name>": "high|medium|low" }
+  "_confidence": { "<field_name>": "high|medium|low" },
+  "_ratio_consistent": true|false
 }
+
+CRITICAL READING RULES — SEW-EURODRIVE nameplates especially:
+
+1. NUMBER FORMAT (European decimal notation):
+   - SEW uses COMMA as decimal separator. "10,11" means 10.11 (ten point eleven), NOT 1011 or two numbers!
+   - Always convert commas in numbers to periods: "10,11" → 10.11
+   - Exception: "1430/141" with slash = TWO separate numbers
+
+2. RATIO FIELD (labeled "i" or "i=" on SEW plates):
+   - Look for the lowercase "i" label, usually on its own line
+   - "i 10,11" or "i=10,11" means ratio = 10.11
+   - Do NOT confuse ratio with torque, RPM, or efficiency values
+
+3. RPM FIELDS ("r/min" or "min^-1"):
+   - "r/min 1430/141" means input_rpm=1430, output_rpm=141
+   - Different lines may show 50Hz and 60Hz values — report 50Hz primary
+   - NEVER put torque values in RPM fields
+
+4. TORQUE FIELD (labeled "Nm"):
+   - "Nm 101/83" means 101 Nm @ 50Hz, 83 Nm @ 60Hz — use 101 as primary
+   - NEVER put this in output_rpm field
+
+5. MODEL CODE READING:
+   - "R37 DRE90L4" → full_model_code="R37 DRE90L4", gear_size_code="R37"
+   - "R107 DV132S4/BMG/HR" → gear_size_code="R107" (NOT R17 or R7)
+   - Capture everything after gear code (motor type + suffixes) in full_model_code
+
+6. CONSISTENCY CHECK (VERY IMPORTANT):
+   After reading, verify: input_rpm / output_rpm ≈ ratio
+   - Example: 1430/141 = 10.14 ≈ 10.11 ✅ (set _ratio_consistent=true)
+   - If they don't match within 5%, you likely misread something → re-read carefully
+   - If still inconsistent, set _ratio_consistent=false and lower confidence
 
 CRITICAL RULES:
 - Only read what is CLEARLY VISIBLE. Do not guess or infer.
@@ -458,29 +499,45 @@ def _call_claude_vision(image_bytes: bytes, mime_type: str, prompt: str) -> dict
 
 
 def read_nameplate(image_bytes: bytes, mime_type: str) -> NameplateSpec:
-    """Extract spec from nameplate image."""
+    """Extract spec from nameplate image + ratio sanity check."""
     raw = _call_claude_vision(image_bytes, mime_type, NAMEPLATE_PROMPT)
 
     if raw.get("_error") or raw.get("_is_nameplate") is False:
         spec = NameplateSpec(raw=raw)
         return spec
 
-    # Coerce number fields
+    # Coerce number fields — handle European "10,11" notation
     def _num(v):
         if v is None or v == "":
             return None
+        if isinstance(v, (int, float)):
+            return v
+        s = str(v).strip()
+        if not s:
+            return None
+        # Handle European decimal separator: "10,11" → "10.11"
+        # But only if there's exactly ONE comma and it's between digits (decimal mark)
+        # AND the string doesn't contain a period already (which would indicate thousand separator mix)
+        if "," in s and "." not in s:
+            # Check if it looks like decimal: digits,digits
+            if re.fullmatch(r"-?\d+,\d+", s):
+                s = s.replace(",", ".")
         try:
-            return float(v) if "." in str(v) or isinstance(v, float) else int(v)
+            return float(s) if "." in s else int(s)
         except (ValueError, TypeError):
             try:
-                return float(str(v).replace(",", ""))
+                return float(s)
             except (ValueError, TypeError):
                 return None
+
+    # Extract gear size from full_model_code (or explicit field from AI)
+    gear_size = raw.get("gear_size_code") or extract_gear_size(raw.get("full_model_code"))
 
     spec = NameplateSpec(
         brand=raw.get("brand"),
         full_model_code=raw.get("full_model_code"),
         gear_type_hint=(raw.get("gear_type_hint") or "").upper()[:1] or None,
+        gear_size_code=gear_size,
         power_kw=_num(raw.get("power_kw")),
         power_hp=_num(raw.get("power_hp")),
         input_rpm=_num(raw.get("input_rpm")),
@@ -498,6 +555,34 @@ def read_nameplate(image_bytes: bytes, mime_type: str) -> NameplateSpec:
         serial_number=raw.get("serial_number"),
         raw=raw,
     )
+    # ========== v4: Ratio sanity check ==========
+    # Cross-verify: input_rpm / output_rpm should equal ratio (within 5%)
+    if spec.input_rpm and spec.output_rpm and spec.output_rpm > 0:
+        computed = spec.input_rpm / spec.output_rpm
+        spec.ratio_computed = round(computed, 2)
+        if spec.ratio:
+            diff_pct = abs(spec.ratio - computed) / max(spec.ratio, 0.01) * 100
+            spec.ratio_consistent = diff_pct <= 5.0
+            # If they disagree significantly, PREFER computed ratio
+            # (AI often mis-reads the "i" label; rpm readings are usually clearer)
+            if not spec.ratio_consistent:
+                # Flag in raw for UI display
+                spec.raw["_ratio_mismatch"] = {
+                    "extracted": spec.ratio,
+                    "computed": spec.ratio_computed,
+                    "diff_pct": round(diff_pct, 1),
+                    "action": "using_computed",
+                }
+                # Over-write the extracted ratio with the computed one
+                spec.ratio = spec.ratio_computed
+        else:
+            # No ratio extracted — use computed
+            spec.ratio = spec.ratio_computed
+            spec.ratio_consistent = True
+    elif spec.ratio and not spec.ratio_computed:
+        # Can't verify without both rpms
+        spec.ratio_consistent = None
+
     return spec
 
 
@@ -632,6 +717,129 @@ def compose_sas_model(spec, gear_size: str,
     }
 
 
+# ============================================================
+# R-Series Dimension Reference Table
+# ============================================================
+# Hardcoded from SAS Catalog page 130 / SEW DRE-GM R-series dimensions
+# All dimensions in mm. These are CRITICAL for installation compatibility —
+# ถ้า customer มี R37 แล้วเราเสนอ R47 shaft ไม่ตรง h/b ก็ไม่ตรง = ใส่ไม่ได้
+
+R_SERIES_DIMENSIONS = {
+    "R17":  {"d": "20k6", "d_mm": 20, "h": 75,  "b_foot": 110, "e": 131, "a": None, "f_foot": 110, "shaft_length": 40,  "key": "M6"},
+    "R17F": {"d": "20k6", "d_mm": 20, "h": 75,  "b_foot": 110, "e": 135, "a": None, "f_foot": 110, "shaft_length": 40,  "key": "M6"},
+    "R27":  {"d": "25k6", "d_mm": 25, "h": 90,  "b_foot": 130, "e": 152, "a": None, "f_foot": 110, "shaft_length": 50,  "key": "M10"},
+    "R27F": {"d": "25k6", "d_mm": 25, "h": 90,  "b_foot": 110, "e": 145, "a": None, "f_foot": 110, "shaft_length": 50,  "key": "M10"},
+    "R37":  {"d": "25k6", "d_mm": 25, "h": 90,  "b_foot": 130, "e": 160, "a": None, "f_foot": 145, "shaft_length": 50,  "key": "M10"},
+    "R37F": {"d": "25k6", "d_mm": 25, "h": 90,  "b_foot": 110, "e": 145, "a": None, "f_foot": 145, "shaft_length": 50,  "key": "M10"},
+    "R47":  {"d": "30k6", "d_mm": 30, "h": 115, "b_foot": 165, "e": 195, "a": None, "f_foot": 170, "shaft_length": 60,  "key": "M10"},
+    "R47F": {"d": "30k6", "d_mm": 30, "h": 115, "b_foot": 135, "e": 170, "a": None, "f_foot": 170, "shaft_length": 60,  "key": "M10"},
+    "R57":  {"d": "35k6", "d_mm": 35, "h": 115, "b_foot": 165, "e": 200, "a": None, "f_foot": 190, "shaft_length": 70,  "key": "M12"},
+    "R57F": {"d": "35k6", "d_mm": 35, "h": 115, "b_foot": 135, "e": 190, "a": None, "f_foot": 190, "shaft_length": 70,  "key": "M12"},
+    "R67":  {"d": "35k6", "d_mm": 35, "h": 130, "b_foot": 195, "e": 235, "a": None, "f_foot": 210, "shaft_length": 70,  "key": "M12"},
+    "R67F": {"d": "35k6", "d_mm": 35, "h": 130, "b_foot": 150, "e": 210, "a": None, "f_foot": 210, "shaft_length": 70,  "key": "M12"},
+    "R77":  {"d": "40k6", "d_mm": 40, "h": 140, "b_foot": 205, "e": 245, "a": None, "f_foot": 230, "shaft_length": 80,  "key": "M16"},
+    "R77F": {"d": "40k6", "d_mm": 40, "h": 140, "b_foot": 170, "e": 230, "a": None, "f_foot": 230, "shaft_length": 80,  "key": "M16"},
+    "R87":  {"d": "50k6", "d_mm": 50, "h": 180, "b_foot": 260, "e": 310, "a": None, "f_foot": 290, "shaft_length": 100, "key": "M16"},
+    "R87F": {"d": "50k6", "d_mm": 50, "h": 180, "b_foot": 215, "e": 290, "a": None, "f_foot": 290, "shaft_length": 100, "key": "M16"},
+    "R97":  {"d": "60m6", "d_mm": 60, "h": 225, "b_foot": 320, "e": 375, "a": None, "f_foot": 360, "shaft_length": 120, "key": "M20"},
+    "R107": {"d": "70m6", "d_mm": 70, "h": 250, "b_foot": 360, "e": 420, "a": None, "f_foot": 400, "shaft_length": 140, "key": "M20"},
+    "R137": {"d": "90m6", "d_mm": 90, "h": 315, "b_foot": 450, "e": 525, "a": None, "f_foot": 500, "shaft_length": 170, "key": "M24"},
+    "R147": {"d":"110m6", "d_mm":110, "h": 355, "b_foot": 510, "e": 590, "a": None, "f_foot": 560, "shaft_length": 210, "key": "M30"},
+    "R167": {"d":"120m6", "d_mm":120, "h": 400, "b_foot": 580, "e": 675, "a": None, "f_foot": 635, "shaft_length": 210, "key": "M36"},
+}
+
+
+_GEAR_SIZE_RE = re.compile(r"^([RSKFW][A-Z]*)(\d{2,3})", re.IGNORECASE)
+
+
+def extract_gear_size(code: Optional[str]) -> Optional[str]:
+    """
+    ดึง gear size (เช่น 'R37', 'R107') จาก full model code.
+    
+    Examples:
+        'R37 DRE90L4' → 'R37'
+        'R107 DV132S4/BMG/HR' → 'R107'
+        'RF47 D90L4' → 'RF47'  (flange variant)
+        'R37' → 'R37'
+    """
+    if not code:
+        return None
+    # Try first token of the string
+    first_token = str(code).strip().split()[0] if str(code).strip() else ""
+    m = _GEAR_SIZE_RE.match(first_token)
+    if m:
+        prefix = m.group(1).upper()
+        size = m.group(2)
+        return f"{prefix}{size}"
+    return None
+
+
+def get_dimensions(gear_size: Optional[str]) -> Optional[dict]:
+    """Look up dimension info for a gear size. Returns None if not in reference."""
+    if not gear_size:
+        return None
+    # Normalize: R37F → R37F, R37 → R37
+    gs = gear_size.upper()
+    return R_SERIES_DIMENSIONS.get(gs)
+
+
+def compare_dimensions(competitor_size: Optional[str], sas_size: Optional[str]) -> dict:
+    """
+    Compare dimensions between competitor gear size and SAS candidate.
+    
+    Returns:
+        {
+          "competitor": {...} or None,
+          "sas": {...} or None,
+          "differences": [{"field": "d", "competitor": 25, "sas": 30, "critical": True}],
+          "installation_compatible": bool,
+          "notes": ["shaft diameter mismatch", "mounting holes differ"],
+        }
+    """
+    comp = get_dimensions(competitor_size)
+    sas = get_dimensions(sas_size)
+    
+    result = {
+        "competitor": comp,
+        "sas": sas,
+        "differences": [],
+        "installation_compatible": True,
+        "notes": [],
+    }
+    
+    if not comp or not sas:
+        return result
+    
+    # Check critical dimensions (these MUST match for drop-in replacement)
+    critical_fields = [
+        ("d_mm", "Shaft diameter", True),
+        ("h", "Center height", True),
+        ("f_foot", "Foot-hole pitch (length)", True),
+        ("b_foot", "Foot-hole width", False),
+        ("shaft_length", "Shaft length", False),
+        ("key", "Keyway size", False),
+    ]
+    
+    for field_key, label, is_critical in critical_fields:
+        cv = comp.get(field_key)
+        sv = sas.get(field_key)
+        if cv is None or sv is None:
+            continue
+        if cv != sv:
+            result["differences"].append({
+                "field": field_key,
+                "label": label,
+                "competitor": cv,
+                "sas": sv,
+                "critical": is_critical,
+            })
+            if is_critical:
+                result["installation_compatible"] = False
+                result["notes"].append(f"{label} ต่างกัน: SEW {cv} vs SAS {sv}")
+    
+    return result
+
+
 def _score_candidate(r: float, t: Optional[float], kw: Optional[float],
                      target_ratio: float, target_torque: Optional[float],
                      target_kw: Optional[float]) -> tuple[float, float, list[str]]:
@@ -668,6 +876,18 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
 
     Returns top_n MatchResult objects sorted by score desc.
     """
+def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) -> list[MatchResult]:
+    """
+    Rank models in `database` against the input `spec`.
+
+    v4 improvements:
+    - Enforce gear size match when competitor model code is known
+      (e.g. "R37 DRE90L4" → MUST match R37 on SAS side, not R47/R107)
+    - Inject dimension data for all candidates
+    - Use ratio_computed (from input/output rpm) as fallback when extracted ratio looks wrong
+
+    Returns top_n MatchResult objects sorted by score desc.
+    """
     if not spec.ratio or not database:
         return []
 
@@ -676,7 +896,37 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
     target_torque = spec.torque_nm
     target_type = (spec.gear_type_hint or "").upper()[:1]
 
+    # v4: Extract competitor gear size (e.g. "R37" from "R37 DRE90L4")
+    # This is the KEY to preventing R37 → R47/R107 mismatches.
+    competitor_gear_size = (
+        spec.gear_size_code
+        or extract_gear_size(spec.full_model_code)
+    )
+    # Normalize: strip "F" or "M" suffix so R37F still matches R37 rows
+    competitor_gear_base = None
+    if competitor_gear_size:
+        m = _GEAR_SIZE_RE.match(competitor_gear_size)
+        if m:
+            letter = m.group(1).upper()
+            # Reduce to just the base letter (R, K, S, F, W) — so RF47 matches R47 variants
+            base_letter = letter[0]
+            competitor_gear_base = f"{base_letter}{m.group(2)}"  # e.g. "R37"
+
     candidates: list[MatchResult] = []
+
+    def _accept_model_size(model_str: str) -> bool:
+        """Check if a candidate model's gear size matches the competitor's."""
+        if not competitor_gear_base:
+            return True
+        cand_size = extract_gear_size(model_str)
+        if not cand_size:
+            return True
+        # Match on the base (R37 matches R37, RF37, RM37)
+        m = _GEAR_SIZE_RE.match(cand_size)
+        if not m:
+            return True
+        cand_base = f"{m.group(1).upper()[0]}{m.group(2)}"
+        return cand_base == competitor_gear_base
 
     # ========== Source 1: selection_tables (best source) ==========
     for st in database.get("selection_tables", []):
@@ -695,6 +945,9 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
                     continue
                 if target_type and not model.upper().startswith(target_type):
                     continue
+                # v4: Strict gear size enforcement
+                if not _accept_model_size(model):
+                    continue
 
                 ratio_diff_pct = abs(r - target_ratio) / target_ratio * 100
                 if ratio_diff_pct > 20:
@@ -702,6 +955,12 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
 
                 total, ratio_pct, warnings = _score_candidate(
                     r, t, kw, target_ratio, target_torque, target_kw)
+
+                cand_size = extract_gear_size(model)
+                dims = get_dimensions(cand_size) if cand_size else None
+                exact = (competitor_gear_base and cand_size and
+                         _GEAR_SIZE_RE.match(cand_size) and
+                         f"{_GEAR_SIZE_RE.match(cand_size).group(1).upper()[0]}{_GEAR_SIZE_RE.match(cand_size).group(2)}" == competitor_gear_base)
 
                 candidates.append(MatchResult(
                     sas_model=model,
@@ -714,20 +973,21 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
                     ratio_match_pct=ratio_pct,
                     total_score=round(total, 1),
                     warnings=warnings,
+                    dimensions=dims,
+                    exact_size_match=bool(exact),
                 ))
 
     # ========== Source 2: ratio_torque_tables (fallback) ==========
-    # Used when catalog doesn't have "selection by kW" tables.
-    # Row gives (gear_size, ratio, output_rpm, torque, radial_load).
-    # We infer model from gear_size + a reasonable motor frame for the power.
     if not candidates:
         for rt in database.get("ratio_torque_tables", []):
-            input_speed = rt.get("input_speed_rpm")
             for table in rt.get("tables", []):
                 gear_size = table.get("gear_size") or ""
                 if not gear_size:
                     continue
                 if target_type and not gear_size.upper().startswith(target_type):
+                    continue
+                # v4: Strict gear size enforcement
+                if not _accept_model_size(gear_size):
                     continue
 
                 for row in table.get("rows", []):
@@ -741,18 +1001,26 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
                     if ratio_diff_pct > 20:
                         continue
 
-                    # Check if this gear can handle the required torque
+                    # Check if gear can handle required torque
                     if target_torque and t and t < target_torque * 0.9:
-                        # Gear too small — skip
                         continue
+                    # v4: Also reject gears MUCH oversized (>5x) when no exact match found
+                    if target_torque and t and t > target_torque * 5:
+                        # Skip unless this is the only option
+                        if competitor_gear_base:
+                            continue
 
                     total, ratio_pct, warnings = _score_candidate(
                         r, t, None, target_ratio, target_torque, None)
-                    # Penalize slightly — we don't have confirmed kW match here
                     total *= 0.92
 
+                    dims = get_dimensions(gear_size)
+                    exact = (competitor_gear_base and
+                             _GEAR_SIZE_RE.match(gear_size) and
+                             f"{_GEAR_SIZE_RE.match(gear_size).group(1).upper()[0]}{_GEAR_SIZE_RE.match(gear_size).group(2)}" == competitor_gear_base)
+
                     candidates.append(MatchResult(
-                        sas_model=gear_size,  # e.g. "R107"
+                        sas_model=gear_size,
                         power_kw=None,
                         ratio=r,
                         output_speed_rpm=out_rpm,
@@ -762,12 +1030,16 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
                         ratio_match_pct=ratio_pct,
                         total_score=round(total, 1),
                         warnings=warnings,
+                        dimensions=dims,
+                        exact_size_match=bool(exact),
                     ))
 
     # ========== Source 3: model_index.applications (last resort) ==========
     if not candidates:
         for model, info in database.get("model_index", {}).items():
             if target_type and not model.upper().startswith(target_type):
+                continue
+            if not _accept_model_size(model):
                 continue
             for app in info.get("applications", []):
                 r = app.get("ratio")
@@ -783,6 +1055,9 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
                 total, ratio_pct, warnings = _score_candidate(
                     r, t, kw, target_ratio, target_torque, target_kw)
 
+                cand_size = extract_gear_size(model)
+                dims = get_dimensions(cand_size) if cand_size else None
+
                 candidates.append(MatchResult(
                     sas_model=model,
                     power_kw=kw,
@@ -794,9 +1069,88 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
                     ratio_match_pct=ratio_pct,
                     total_score=round(total, 1),
                     warnings=warnings,
+                    dimensions=dims,
                 ))
 
-    # Deduplicate by (model, ratio) keeping highest score
+    # ========== v4: Fallback — if strict filter killed all candidates,
+    #               add a warning and allow nearest-size matches ==========
+    if not candidates and competitor_gear_base:
+        # Signal this was a non-ideal match
+        # Repeat search without gear size constraint, then flag warnings
+        fallback = match_spec_to_database_loose(spec, database, top_n)
+        for c in fallback:
+            c.warnings.insert(0,
+                f"⚠ ไม่พบ {competitor_gear_base} ใน SAS catalog — แสดง gear ที่ใกล้ที่สุด "
+                f"(อาจต้องเช็ค dimensions ก่อนเสนอ)")
+            c.exact_size_match = False
+        candidates = fallback
+
+    # Deduplicate
+    seen: dict[tuple, MatchResult] = {}
+    for c in sorted(candidates, key=lambda x: (-int(x.exact_size_match), -x.total_score)):
+        key = (c.sas_model, round(c.ratio or 0, 2))
+        if key not in seen:
+            seen[key] = c
+    return list(seen.values())[:top_n]
+
+
+def match_spec_to_database_loose(spec: NameplateSpec, database: dict, top_n: int = 5) -> list[MatchResult]:
+    """
+    Same as match_spec_to_database but without strict gear size enforcement.
+    Used as fallback when strict match returns empty.
+    """
+    if not spec.ratio or not database:
+        return []
+
+    target_kw = spec.power_kw
+    target_ratio = spec.ratio
+    target_torque = spec.torque_nm
+    target_type = (spec.gear_type_hint or "").upper()[:1]
+
+    candidates: list[MatchResult] = []
+
+    for rt in database.get("ratio_torque_tables", []):
+        for table in rt.get("tables", []):
+            gear_size = table.get("gear_size") or ""
+            if not gear_size:
+                continue
+            if target_type and not gear_size.upper().startswith(target_type):
+                continue
+
+            for row in table.get("rows", []):
+                r = row.get("ratio")
+                t = row.get("max_torque_nm")
+                out_rpm = row.get("output_speed_rpm")
+                if not r:
+                    continue
+
+                ratio_diff_pct = abs(r - target_ratio) / target_ratio * 100
+                if ratio_diff_pct > 20:
+                    continue
+
+                if target_torque and t and t < target_torque * 0.9:
+                    continue
+
+                total, ratio_pct, warnings = _score_candidate(
+                    r, t, None, target_ratio, target_torque, None)
+                total *= 0.85  # lower confidence for loose match
+
+                dims = get_dimensions(gear_size)
+
+                candidates.append(MatchResult(
+                    sas_model=gear_size,
+                    power_kw=None,
+                    ratio=r,
+                    output_speed_rpm=out_rpm,
+                    output_torque_nm=t,
+                    variants=[],
+                    service_factor=None,
+                    ratio_match_pct=ratio_pct,
+                    total_score=round(total, 1),
+                    warnings=warnings,
+                    dimensions=dims,
+                ))
+
     seen: dict[tuple, MatchResult] = {}
     for c in sorted(candidates, key=lambda x: -x.total_score):
         key = (c.sas_model, round(c.ratio or 0, 2))
@@ -1052,6 +1406,17 @@ def api_scan():
         except Exception as e:
             print(f"[matcher] SEW decoder failed: {e}", flush=True)
 
+    # Step 3.7: Dimension comparison (competitor gear size vs top SAS match)
+    # For R-series, critical dimensions must match or customer can't install SAS as drop-in
+    dimension_compare = None
+    competitor_gear = spec.gear_size_code or extract_gear_size(spec.full_model_code)
+    if competitor_gear and matches:
+        top_sas_gear = extract_gear_size(matches[0].sas_model)
+        if top_sas_gear:
+            dimension_compare = compare_dimensions(competitor_gear, top_sas_gear)
+            dimension_compare["competitor_size"] = competitor_gear
+            dimension_compare["sas_size"] = top_sas_gear
+
     # Step 4: Archive if low confidence
     archived = False
     if top_score < LOW_CONFIDENCE_THRESHOLD:
@@ -1069,6 +1434,7 @@ def api_scan():
         "matches": [m.to_dict() for m in matches],
         "composed_sas_model": composed,
         "decoded_competitor": decoded_competitor,
+        "dimension_compare": dimension_compare,
         "from_brand": from_brand,
         "to_brand": to_brand,
         "timing": {"read_ms": int(t_read * 1000), "match_ms": int(t_match * 1000)},
