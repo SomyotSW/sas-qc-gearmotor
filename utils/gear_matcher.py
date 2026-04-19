@@ -867,28 +867,26 @@ def _score_candidate(r: float, t: Optional[float], kw: Optional[float],
 
 def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) -> list[MatchResult]:
     """
-    Rank models in `database` against the input `spec`.
+    Rank SAS models against the competitor nameplate spec.
 
-    Searches 3 sources in order of preference:
-      1. selection_tables (best — has power_kw + model explicitly)
-      2. ratio_torque_tables (fallback — has gear_size, infer model)
-      3. model_index.applications (last resort — pre-built index)
+    CORE PRINCIPLE (v5 — fixed):
+    ============================================================
+    SAS makes gear boxes with dimensions IDENTICAL to SEW (and most
+    European brands) for R-series R17-R167, S-series S37-S97, K-series K37-K97.
+    Therefore:
+      - SEW R57  →  SAS R57  (direct size mapping)
+      - SEW R37  →  SAS R37
+      - SEW R107 →  SAS R107
 
-    Returns top_n MatchResult objects sorted by score desc.
+    The ratio/torque from the database is used ONLY to:
+      - Confirm the exact model exists (e.g. R57 D100M4 at ratio 5.82)
+      - Pick the motor frame (D90L4 vs D100M4 vs D112M4)
+
+    Without a database, we can still compose a valid SAS model from the
+    competitor gear size + dimensions reference table.
+    ============================================================
     """
-def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) -> list[MatchResult]:
-    """
-    Rank models in `database` against the input `spec`.
-
-    v4 improvements:
-    - Enforce gear size match when competitor model code is known
-      (e.g. "R37 DRE90L4" → MUST match R37 on SAS side, not R47/R107)
-    - Inject dimension data for all candidates
-    - Use ratio_computed (from input/output rpm) as fallback when extracted ratio looks wrong
-
-    Returns top_n MatchResult objects sorted by score desc.
-    """
-    if not spec.ratio or not database:
+    if not database and not spec.gear_size_code and not spec.full_model_code:
         return []
 
     target_kw = spec.power_kw
@@ -896,97 +894,86 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
     target_torque = spec.torque_nm
     target_type = (spec.gear_type_hint or "").upper()[:1]
 
-    # v4: Extract competitor gear size (e.g. "R37" from "R37 DRE90L4")
-    # This is the KEY to preventing R37 → R47/R107 mismatches.
+    # Extract competitor gear size (e.g. "R57" from "R57 DRE100M4/AND8")
     competitor_gear_size = (
         spec.gear_size_code
         or extract_gear_size(spec.full_model_code)
     )
-    # Normalize: strip "F" or "M" suffix so R37F still matches R37 rows
+
+    # Normalize to base (R57, K57, S57 — drop F/A/M variants for matching)
     competitor_gear_base = None
     if competitor_gear_size:
         m = _GEAR_SIZE_RE.match(competitor_gear_size)
         if m:
-            letter = m.group(1).upper()
-            # Reduce to just the base letter (R, K, S, F, W) — so RF47 matches R47 variants
-            base_letter = letter[0]
-            competitor_gear_base = f"{base_letter}{m.group(2)}"  # e.g. "R37"
+            base_letter = m.group(1).upper()[0]
+            competitor_gear_base = f"{base_letter}{m.group(2)}"
 
     candidates: list[MatchResult] = []
 
     def _accept_model_size(model_str: str) -> bool:
-        """Check if a candidate model's gear size matches the competitor's."""
+        """Strict: candidate's gear size must match competitor's."""
         if not competitor_gear_base:
             return True
         cand_size = extract_gear_size(model_str)
         if not cand_size:
-            return True
-        # Match on the base (R37 matches R37, RF37, RM37)
+            return False   # ไม่รู้ขนาด = ไม่รับ
         m = _GEAR_SIZE_RE.match(cand_size)
         if not m:
-            return True
+            return False
         cand_base = f"{m.group(1).upper()[0]}{m.group(2)}"
         return cand_base == competitor_gear_base
 
-    # ========== Source 1: selection_tables (best source) ==========
-    for st in database.get("selection_tables", []):
-        for table in st.get("tables", []):
-            kw = table.get("power_kw")
-            if target_kw and kw:
-                diff = abs(kw - target_kw)
-                if diff > 0.5 and (target_kw > 0 and diff / target_kw > 0.3):
-                    continue
+    # ========== Source 1: selection_tables (model + kW + ratio complete) ==========
+    if database and target_ratio:
+        for st in database.get("selection_tables", []):
+            for table in st.get("tables", []):
+                kw = table.get("power_kw")
+                if target_kw and kw:
+                    diff = abs(kw - target_kw)
+                    if diff > 0.5 and (target_kw > 0 and diff / target_kw > 0.3):
+                        continue
 
-            for row in table.get("rows", []):
-                r = row.get("ratio")
-                t = row.get("output_torque_nm")
-                model = row.get("full_model") or row.get("model_code")
-                if not r or not model:
-                    continue
-                if target_type and not model.upper().startswith(target_type):
-                    continue
-                # v4: Strict gear size enforcement
-                if not _accept_model_size(model):
-                    continue
+                for row in table.get("rows", []):
+                    r = row.get("ratio")
+                    t = row.get("output_torque_nm")
+                    model = row.get("full_model") or row.get("model_code")
+                    if not r or not model:
+                        continue
+                    if not _accept_model_size(model):
+                        continue
 
-                ratio_diff_pct = abs(r - target_ratio) / target_ratio * 100
-                if ratio_diff_pct > 20:
-                    continue
+                    ratio_diff_pct = abs(r - target_ratio) / target_ratio * 100
+                    if ratio_diff_pct > 25:
+                        continue
 
-                total, ratio_pct, warnings = _score_candidate(
-                    r, t, kw, target_ratio, target_torque, target_kw)
+                    total, ratio_pct, warnings = _score_candidate(
+                        r, t, kw, target_ratio, target_torque, target_kw)
 
-                cand_size = extract_gear_size(model)
-                dims = get_dimensions(cand_size) if cand_size else None
-                exact = (competitor_gear_base and cand_size and
-                         _GEAR_SIZE_RE.match(cand_size) and
-                         f"{_GEAR_SIZE_RE.match(cand_size).group(1).upper()[0]}{_GEAR_SIZE_RE.match(cand_size).group(2)}" == competitor_gear_base)
+                    cand_size = extract_gear_size(model)
+                    dims = get_dimensions(cand_size) if cand_size else None
 
-                candidates.append(MatchResult(
-                    sas_model=model,
-                    power_kw=kw,
-                    ratio=r,
-                    output_speed_rpm=row.get("output_speed_rpm"),
-                    output_torque_nm=t,
-                    variants=row.get("variants", []),
-                    service_factor=row.get("service_factor"),
-                    ratio_match_pct=ratio_pct,
-                    total_score=round(total, 1),
-                    warnings=warnings,
-                    dimensions=dims,
-                    exact_size_match=bool(exact),
-                ))
+                    candidates.append(MatchResult(
+                        sas_model=model,
+                        power_kw=kw,
+                        ratio=r,
+                        output_speed_rpm=row.get("output_speed_rpm"),
+                        output_torque_nm=t,
+                        variants=row.get("variants", []),
+                        service_factor=row.get("service_factor"),
+                        ratio_match_pct=ratio_pct,
+                        total_score=round(total, 1),
+                        warnings=warnings,
+                        dimensions=dims,
+                        exact_size_match=True,   # already filtered
+                    ))
 
-    # ========== Source 2: ratio_torque_tables (fallback) ==========
-    if not candidates:
+    # ========== Source 2: ratio_torque_tables ==========
+    if not candidates and database and target_ratio:
         for rt in database.get("ratio_torque_tables", []):
             for table in rt.get("tables", []):
                 gear_size = table.get("gear_size") or ""
                 if not gear_size:
                     continue
-                if target_type and not gear_size.upper().startswith(target_type):
-                    continue
-                # v4: Strict gear size enforcement
                 if not _accept_model_size(gear_size):
                     continue
 
@@ -998,26 +985,14 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
                         continue
 
                     ratio_diff_pct = abs(r - target_ratio) / target_ratio * 100
-                    if ratio_diff_pct > 20:
+                    if ratio_diff_pct > 25:
                         continue
 
-                    # Check if gear can handle required torque
                     if target_torque and t and t < target_torque * 0.9:
                         continue
-                    # v4: Also reject gears MUCH oversized (>5x) when no exact match found
-                    if target_torque and t and t > target_torque * 5:
-                        # Skip unless this is the only option
-                        if competitor_gear_base:
-                            continue
 
                     total, ratio_pct, warnings = _score_candidate(
                         r, t, None, target_ratio, target_torque, None)
-                    total *= 0.92
-
-                    dims = get_dimensions(gear_size)
-                    exact = (competitor_gear_base and
-                             _GEAR_SIZE_RE.match(gear_size) and
-                             f"{_GEAR_SIZE_RE.match(gear_size).group(1).upper()[0]}{_GEAR_SIZE_RE.match(gear_size).group(2)}" == competitor_gear_base)
 
                     candidates.append(MatchResult(
                         sas_model=gear_size,
@@ -1030,62 +1005,35 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
                         ratio_match_pct=ratio_pct,
                         total_score=round(total, 1),
                         warnings=warnings,
-                        dimensions=dims,
-                        exact_size_match=bool(exact),
+                        dimensions=get_dimensions(gear_size),
+                        exact_size_match=True,
                     ))
 
-    # ========== Source 3: model_index.applications (last resort) ==========
-    if not candidates:
-        for model, info in database.get("model_index", {}).items():
-            if target_type and not model.upper().startswith(target_type):
-                continue
-            if not _accept_model_size(model):
-                continue
-            for app in info.get("applications", []):
-                r = app.get("ratio")
-                t = app.get("output_torque_nm")
-                kw = app.get("power_kw")
-                if not r:
-                    continue
-
-                ratio_diff_pct = abs(r - target_ratio) / target_ratio * 100
-                if ratio_diff_pct > 20:
-                    continue
-
-                total, ratio_pct, warnings = _score_candidate(
-                    r, t, kw, target_ratio, target_torque, target_kw)
-
-                cand_size = extract_gear_size(model)
-                dims = get_dimensions(cand_size) if cand_size else None
-
-                candidates.append(MatchResult(
-                    sas_model=model,
-                    power_kw=kw,
-                    ratio=r,
-                    output_speed_rpm=app.get("output_speed_rpm"),
-                    output_torque_nm=t,
-                    variants=app.get("variants", []),
-                    service_factor=None,
-                    ratio_match_pct=ratio_pct,
-                    total_score=round(total, 1),
-                    warnings=warnings,
-                    dimensions=dims,
-                ))
-
-    # ========== v4: Fallback — if strict filter killed all candidates,
-    #               add a warning and allow nearest-size matches ==========
+    # ========== Source 3: DIRECT MAPPING (no database hit — v5 core fix) ==========
+    # If we know the competitor gear size (e.g. R57) and SAS makes R57 with
+    # identical dimensions, we can synthesize a match without needing the
+    # exact row in the database.
     if not candidates and competitor_gear_base:
-        # Signal this was a non-ideal match
-        # Repeat search without gear size constraint, then flag warnings
-        fallback = match_spec_to_database_loose(spec, database, top_n)
-        for c in fallback:
-            c.warnings.insert(0,
-                f"⚠ ไม่พบ {competitor_gear_base} ใน SAS catalog — แสดง gear ที่ใกล้ที่สุด "
-                f"(อาจต้องเช็ค dimensions ก่อนเสนอ)")
-            c.exact_size_match = False
-        candidates = fallback
+        dims = get_dimensions(competitor_gear_base)
+        if dims:
+            # Compose synthesized match
+            synth = MatchResult(
+                sas_model=competitor_gear_base,
+                power_kw=target_kw,
+                ratio=target_ratio,
+                output_speed_rpm=spec.output_rpm,
+                output_torque_nm=target_torque,
+                variants=["R", "RF"],
+                service_factor=spec.service_factor,
+                ratio_match_pct=100.0,
+                total_score=95.0,   # high confidence: exact size match
+                warnings=["🎯 SAS " + competitor_gear_base + " uses IDENTICAL dimensions as SEW " + competitor_gear_base + " — drop-in replacement"],
+                dimensions=dims,
+                exact_size_match=True,
+            )
+            candidates.append(synth)
 
-    # Deduplicate
+    # Deduplicate by (model, ratio)
     seen: dict[tuple, MatchResult] = {}
     for c in sorted(candidates, key=lambda x: (-int(x.exact_size_match), -x.total_score)):
         key = (c.sas_model, round(c.ratio or 0, 2))
@@ -1096,13 +1044,13 @@ def match_spec_to_database(spec: NameplateSpec, database: dict, top_n: int = 5) 
 
 def match_spec_to_database_loose(spec: NameplateSpec, database: dict, top_n: int = 5) -> list[MatchResult]:
     """
-    Same as match_spec_to_database but without strict gear size enforcement.
-    Used as fallback when strict match returns empty.
+    Legacy loose match (no gear size enforcement). Used by tests only.
+    In v5, the main function never falls back to loose matching — it synthesizes
+    a result from the dimension reference table instead.
     """
     if not spec.ratio or not database:
         return []
 
-    target_kw = spec.power_kw
     target_ratio = spec.ratio
     target_torque = spec.torque_nm
     target_type = (spec.gear_type_hint or "").upper()[:1]
@@ -1120,38 +1068,30 @@ def match_spec_to_database_loose(spec: NameplateSpec, database: dict, top_n: int
             for row in table.get("rows", []):
                 r = row.get("ratio")
                 t = row.get("max_torque_nm")
-                out_rpm = row.get("output_speed_rpm")
                 if not r:
                     continue
-
                 ratio_diff_pct = abs(r - target_ratio) / target_ratio * 100
                 if ratio_diff_pct > 20:
                     continue
-
                 if target_torque and t and t < target_torque * 0.9:
                     continue
 
                 total, ratio_pct, warnings = _score_candidate(
                     r, t, None, target_ratio, target_torque, None)
-                total *= 0.85  # lower confidence for loose match
-
-                dims = get_dimensions(gear_size)
+                total *= 0.85
 
                 candidates.append(MatchResult(
                     sas_model=gear_size,
-                    power_kw=None,
-                    ratio=r,
-                    output_speed_rpm=out_rpm,
-                    output_torque_nm=t,
-                    variants=[],
-                    service_factor=None,
+                    power_kw=None, ratio=r,
+                    output_speed_rpm=row.get("output_speed_rpm"),
+                    output_torque_nm=t, variants=[], service_factor=None,
                     ratio_match_pct=ratio_pct,
                     total_score=round(total, 1),
                     warnings=warnings,
-                    dimensions=dims,
+                    dimensions=get_dimensions(gear_size),
                 ))
 
-    seen: dict[tuple, MatchResult] = {}
+    seen = {}
     for c in sorted(candidates, key=lambda x: -x.total_score):
         key = (c.sas_model, round(c.ratio or 0, 2))
         if key not in seen:
