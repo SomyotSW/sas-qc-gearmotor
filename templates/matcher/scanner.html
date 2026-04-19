@@ -1366,6 +1366,7 @@
 
       const ratioWarnHtml = renderRatioWarning(spec, specRaw, composed);
       const torqueWarnHtml = renderTorqueWarning(spec, specRaw);
+      const kwWarnHtml = renderKwWarning(spec, specRaw);
       const featuresHtml = decoded ? renderFeaturesCard(decoded, state.fromBrand?.name || '') : '';
       const dimHtml = dimCompare ? renderDimensionCard(dimCompare) : '';
       const flangeHtml = flangeOptions ? renderFlangeCard(flangeOptions) : '';
@@ -1408,7 +1409,7 @@
 
       // Order: Specs -> Warnings -> Features -> Dimension -> Flange -> Composer -> Matches
       el.resultBody.innerHTML =
-        specHtml + ratioWarnHtml + torqueWarnHtml + featuresHtml + dimHtml + flangeHtml + composerHtml + matchesHtml;
+        specHtml + ratioWarnHtml + torqueWarnHtml + kwWarnHtml + featuresHtml + dimHtml + flangeHtml + composerHtml + matchesHtml;
 
       if (composed) bindComposerDropdowns();
     }
@@ -1492,10 +1493,22 @@
       }
     }
 
-    function renderTorqueWarning(spec, specRaw) {
+    // v10: kW frame-based override warning
+    function renderKwWarning(spec, specRaw) {
       if (!specRaw) return '';
-      const mm = specRaw._torque_mismatch;
-      const src = specRaw._torque_source;
+      const mm = specRaw._kw_mismatch;
+      if (!mm) return '';
+      return `
+        <div class="torque-warning">
+          <strong>ℹ ระบบปรับค่า kW อัตโนมัติ (จาก Frame code)</strong><br>
+          ระบบตรวจพบว่า AI อ่าน kW จากเนมเพลทไม่ตรงกับ Frame code
+          (<code>${escapeHtml(mm.frame_code || '')}</code> ตรงกับ ${escapeHtml(String(mm.corrected_to))} kW เท่านั้น)<br>
+          ค่าเดิม: <code>${escapeHtml(String(mm.original ?? '—'))} kW</code>
+          → ค่าที่ใช้: <code>${escapeHtml(String(mm.corrected_to))} kW</code>
+        </div>`;
+    }
+
+    function renderTorqueWarning(spec, specRaw) {
 
       if (mm) {
         const reason = mm.reason === 'extracted_torque_equals_ratio'

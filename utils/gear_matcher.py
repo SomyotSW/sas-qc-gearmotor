@@ -600,12 +600,92 @@ def read_nameplate(image_bytes: bytes, mime_type: str) -> NameplateSpec:
         return best if abs(best - v) / v < 0.10 else v
 
     if not power_kw and power_hp:
-        # Convert hp to kW and snap to IEC step
         raw_kw = power_hp * 0.7457
         power_kw = _snap_to_iec_kw(raw_kw)
     elif power_kw:
-        # Snap even if AI read kW directly (in case it read 0.56 off a USA plate)
         power_kw = _snap_to_iec_kw(power_kw)
+
+    # v10: Frame-based kW verification.
+    # Motor frame codes are DETERMINISTIC indicators of kW.
+    # Example: D132M4 is ALWAYS 7.5 kW (never 5.5). If AI read kW=5.5 but
+    # the plate shows "DRN132M4" in the full_model_code, the kW read is wrong.
+    # We override with the catalog kW that matches the frame.
+    #
+    # This is a CONSERVATIVE fix — only overrides when:
+    #   (a) We can extract a motor frame from full_model_code
+    #   (b) The frame maps to exactly 1 kW value in the SEW standard table
+    #   (c) The frame's kW differs from the extracted kW by >10%
+    # Otherwise we trust the extracted kW.
+    _FRAME_TO_KW = {
+        # Size 63 (smallest)
+        "D63S4": 0.12,  "D63M4": 0.18,  "D63M6": 0.12,  "D63L6": 0.18,
+        "D63M2": 0.25,  "D63S2": 0.18,  "D63L2": 0.37,
+        # Size 71
+        "D71C4": 0.25,  "D71D4": 0.37,            "D71D6": 0.25,
+        "D71S4": 0.37,  "D71M2": 0.55,  "D71D2": 0.55,
+        # D71M4 is AMBIGUOUS (0.25/0.37) — excluded
+        # Size 80
+        "D80K4": 0.55,  "D80N4": 0.75,  "D80N6": 0.55,  "D80N8": 0.25,
+        "D80K6": 0.37,  "D80K2": 0.75,  "D80N2": 1.1,
+        # D80M4 is AMBIGUOUS (0.55/0.75) — excluded
+        # Size 90
+        "D90S4": 1.1,   "D90L4": 1.5,   "D90S6": 0.75,  "D90L6": 1.1,
+        "D90S8": 0.37,  "D90L8": 0.55,  "D90S2": 1.5,   "D90L2": 2.2,
+        # Size 100
+        "D100M4": 2.2,  "D100L4": 3.0,  "D100M6": 1.5,  "D100M8": 0.75,
+        "D100L8": 1.1,  "D100M2": 3.0,
+        # Size 112
+        "D112M4": 4.0,  "D112M6": 1.5,  "D112M8": 1.5,  "D112M2": 4.0,
+        # Size 132 (critical — includes M4 which was the bug)
+        # D132S4 is AMBIGUOUS (4.0/5.5) — excluded
+                        "D132M4": 7.5,  "D132ML4": 9.2,   # M=7.5, ML=9.2
+        "D132S6": 3.0,  "D132M6": 4.0,  "D132ML6": 5.5,
+        "D132S8": 1.5,  "D132ML8": 4.0,
+        "D132S2": 5.5,  "D132M2": 7.5,
+        # Size 160
+        "D160M4": 11.0, "D160L4": 15.0, "D160M6": 7.5,  "D160L6": 9.2,
+        "D160M8": 5.5,  "D160L8": 7.5,
+        # D160M4 is AMBIGUOUS (9.2/11.0) — excluded
+        # Size 180
+        "D180M4": 18.5, "D180L4": 22.0,
+        # Size 200+
+        "D200L4": 30.0,                 "D225M4": 45.0,
+        # D225S4 is AMBIGUOUS (30.0/37.0) — excluded
+        "D250M4": 55.0, "D280S4": 75.0, "D280M4": 90.0,
+        "D315S4": 110.0, "D315M4": 132.0, "D315M4A": 160.0,
+    }
+
+    # Extract motor frame from full_model_code
+    # Example: "R107 DRN132M4/BE11/TF/AV7W/V" -> frame="D132M4"
+    # Step 1: strip the first token (gear size like "R107")
+    # Step 2: the next token contains DRN/DRE/DRS + frame + suffix
+    # Step 3: extract D-prefix + digits + letter(s) + digit
+    frame_kw_override = None
+    frame_detected = None
+    full = str(raw.get("full_model_code") or "").upper()
+    if full:
+        # Match pattern: (DRN|DRE|DRS|DRP|DRU|DR|DV|DT) + frame portion
+        # Frame portion: digits + [KMNSLC] + single digit (+ optional L/A letter)
+        fm = re.search(
+            r"(?:DRN|DRE|DRS|DRP|DRU|DRK|DRM|DRJ|EDRE|EDRS|DV|DT|DR)"
+            r"(\d{2,3}(?:ML|M|S|L|K|N|C|D)\d(?:L|A)?)",
+            full
+        )
+        if fm:
+            frame_code = "D" + fm.group(1)  # e.g. "D132M4"
+            catalog_kw = _FRAME_TO_KW.get(frame_code)
+            if catalog_kw is not None:
+                frame_detected = frame_code
+                # Only override if extracted kW differs by >10% AND catalog_kw is
+                # definitive (single mapping, not ambiguous)
+                if power_kw is None:
+                    frame_kw_override = catalog_kw
+                elif abs(power_kw - catalog_kw) / max(catalog_kw, 0.01) > 0.10:
+                    frame_kw_override = catalog_kw
+
+    if frame_kw_override is not None:
+        power_kw_original = power_kw
+        power_kw = frame_kw_override
 
     spec = NameplateSpec(
         brand=raw.get("brand"),
@@ -718,6 +798,17 @@ def read_nameplate(image_bytes: bytes, mime_type: str) -> NameplateSpec:
     spec.raw["_torque_source"] = torque_source
     spec.raw["_torque_computed"] = computed_torque
     spec.raw["_torque_lb_in"] = torque_lb_in
+
+    # v10: frame-based kW override metadata
+    if frame_detected:
+        spec.raw["_frame_detected"] = frame_detected
+    if frame_kw_override is not None:
+        spec.raw["_kw_mismatch"] = {
+            "reason": "frame_code_implies_different_kw",
+            "original": power_kw_original,
+            "frame_code": frame_detected,
+            "corrected_to": frame_kw_override,
+        }
 
     return spec
 
