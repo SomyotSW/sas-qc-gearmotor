@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0a1828">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self'; script-src 'self' 'unsafe-inline';">
+  <title>IK Scanner — SAS Matcher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ink: #0a1828;
+      --ink-soft: #324a63;
+      --paper: #f6f4ee;
+      --surface: #ffffff;
+      --accent: #169c4a;
+      --accent-bright: #34d270;
+      --blue: #2f79d8;
+      --warn: #d97706;
+      --danger: #dc2626;
+      --border: #d9d4c7;
+    }
+
+    html, body {
+      height: 100dvh;
+      overflow: hidden auto;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      min-height: 100dvh;
+    }
+
+    header {
+      padding: 14px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    header h1 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink);
+    }
+
+    .back-btn {
+      color: var(--ink-soft);
+      background: transparent;
+      border: 0;
+      padding: 4px 10px;
+      font-size: 14px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .brand-badge {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      background: var(--ink);
+      color: var(--paper);
+      padding: 4px 10px;
+      border-radius: 4px;
+    }
+
+    main {
+      flex: 1;
+      padding: 20px 18px 40px;
+      max-width: 720px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .brand-line {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+      font-size: 13px;
+      color: var(--ink-soft);
+    }
+
+    .brand-line strong { color: var(--ink); }
+
+    .info-box {
+      background: #eef4ff;
+      border-left: 3px solid var(--blue);
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--ink);
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
+    .slot-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    @media (max-width: 480px) {
+      .slot-grid { grid-template-columns: 1fr; }
+    }
+
+    .upload-slot {
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      padding: 18px 14px;
+      text-align: center;
+      background: var(--surface);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      position: relative;
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .upload-slot:hover { border-color: var(--accent); background: #f0fdf4; }
+    .upload-slot.has-image { border-style: solid; border-color: var(--accent); padding: 8px; }
+
+    .slot-icon { font-size: 36px; opacity: 0.5; }
+    .slot-label {
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink);
+    }
+    .slot-hint { font-size: 11px; color: var(--ink-soft); }
+
+    .preview-img {
+      max-width: 100%;
+      max-height: 160px;
+      border-radius: 6px;
+      object-fit: contain;
+    }
+
+    .remove-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 24px;
+      height: 24px;
+      background: var(--danger);
+      color: white;
+      border: 0;
+      border-radius: 50%;
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .scan-btn {
+      width: 100%;
+      padding: 16px;
+      background: var(--accent);
+      color: white;
+      border: 0;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s;
+    }
+    .scan-btn:disabled {
+      background: var(--border);
+      color: var(--ink-soft);
+      cursor: not-allowed;
+    }
+    .scan-btn:not(:disabled):hover { background: var(--accent-bright); }
+    .scan-btn:not(:disabled):active { transform: translateY(1px); }
+
+    /* Results */
+    .result {
+      margin-top: 24px;
+      display: none;
+    }
+    .result.show { display: block; }
+
+    .result-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    .result-card h3 {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+      margin-bottom: 10px;
+    }
+
+    .code-big {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent);
+      word-break: break-all;
+      line-height: 1.3;
+    }
+
+    .code-med {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--ink);
+      word-break: break-all;
+    }
+
+    .split-codes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    @media (max-width: 480px) {
+      .split-codes { grid-template-columns: 1fr; }
+    }
+    .split-codes > div {
+      background: #fbfaf7;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .split-codes strong {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+      margin-bottom: 4px;
+    }
+
+    .specs-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px 12px;
+      font-size: 13px;
+    }
+    .specs-grid .label {
+      color: var(--ink-soft);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .specs-grid .value { font-weight: 600; color: var(--ink); }
+
+    .warning-card {
+      background: #fef3c7;
+      border-left: 3px solid var(--warn);
+      padding: 10px 14px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: var(--ink);
+      border-radius: 6px;
+    }
+
+    .error-card {
+      background: #fee2e2;
+      border-left: 3px solid var(--danger);
+      padding: 10px 14px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: var(--ink);
+      border-radius: 6px;
+    }
+
+    .copy-btn {
+      background: transparent;
+      color: var(--blue);
+      border: 1px solid var(--blue);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: inherit;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      margin-top: 6px;
+    }
+    .copy-btn:hover { background: var(--blue); color: white; }
+
+    .loading-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 24, 40, 0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+    }
+    .loading-backdrop.show { display: flex; }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid white;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    input[type="file"] { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <button class="back-btn" onclick="window.location.href='/matcher/app'">← Back</button>
+    <h1>IK Series Scanner</h1>
+    <span class="brand-badge" id="brandBadge">—</span>
+  </header>
+
+  <main>
+    <div class="brand-line">
+      Brand: <strong id="brandLabel">—</strong> →
+      Match to <strong>SAS</strong>
+    </div>
+
+    <div class="info-box">
+      IK series ขายแยก <strong>หัวเกียร์ + มอเตอร์</strong> —
+      ถ่ายภาพทั้ง 2 ช่องเพื่อเทียบรหัส SAS แบบรวม
+      หรือถ่ายเพียงช่องเดียวถ้าต้องการเทียบแค่ส่วนใดส่วนหนึ่ง
+    </div>
+
+    <div class="slot-grid">
+      <label class="upload-slot" id="gearSlot" for="gearInput">
+        <div class="slot-icon">⚙</div>
+        <div class="slot-label">Gear Head</div>
+        <div class="slot-hint">แตะเพื่อถ่าย/เลือกภาพ</div>
+        <input type="file" id="gearInput" accept="image/*" capture="environment">
+      </label>
+
+      <label class="upload-slot" id="motorSlot" for="motorInput">
+        <div class="slot-icon">⚡</div>
+        <div class="slot-label">Motor</div>
+        <div class="slot-hint">แตะเพื่อถ่าย/เลือกภาพ</div>
+        <input type="file" id="motorInput" accept="image/*" capture="environment">
+      </label>
+    </div>
+
+    <button class="scan-btn" id="scanBtn" disabled>สแกน (Scan)</button>
+
+    <div class="result" id="result">
+      <!-- rendered dynamically -->
+    </div>
+  </main>
+
+  <div class="loading-backdrop" id="loading">
+    <div class="spinner"></div>
+  </div>
+
+<script>
+(() => {
+  // Read brand from URL
+  const params = new URLSearchParams(window.location.search);
+  const brand = (params.get('brand') || 'sas').toLowerCase();
+  document.getElementById('brandBadge').textContent = brand.toUpperCase();
+  document.getElementById('brandLabel').textContent =
+    brand.charAt(0).toUpperCase() + brand.slice(1);
+
+  const state = {
+    gearImage: null,   // base64 string (no data: prefix)
+    motorImage: null,
+    gearMime: null,
+    motorMime: null,
+  };
+
+  const els = {
+    gearSlot: document.getElementById('gearSlot'),
+    motorSlot: document.getElementById('motorSlot'),
+    gearInput: document.getElementById('gearInput'),
+    motorInput: document.getElementById('motorInput'),
+    scanBtn: document.getElementById('scanBtn'),
+    result: document.getElementById('result'),
+    loading: document.getElementById('loading'),
+  };
+
+  function updateScanBtn() {
+    const hasAny = state.gearImage || state.motorImage;
+    els.scanBtn.disabled = !hasAny;
+  }
+
+  function readAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleFile(kind, file) {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert('ไฟล์ใหญ่เกิน 10MB');
+      return;
+    }
+    const dataUrl = await readAsDataURL(file);
+    const [meta, b64] = dataUrl.split(',');
+    const mime = meta.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
+
+    if (kind === 'gear') {
+      state.gearImage = b64;
+      state.gearMime = mime;
+      renderSlot('gearSlot', dataUrl, 'gear');
+    } else {
+      state.motorImage = b64;
+      state.motorMime = mime;
+      renderSlot('motorSlot', dataUrl, 'motor');
+    }
+    updateScanBtn();
+  }
+
+  function renderSlot(slotId, dataUrl, kind) {
+    const slot = document.getElementById(slotId);
+    slot.classList.add('has-image');
+    const label = kind === 'gear' ? 'Gear Head' : 'Motor';
+    slot.innerHTML = `
+      <img src="${dataUrl}" class="preview-img" alt="${label}">
+      <div class="slot-label">${label}</div>
+      <button class="remove-btn" data-kind="${kind}">×</button>
+      <input type="file" id="${kind}Input" accept="image/*" capture="environment" style="display:none">
+    `;
+    // Re-bind
+    const newInput = slot.querySelector('input[type="file"]');
+    newInput.addEventListener('change', e => handleFile(kind, e.target.files[0]));
+    slot.querySelector('.remove-btn').addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      clearSlot(kind);
+    });
+    // Clicking the slot triggers file input
+    slot.addEventListener('click', e => {
+      if (e.target.classList.contains('remove-btn')) return;
+      newInput.click();
+    });
+  }
+
+  function clearSlot(kind) {
+    if (kind === 'gear') {
+      state.gearImage = null;
+      state.gearMime = null;
+      resetSlot('gearSlot', '⚙', 'Gear Head', 'gear');
+    } else {
+      state.motorImage = null;
+      state.motorMime = null;
+      resetSlot('motorSlot', '⚡', 'Motor', 'motor');
+    }
+    updateScanBtn();
+  }
+
+  function resetSlot(slotId, icon, label, kind) {
+    const slot = document.getElementById(slotId);
+    slot.classList.remove('has-image');
+    slot.innerHTML = `
+      <div class="slot-icon">${icon}</div>
+      <div class="slot-label">${label}</div>
+      <div class="slot-hint">แตะเพื่อถ่าย/เลือกภาพ</div>
+      <input type="file" id="${kind}Input" accept="image/*" capture="environment">
+    `;
+    const newInput = slot.querySelector('input[type="file"]');
+    newInput.addEventListener('change', e => handleFile(kind, e.target.files[0]));
+  }
+
+  // Initial bindings
+  els.gearInput.addEventListener('change', e => handleFile('gear', e.target.files[0]));
+  els.motorInput.addEventListener('change', e => handleFile('motor', e.target.files[0]));
+
+  els.scanBtn.addEventListener('click', async () => {
+    els.loading.classList.add('show');
+    els.result.classList.remove('show');
+    els.result.innerHTML = '';
+    try {
+      const payload = {
+        brand: brand,
+        gear_head: state.gearImage ? {
+          image_b64: state.gearImage,
+          mime_type: state.gearMime,
+        } : null,
+        motor: state.motorImage ? {
+          image_b64: state.motorImage,
+          mime_type: state.motorMime,
+        } : null,
+      };
+      const res = await fetch('/matcher/api/scan_ik', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        renderError(data.error || 'สแกนไม่สำเร็จ');
+      } else {
+        renderResult(data);
+      }
+    } catch (err) {
+      console.error(err);
+      renderError('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ — ' + err.message);
+    } finally {
+      els.loading.classList.remove('show');
+    }
+  });
+
+  function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function renderError(msg) {
+    els.result.innerHTML = `<div class="error-card">${escapeHtml(msg)}</div>`;
+    els.result.classList.add('show');
+  }
+
+  function renderResult(data) {
+    let html = '';
+    const warnings = data.warnings || [];
+    if (warnings.length) {
+      warnings.forEach(w => {
+        html += `<div class="warning-card">⚠ ${escapeHtml(w)}</div>`;
+      });
+    }
+
+    // Full SAS code card (only if both pieces scanned)
+    if (data.sas_full_code) {
+      html += `
+        <div class="result-card">
+          <h3>SAS Full Code</h3>
+          <div class="code-big" id="fullCode">${escapeHtml(data.sas_full_code)}</div>
+          <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('fullCode').textContent)">Copy</button>
+        </div>`;
+    }
+
+    // Split cards
+    html += '<div class="split-codes">';
+    if (data.sas_motor_code) {
+      html += `
+        <div>
+          <strong>Motor</strong>
+          <div class="code-med">${escapeHtml(data.sas_motor_code)}</div>
+          ${data.motor_specs ? renderSpecs(data.motor_specs) : ''}
+        </div>`;
+    } else if (state.motorImage) {
+      html += `<div><strong>Motor</strong><div style="color:var(--danger);font-size:12px">สแกนไม่สำเร็จ</div></div>`;
+    }
+
+    if (data.sas_gear_code) {
+      html += `
+        <div>
+          <strong>Gear Head</strong>
+          <div class="code-med">${escapeHtml(data.sas_gear_code)}</div>
+          ${data.gear_specs ? renderSpecs(data.gear_specs) : ''}
+        </div>`;
+    } else if (state.gearImage) {
+      html += `<div><strong>Gear Head</strong><div style="color:var(--danger);font-size:12px">สแกนไม่สำเร็จ</div></div>`;
+    }
+    html += '</div>';
+
+    // Raw read-back
+    if (data.raw_motor_code || data.raw_gear_code) {
+      html += `
+        <div class="result-card" style="margin-top:14px">
+          <h3>อ่านได้จากเนมเพลท</h3>
+          <div class="specs-grid">
+            ${data.raw_motor_code ? `<div class="label">Motor:</div><div class="value" style="font-family:monospace">${escapeHtml(data.raw_motor_code)}</div>` : ''}
+            ${data.raw_gear_code  ? `<div class="label">Gear Head:</div><div class="value" style="font-family:monospace">${escapeHtml(data.raw_gear_code)}</div>` : ''}
+          </div>
+        </div>`;
+    }
+
+    els.result.innerHTML = html;
+    els.result.classList.add('show');
+    els.result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderSpecs(specs) {
+    const rows = [];
+    if (specs.frame_mm)     rows.push(['Frame', specs.frame_mm + 'mm']);
+    if (specs.power_w)      rows.push(['Power', specs.power_w + 'W']);
+    if (specs.ratio)        rows.push(['Ratio', '1:' + specs.ratio]);
+    if (specs.motor_type)   rows.push(['Type', specs.motor_type]);
+    if (specs.pinion_type)  rows.push(['Pinion', specs.pinion_type]);
+    if (specs.voltage_code) rows.push(['Voltage', specs.voltage_code]);
+    if (specs.mount)        rows.push(['Mount', specs.mount]);
+    if (!rows.length) return '';
+    return '<div class="specs-grid" style="margin-top:8px">' +
+      rows.map(([k, v]) => `<div class="label">${escapeHtml(k)}</div><div class="value">${escapeHtml(v)}</div>`).join('') +
+      '</div>';
+  }
+})();
+</script>
+</body>
+</html>

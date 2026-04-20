@@ -1832,3 +1832,228 @@ def api_scan():
         "archived_for_review": archived,
         "top_score": top_score,
     })
+
+
+# ============================================================
+# IK Series — 2-photo scanner (Phase A)
+# ============================================================
+# Supported brands: SAS, ZD, Suntech, Oriental Motor, SPG, Panasonic
+
+IK_BRAND_PROMPTS = {
+    "sas": "SAS IK series. Example formats: '5IK60GU-CF' (motor), '5GU50KB' (gear head), '5IK60GU-CF-5GU50KB' (combined).",
+    "zd": "ZD IK series — uses same code format as SAS. Example: '5IK60GU-CF' (motor), '5GU50KB' (gear head).",
+    "suntech": "Suntech IK series — uses same code format as SAS. Example: '5IK60GU-CF' (motor), '5GU50KB' (gear head).",
+    "oriental": "Oriental Motor 'World K' series. Motor example: '4IK25GN-CW2', '5IK60GE-UT4F'. Gear head example: '4GN18S', '5GN50K'.",
+    "spg": "SPG Co. Ltd. Standard AC Geared Motor. Motor example: 'S9I60GBH', 'S6I03GA'. Gear head example: 'S9KC50BH', 'S6DT3B'. Note: starts with 'S' (brand letter).",
+    "panasonic": "Panasonic Compact AC Geared Motor. Motor example: 'M91Z60G4L', 'M71X10G4L'. Gear head example: 'MX9G50B', 'MX7G10XB'. Note: starts with 'M' (brand letter), gear head starts with 'MX'.",
+}
+
+
+def _build_ik_prompt(brand: str, kind: str) -> str:
+    """Build a brand-specific prompt to read an IK series nameplate."""
+    brand_hint = IK_BRAND_PROMPTS.get(brand, "AC geared motor nameplate.")
+    kind_label = "gear head" if kind == "gear" else "motor"
+    return f"""You are reading a nameplate label on an AC geared {kind_label} (IK series).
+
+Brand context: {brand_hint}
+
+Read the nameplate and extract the model code EXACTLY as printed.
+
+Return JSON only:
+{{
+  "is_nameplate": true,
+  "kind_observed": "motor" or "gear_head",
+  "full_code": "<the complete model code as printed, UPPERCASE, no spaces>",
+  "brand_observed": "<brand name if visible on label>"
+}}
+
+Rules:
+- Copy the code CHARACTER BY CHARACTER from the label. Do not guess or complete.
+- Preserve letters exactly (e.g. GN is different from GU, B is different from BH).
+- If the code uses a hyphen '-', keep it.
+- If you see multiple codes on one label (sometimes motor AND gear head are labeled together), return the one matching {kind_label}.
+- If you cannot see a clear code, return {{"is_nameplate": false}}.
+- Do not include any explanation, just the JSON.
+"""
+
+
+def _read_ik_code(image_bytes: bytes, mime_type: str, brand: str, kind: str) -> dict:
+    """Call Claude Vision to read an IK-series nameplate. Returns dict with 'full_code' key."""
+    prompt = _build_ik_prompt(brand, kind)
+    result = _call_claude_vision(image_bytes, mime_type, prompt)
+    if result.get("_error"):
+        return {"error": result["_error"]}
+    if result.get("is_nameplate") is False:
+        return {"error": "Image does not appear to be a nameplate"}
+    code = (result.get("full_code") or "").strip().upper().replace(" ", "")
+    if not code:
+        return {"error": "Could not extract code from nameplate"}
+    return {"full_code": code, "brand_observed": result.get("brand_observed")}
+
+
+@matcher_bp.route("/api/scan_ik", methods=["POST"])
+def api_scan_ik():
+    """
+    IK series 2-photo scanner.
+    
+    Expected JSON body:
+      {
+        "brand": "oriental" | "spg" | "panasonic" | "sas" | "zd" | "suntech",
+        "gear_head": { "image_b64": "...", "mime_type": "image/jpeg" } | null,
+        "motor":     { "image_b64": "...", "mime_type": "image/jpeg" } | null
+      }
+    
+    At least one of gear_head or motor must be provided.
+    
+    Returns:
+      {
+        "ok": true,
+        "brand": str,
+        "raw_motor_code": str | null,
+        "raw_gear_code":  str | null,
+        "sas_motor_code": str | null,   (translated SAS code)
+        "sas_gear_code":  str | null,
+        "sas_full_code":  str | null,   (composed motor-gearhead, only if BOTH present)
+        "motor_specs":    { frame_mm, power_w, pinion_type, voltage_code, motor_type },
+        "gear_specs":     { frame_mm, ratio, mount },
+        "warnings":       [str, ...]
+      }
+    """
+    ip = _client_ip()
+    if not _check_rate_limit(ip):
+        return jsonify({"ok": False, "error": "Rate limit exceeded. Try again later."}), 429
+
+    try:
+        payload = request.get_json(force=True, silent=False) or {}
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Invalid JSON: {e}"}), 400
+
+    brand = (payload.get("brand") or "sas").lower().strip()
+    if brand not in IK_BRAND_PROMPTS:
+        return jsonify({"ok": False, "error": f"Unsupported brand for IK series: {brand}"}), 400
+
+    gear_data = payload.get("gear_head")
+    motor_data = payload.get("motor")
+    if not gear_data and not motor_data:
+        return jsonify({"ok": False, "error": "Must provide at least one of gear_head or motor"}), 400
+
+    # Import decoder/translator here to avoid circular imports at module load
+    from .ik_decoder import decode_ik
+    from .ik_translator import (
+        translate_motor, translate_gearhead,
+        compose_sas_motor_code, compose_sas_gear_code, compose_sas_full_code,
+    )
+
+    result = {
+        "ok": True,
+        "brand": brand,
+        "raw_motor_code": None,
+        "raw_gear_code": None,
+        "sas_motor_code": None,
+        "sas_gear_code": None,
+        "sas_full_code": None,
+        "motor_specs": None,
+        "gear_specs": None,
+        "warnings": [],
+    }
+
+    def _decode_image(img_data):
+        """Decode base64 image, return (bytes, mime) or raise."""
+        b64 = img_data.get("image_b64", "")
+        mime = img_data.get("mime_type", "image/jpeg")
+        try:
+            img_bytes = base64.b64decode(b64)
+        except Exception as e:
+            raise ValueError(f"Invalid base64: {e}")
+        if len(img_bytes) > MAX_IMAGE_SIZE:
+            raise ValueError(f"Image too large (max {MAX_IMAGE_SIZE} bytes)")
+        if len(img_bytes) < 500:
+            raise ValueError("Image too small")
+        return img_bytes, mime
+
+    motor_spec = None
+    gear_spec = None
+
+    # Read motor nameplate
+    if motor_data:
+        try:
+            img_bytes, mime = _decode_image(motor_data)
+            ocr = _read_ik_code(img_bytes, mime, brand, kind="motor")
+            if "error" in ocr:
+                result["warnings"].append(f"Motor: {ocr['error']}")
+            else:
+                result["raw_motor_code"] = ocr["full_code"]
+                motor_spec = decode_ik(brand, ocr["full_code"], "motor")
+                if motor_spec is None:
+                    result["warnings"].append(
+                        f"Motor code '{ocr['full_code']}' does not match expected {brand.upper()} format"
+                    )
+        except Exception as e:
+            result["warnings"].append(f"Motor image error: {e}")
+
+    # Read gear head nameplate
+    if gear_data:
+        try:
+            img_bytes, mime = _decode_image(gear_data)
+            ocr = _read_ik_code(img_bytes, mime, brand, kind="gear")
+            if "error" in ocr:
+                result["warnings"].append(f"Gear head: {ocr['error']}")
+            else:
+                result["raw_gear_code"] = ocr["full_code"]
+                gear_spec = decode_ik(brand, ocr["full_code"], "gearhead")
+                if gear_spec is None:
+                    result["warnings"].append(
+                        f"Gear head code '{ocr['full_code']}' does not match expected {brand.upper()} format"
+                    )
+        except Exception as e:
+            result["warnings"].append(f"Gear head image error: {e}")
+
+    # Translate motor
+    sas_motor = None
+    if motor_spec:
+        sas_motor, mwarn = translate_motor(motor_spec)
+        result["warnings"].extend(mwarn)
+        result["sas_motor_code"] = compose_sas_motor_code(sas_motor)
+        result["motor_specs"] = {
+            "frame_mm": sas_motor.frame_mm,
+            "power_w": sas_motor.power_w,
+            "pinion_type": sas_motor.pinion_type,
+            "voltage_code": sas_motor.voltage_code,
+            "motor_type": sas_motor.motor_type,
+        }
+
+    # Translate gear head
+    sas_gear = None
+    if gear_spec:
+        motor_power = motor_spec.power_w if motor_spec else None
+        motor_pinion = sas_motor.pinion_type if sas_motor else None
+        sas_gear, gwarn = translate_gearhead(
+            gear_spec, motor_power_w=motor_power, motor_pinion=motor_pinion
+        )
+        result["warnings"].extend(gwarn)
+        result["sas_gear_code"] = compose_sas_gear_code(sas_gear)
+        result["gear_specs"] = {
+            "frame_mm": sas_gear.frame_mm,
+            "ratio": sas_gear.ratio,
+            "mount": sas_gear.mount,
+            "pinion_type": sas_gear.pinion_type,
+        }
+
+    # Compose full code if both available
+    if sas_motor and sas_gear:
+        # Verify frame match
+        if sas_motor.frame_mm != sas_gear.frame_mm:
+            result["warnings"].append(
+                f"Frame size mismatch: motor={sas_motor.frame_mm}mm, gear head={sas_gear.frame_mm}mm. "
+                "These cannot be paired in SAS."
+            )
+        else:
+            result["sas_full_code"] = compose_sas_full_code(sas_motor, sas_gear)
+
+    return jsonify(result)
+
+
+@matcher_bp.route("/scanner_ik")
+def scanner_ik_page():
+    """Serve the 2-photo IK scanner UI."""
+    return render_template("matcher/scanner_ik.html")

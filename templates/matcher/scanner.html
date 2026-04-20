@@ -1233,6 +1233,14 @@
           const id = item.dataset.brandId;
           const brand = state.brands.find(b => b.id === id);
           if (!brand) return;
+
+          // IK ecosystem brands → redirect to 2-photo scanner
+          const IK_BRANDS = new Set(['sas', 'zd', 'suntech', 'oriental', 'spg', 'panasonic']);
+          if (state.pickerFor === 'from' && IK_BRANDS.has(brand.id)) {
+            window.location.href = `/matcher/scanner_ik?brand=${encodeURIComponent(brand.id)}`;
+            return;
+          }
+
           if (state.pickerFor === 'from') state.fromBrand = { id: brand.id, name: brand.name };
           else state.toBrand = { id: brand.id, name: brand.name };
           updateBrandDisplay();
