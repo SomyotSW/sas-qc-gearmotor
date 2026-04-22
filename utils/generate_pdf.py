@@ -40,7 +40,7 @@ _QC_STICKER_READER = None
 _QC_STICKER_SIZE   = None
 
 INSPECTOR_MAP = {
-    "QC001": "คุณสมประสงค์",
+    "QC001": "คุณสมนา",
     "QC002": "คุณเกียรติศักดิ์",
     "QC003": "คุณมัด",
     "QC999": "คุณโชติธนินท์",
@@ -51,7 +51,7 @@ SIGNATURE_MAP = {
     "QC001": "001.png",
     "QC002": "002.png",
     # รองรับชื่อภาษาไทยด้วย (กรณี app.py เก็บ inspector_name แทน id)
-    "คุณสมประสงค์": "001.png",
+    "คุณสม": "001.png",
     "คุณเกียรติศักดิ์": "002.png",
 }
 
@@ -224,7 +224,7 @@ def draw_footer(c, width, page_num=None):
 
     c.setFillColor(WHITE)
     c.setFont("THSarabunNew", 13)
-    c.drawString(1.5 * cm, 0.45 * cm, "SAS Service: 096-2815161")
+    c.drawString(1.5 * cm, 0.45 * cm, "SAS Service: 099-8527166")
     c.drawCentredString(width / 2, 0.45 * cm, "SAS QC Gear Motor Report")
     if page_num:
         c.drawRightString(width - 1.5 * cm, 0.45 * cm, f"Page {page_num}")
