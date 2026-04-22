@@ -506,7 +506,7 @@ def check_status_upload_public():
                 
 # ✅ Inspector mapping (ID -> ชื่อ)
 INSPECTOR_MAP = {
-    "QC001": "คุณสมประสงค์",
+    "QC001": "คุณสมนา",
     "QC002": "คุณเกียรติศักดิ์",
     "QC003": "คุณมัด",
     "QC999": "คุณโชติธนินท์",
