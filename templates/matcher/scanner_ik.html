@@ -397,19 +397,19 @@
     </div>
 
     <div class="slot-grid">
-      <label class="upload-slot" id="gearSlot" for="gearInput">
+      <div class="upload-slot" id="gearSlot">
         <div class="slot-icon">⚙</div>
         <div class="slot-label">Gear Head</div>
         <div class="slot-hint">แตะเพื่อถ่าย/เลือกภาพ</div>
-        <input type="file" id="gearInput" accept="image/*" capture="environment">
-      </label>
+        <input type="file" id="gearInput" accept="image/*" style="display:none">
+      </div>
 
-      <label class="upload-slot" id="motorSlot" for="motorInput">
+      <div class="upload-slot" id="motorSlot">
         <div class="slot-icon">⚡</div>
         <div class="slot-label">Motor</div>
         <div class="slot-hint">แตะเพื่อถ่าย/เลือกภาพ</div>
-        <input type="file" id="motorInput" accept="image/*" capture="environment">
-      </label>
+        <input type="file" id="motorInput" accept="image/*" style="display:none">
+      </div>
     </div>
 
     <button class="scan-btn" id="scanBtn" disabled>สแกน (Scan)</button>
@@ -485,28 +485,41 @@
     updateScanBtn();
   }
 
+  // Open file picker safely — avoids double-trigger on iOS
+  function openPicker(inputEl) {
+    // Reset value so 'change' fires even if same file re-selected
+    inputEl.value = '';
+    inputEl.click();
+  }
+
   function renderSlot(slotId, dataUrl, kind) {
     const slot = document.getElementById(slotId);
     slot.classList.add('has-image');
     const label = kind === 'gear' ? 'Gear Head' : 'Motor';
+    // Replace slot content — old event listeners on slot are wiped by cloneNode trick below
     slot.innerHTML = `
       <img src="${dataUrl}" class="preview-img" alt="${label}">
       <div class="slot-label">${label}</div>
-      <button class="remove-btn" data-kind="${kind}">×</button>
-      <input type="file" id="${kind}Input" accept="image/*" capture="environment" style="display:none">
+      <button class="remove-btn" type="button" data-kind="${kind}">×</button>
+      <input type="file" id="${kind}Input" accept="image/*" style="display:none">
     `;
-    // Re-bind
-    const newInput = slot.querySelector('input[type="file"]');
-    newInput.addEventListener('change', e => handleFile(kind, e.target.files[0]));
-    slot.querySelector('.remove-btn').addEventListener('click', e => {
+    // Remove all accumulated click listeners by replacing node with clone
+    const fresh = slot.cloneNode(true);
+    slot.parentNode.replaceChild(fresh, slot);
+    const freshSlot = document.getElementById(slotId);
+
+    const inp = freshSlot.querySelector('input[type="file"]');
+    inp.addEventListener('change', e => {
+      if (e.target.files && e.target.files[0]) handleFile(kind, e.target.files[0]);
+    });
+    freshSlot.querySelector('.remove-btn').addEventListener('click', e => {
       e.preventDefault();
       e.stopPropagation();
       clearSlot(kind);
     });
-    // Clicking the slot triggers file input
-    slot.addEventListener('click', e => {
-      if (e.target.classList.contains('remove-btn')) return;
-      newInput.click();
+    freshSlot.addEventListener('click', e => {
+      if (e.target.closest('.remove-btn')) return;
+      openPicker(inp);
     });
   }
 
@@ -530,15 +543,31 @@
       <div class="slot-icon">${icon}</div>
       <div class="slot-label">${label}</div>
       <div class="slot-hint">แตะเพื่อถ่าย/เลือกภาพ</div>
-      <input type="file" id="${kind}Input" accept="image/*" capture="environment">
+      <input type="file" id="${kind}Input" accept="image/*" style="display:none">
     `;
-    const newInput = slot.querySelector('input[type="file"]');
-    newInput.addEventListener('change', e => handleFile(kind, e.target.files[0]));
+    // Replace node to clear any accumulated listeners
+    const fresh = slot.cloneNode(true);
+    slot.parentNode.replaceChild(fresh, slot);
+    const freshSlot = document.getElementById(slotId);
+
+    const inp = freshSlot.querySelector('input[type="file"]');
+    inp.addEventListener('change', e => {
+      if (e.target.files && e.target.files[0]) handleFile(kind, e.target.files[0]);
+    });
+    freshSlot.addEventListener('click', () => openPicker(inp));
   }
 
   // Initial bindings
-  els.gearInput.addEventListener('change', e => handleFile('gear', e.target.files[0]));
-  els.motorInput.addEventListener('change', e => handleFile('motor', e.target.files[0]));
+  function bindSlot(slotId, kind) {
+    const slot = document.getElementById(slotId);
+    const inp = document.getElementById(kind + 'Input');
+    inp.addEventListener('change', e => {
+      if (e.target.files && e.target.files[0]) handleFile(kind, e.target.files[0]);
+    });
+    slot.addEventListener('click', () => openPicker(inp));
+  }
+  bindSlot('gearSlot', 'gear');
+  bindSlot('motorSlot', 'motor');
 
   els.scanBtn.addEventListener('click', async () => {
     els.loading.classList.add('show');
