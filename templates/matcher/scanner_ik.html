@@ -275,6 +275,49 @@
     }
     .specs-grid .value { font-weight: 600; color: var(--ink); }
 
+    /* Gear head dimension block */
+    .dim-block {
+      margin-top: 10px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .dim-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .dim-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    @media (max-width: 480px) {
+      .dim-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .dim-item {
+      background: rgba(255,255,255,0.7);
+      border-radius: 6px;
+      padding: 6px 8px;
+      text-align: center;
+    }
+    .dim-label {
+      font-size: 10px;
+      color: var(--ink-soft);
+      letter-spacing: 0.05em;
+      margin-bottom: 2px;
+    }
+    .dim-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
     .warning-card {
       background: #fef3c7;
       border-left: 3px solid var(--warn);
@@ -563,30 +606,37 @@
         </div>`;
     }
 
-    // Split cards
-    html += '<div class="split-codes">';
-    if (data.sas_motor_code) {
-      html += `
-        <div>
-          <strong>Motor</strong>
-          <div class="code-med">${escapeHtml(data.sas_motor_code)}</div>
-          ${data.motor_specs ? renderSpecs(data.motor_specs) : ''}
-        </div>`;
-    } else if (state.motorImage) {
-      html += `<div><strong>Motor</strong><div style="color:var(--danger);font-size:12px">สแกนไม่สำเร็จ</div></div>`;
+    // Split cards — motor only in 2-col grid
+    if (data.sas_motor_code || state.motorImage) {
+      html += '<div class="split-codes">';
+      if (data.sas_motor_code) {
+        html += `
+          <div>
+            <strong>Motor</strong>
+            <div class="code-med">${escapeHtml(data.sas_motor_code)}</div>
+            ${data.motor_specs ? renderSpecs(data.motor_specs) : ''}
+          </div>`;
+      } else if (state.motorImage) {
+        html += `<div><strong>Motor</strong><div style="color:var(--danger);font-size:12px">สแกนไม่สำเร็จ</div></div>`;
+      }
+      html += '</div>';
     }
 
+    // Gear head — full width card (has dimension table)
     if (data.sas_gear_code) {
       html += `
-        <div>
-          <strong>Gear Head</strong>
-          <div class="code-med">${escapeHtml(data.sas_gear_code)}</div>
+        <div class="result-card" style="margin-top:14px">
+          <h3>Gear Head</h3>
+          <div class="code-med" style="margin-bottom:8px">${escapeHtml(data.sas_gear_code)}</div>
           ${data.gear_specs ? renderSpecs(data.gear_specs) : ''}
         </div>`;
     } else if (state.gearImage) {
-      html += `<div><strong>Gear Head</strong><div style="color:var(--danger);font-size:12px">สแกนไม่สำเร็จ</div></div>`;
+      html += `
+        <div class="result-card" style="margin-top:14px">
+          <h3>Gear Head</h3>
+          <div style="color:var(--danger);font-size:12px">สแกนไม่สำเร็จ</div>
+        </div>`;
     }
-    html += '</div>';
 
     // Raw read-back
     if (data.raw_motor_code || data.raw_gear_code) {
@@ -614,10 +664,51 @@
     if (specs.pinion_type)  rows.push(['Pinion', specs.pinion_type]);
     if (specs.voltage_code) rows.push(['Voltage', specs.voltage_code]);
     if (specs.mount)        rows.push(['Mount', specs.mount]);
-    if (!rows.length) return '';
-    return '<div class="specs-grid" style="margin-top:8px">' +
-      rows.map(([k, v]) => `<div class="label">${escapeHtml(k)}</div><div class="value">${escapeHtml(v)}</div>`).join('') +
-      '</div>';
+    if (!rows.length && !specs.dimensions) return '';
+
+    let html = '';
+    if (rows.length) {
+      html += '<div class="specs-grid" style="margin-top:8px">' +
+        rows.map(([k, v]) => `<div class="label">${escapeHtml(k)}</div><div class="value">${escapeHtml(v)}</div>`).join('') +
+        '</div>';
+    }
+
+    // Gear head physical dimensions block
+    const d = specs.dimensions;
+    if (d) {
+      html += `
+        <div class="dim-block">
+          <div class="dim-title">📐 ขนาดทางกายภาพ (Dimensions)</div>
+          <div class="dim-grid">
+            <div class="dim-item">
+              <div class="dim-label">Shaft Ø</div>
+              <div class="dim-value">φ${d.shaft_dia_mm} mm</div>
+            </div>
+            <div class="dim-item">
+              <div class="dim-label">Shaft Length</div>
+              <div class="dim-value">${d.shaft_len_mm} mm</div>
+            </div>
+            <div class="dim-item">
+              <div class="dim-label">Boss Ø</div>
+              <div class="dim-value">φ${d.boss_dia_mm} mm</div>
+            </div>
+            <div class="dim-item">
+              <div class="dim-label">Bolt PCD</div>
+              <div class="dim-value">φ${d.bolt_pcd_mm} mm</div>
+            </div>
+            <div class="dim-item">
+              <div class="dim-label">Bolt Hole Ø</div>
+              <div class="dim-value">φ${d.bolt_hole_dia_mm} mm</div>
+            </div>
+            <div class="dim-item">
+              <div class="dim-label">Frame</div>
+              <div class="dim-value">${d.frame_w_mm}×${d.frame_w_mm} mm</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    return html;
   }
 })();
 </script>

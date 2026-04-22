@@ -208,12 +208,13 @@ ORIENTAL_MOTOR_RE = re.compile(
     r"([IRT])"                          # ② type
     r"(K)"                              # ③ series
     r"(\d{1,3})"                        # ④ power
-    r"(GN|GE|A)"                        # ⑤ shaft
+    r"(R)?"                             # ⑤ speed-adjustable (optional, same as SAS)
+    r"(GN|GE|A)"                        # ⑥ shaft
     r"-"
-    r"(AW|DW|BW|CW|SW|TW|U)"            # ⑥ voltage
-    r"(2|3)?"                           # ⑦ RoHS
-    r"(T4F|T4|T)?"                      # ⑧ option
-    r"(E|U|J)?"                         # ⑨ capacitor (ignored)
+    r"(AW|DW|BW|CW|SW|TW|U)"            # ⑦ voltage
+    r"(2|3)?"                           # ⑧ RoHS
+    r"(T4F|T4|T)?"                      # ⑨ option
+    r"(E|U|J)?"                         # ⑩ capacitor (ignored)
     r"$"
 )
 
@@ -232,7 +233,7 @@ def decode_oriental_motor(code: str) -> Optional[IKSpec]:
     m = ORIENTAL_MOTOR_RE.match(code)
     if not m:
         return None
-    frame_d, mtype, _, power, shaft, voltage, rohs, option, capacitor = m.groups()
+    frame_d, mtype, _, power, r_suffix, shaft, voltage, rohs, option, capacitor = m.groups()
     # Option decoding:
     #   T   = Terminal box → SAS 'T'
     #   T4  = TÜV certification grade → IGNORE (not SAS-relevant)
@@ -244,7 +245,7 @@ def decode_oriental_motor(code: str) -> Optional[IKSpec]:
         options.append("F")
     elif option == "T4":
         pass  # cert only, no hardware option
-    return IKSpec(
+    spec = IKSpec(
         brand="oriental",
         kind="motor",
         frame_mm=ORIENTAL_SIZE_TO_MM.get(frame_d),
@@ -257,6 +258,9 @@ def decode_oriental_motor(code: str) -> Optional[IKSpec]:
         raw_code=code,
         extras={"rohs": rohs, "cert": option, "capacitor_suffix_ignored": capacitor},
     )
+    if r_suffix:
+        spec.extras["speed_adjustable"] = True
+    return spec
 
 
 def decode_oriental_gear(code: str) -> Optional[IKSpec]:

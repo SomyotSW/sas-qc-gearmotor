@@ -1218,12 +1218,16 @@
         const isSelected = target && target.id === b.id;
         const catalogs = (b.catalogs || []).length;
         const initials = (b.name.match(/[A-Z]/g) || []).slice(0,3).join('') || b.name.slice(0,2).toUpperCase();
+        const isIK = b.series === 'ik';
+        const metaText = isIK
+          ? '🔩 IK · แยกหัวเกียร์/มอเตอร์'
+          : `${catalogs} catalog${catalogs === 1 ? '' : 's'}`;
         return `
           <button class="brand-item ${isSelected ? 'selected' : ''}" data-brand-id="${escapeAttr(b.id)}" type="button">
             <div class="brand-logo">${escapeHtml(initials)}</div>
             <div class="brand-info">
               <div class="name">${escapeHtml(b.name)}</div>
-              <div class="meta">${catalogs} catalog${catalogs === 1 ? '' : 's'}</div>
+              <div class="meta">${escapeHtml(metaText)}</div>
             </div>
           </button>`;
       }).join('');
@@ -1234,10 +1238,12 @@
           const brand = state.brands.find(b => b.id === id);
           if (!brand) return;
 
-          // IK ecosystem brands → redirect to 2-photo scanner
-          const IK_BRANDS = new Set(['sas', 'zd', 'suntech', 'oriental', 'spg', 'panasonic']);
-          if (state.pickerFor === 'from' && IK_BRANDS.has(brand.id)) {
-            window.location.href = `/matcher/scanner_ik?brand=${encodeURIComponent(brand.id)}`;
+          // IK-series brand → redirect to 2-photo scanner
+          if (state.pickerFor === 'from' && brand.series === 'ik') {
+            // For "<brand>_ik" variants (e.g. "sas_ik"), strip the _ik suffix when
+            // passing to the scanner, since the decoder uses the base brand id.
+            const scanBrand = brand.base_brand || brand.id;
+            window.location.href = `/matcher/scanner_ik?brand=${encodeURIComponent(scanBrand)}`;
             return;
           }
 

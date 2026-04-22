@@ -226,12 +226,28 @@ def _upload_bytes(key: str, data: bytes, content_type: str):
 # Brand discovery (auto from R2)
 # ============================================================
 
+# ============================================================
+# Virtual IK-ecosystem brands (no catalog in R2 yet — added manually)
+# ============================================================
+# These brands are shown in the brand picker and route to the 2-photo
+# IK scanner. They work even before a catalog PDF is uploaded because
+# the decoder/translator is code-based.
+IK_ECOSYSTEM_BRANDS_META = [
+    {"id": "sas",       "name": "SAS (Synergy Asia Solution)", "series": "ik"},
+    {"id": "zd",        "name": "ZD",                          "series": "ik"},
+    {"id": "suntech",   "name": "Suntech",                     "series": "ik"},
+    {"id": "oriental",  "name": "Oriental Motor (World K)",    "series": "ik"},
+    {"id": "spg",       "name": "SPG",                         "series": "ik"},
+    {"id": "panasonic", "name": "Panasonic",                   "series": "ik"},
+]
+
+
 def get_brand_list(force_refresh: bool = False) -> list[dict]:
     """
-    Auto-discover brands from R2 bucket structure.
-    Cached for 5 minutes to avoid hammering R2.
+    Return all available brands: auto-discovered from R2 + virtual IK brands.
+    Cached for 5 minutes.
     
-    Returns: [{"id": "sew", "name": "SEW-EURODRIVE", "catalogs": [...]}, ...]
+    Returns: [{"id": "sew", "name": "SEW-EURODRIVE", "catalogs": [...], "series": "r"}, ...]
     """
     now = time.time()
     with _state["brand_list_lock"]:
@@ -243,6 +259,7 @@ def get_brand_list(force_refresh: bool = False) -> list[dict]:
         objects = _list_objects(CATALOGS_PREFIX)
         brands: dict[str, dict] = {}
 
+        # Step 1: auto-discover from R2 (existing behavior — these are "r-series" brands)
         for o in objects:
             # key looks like: catalogs/sew/r_series.pdf
             parts = o["key"].split("/")
@@ -257,6 +274,7 @@ def get_brand_list(force_refresh: bool = False) -> list[dict]:
                 "id": brand_id,
                 "name": _brand_display_name(brand_id),
                 "catalogs": [],
+                "series": "r",  # default — R-series / large gearbox
             })
             if filename.lower().endswith(".pdf"):
                 brand["catalogs"].append({
@@ -265,11 +283,38 @@ def get_brand_list(force_refresh: bool = False) -> list[dict]:
                     "last_modified": str(o["last_modified"]),
                 })
 
-        # Always include SAS first if present
-        result = sorted(
-            brands.values(),
-            key=lambda b: (0 if b["id"] == "sas" else 1, b["name"])
-        )
+        # Step 2: add virtual IK-ecosystem brands.
+        # If a brand already exists from R2 (e.g. SAS has r_series.pdf), we keep
+        # its R-series entry AND add a separate IK entry with id "<brand>_ik".
+        for meta in IK_ECOSYSTEM_BRANDS_META:
+            ik_id = meta["id"]
+            # If the brand already exists in R2 (SAS), mark it as dual-series
+            # by adding an IK variant with distinct id.
+            if ik_id in brands:
+                # Promote existing entry to include IK variant
+                ik_variant_id = f"{ik_id}_ik"
+                brands[ik_variant_id] = {
+                    "id": ik_variant_id,
+                    "name": f"{brands[ik_id]['name']} — IK Series",
+                    "catalogs": [],
+                    "series": "ik",
+                    "base_brand": ik_id,
+                }
+            else:
+                brands[ik_id] = {
+                    "id": ik_id,
+                    "name": meta["name"],
+                    "catalogs": [],
+                    "series": "ik",
+                }
+
+        # Sort: SAS first (both variants), then others alphabetically
+        def _sort_key(b):
+            bid = b["id"]
+            is_sas = bid.startswith("sas")
+            return (0 if is_sas else 1, b.get("series", "r"), b["name"])
+
+        result = sorted(brands.values(), key=_sort_key)
         _state["brand_list_cache"] = result
         _state["brand_list_mtime"] = now
         return result
@@ -288,6 +333,12 @@ def _brand_display_name(brand_id: str) -> str:
         "sumitomo": "Sumitomo",
         "motovario": "Motovario",
         "abb": "ABB",
+        # IK-ecosystem brands
+        "zd": "ZD",
+        "suntech": "Suntech",
+        "oriental": "Oriental Motor (World K)",
+        "spg": "SPG",
+        "panasonic": "Panasonic",
     }
     return known.get(brand_id, brand_id.upper())
 
@@ -1835,9 +1886,33 @@ def api_scan():
 
 
 # ============================================================
-# IK Series — 2-photo scanner (Phase A)
 # ============================================================
-# Supported brands: SAS, ZD, Suntech, Oriental Motor, SPG, Panasonic
+# IK Gear Head — Physical Dimensions Reference Table
+# Source: SAS / Oriental Motor IK Series catalog
+# Key dimensions for cross-brand comparison:
+#   shaft_dia_mm      : output shaft diameter (mm)
+#   shaft_len_mm      : output shaft length (mm)
+#   boss_dia_mm       : boss (pilot) diameter φ34 / φ25 etc.
+#   bolt_pcd_mm       : bolt hole pitch circle diameter (distance between 4 holes diagonal)
+#   bolt_hole_dia_mm  : bolt hole diameter
+#   frame_w_mm        : frame width (square face)
+# ============================================================
+IK_GEAR_DIMENSIONS = {
+    # frame_mm: { pinion: { ... } }
+    # GN and GU share the same physical frame per size
+    42:  {"shaft_dia_mm": 8,  "shaft_len_mm": 20, "boss_dia_mm": 20, "bolt_pcd_mm": 50,  "bolt_hole_dia_mm": 4.5, "frame_w_mm": 42},
+    60:  {"shaft_dia_mm": 10, "shaft_len_mm": 25, "boss_dia_mm": 25, "bolt_pcd_mm": 70,  "bolt_hole_dia_mm": 5.0, "frame_w_mm": 60},
+    70:  {"shaft_dia_mm": 12, "shaft_len_mm": 30, "boss_dia_mm": 30, "bolt_pcd_mm": 80,  "bolt_hole_dia_mm": 5.5, "frame_w_mm": 70},
+    80:  {"shaft_dia_mm": 12, "shaft_len_mm": 30, "boss_dia_mm": 34, "bolt_pcd_mm": 94,  "bolt_hole_dia_mm": 5.5, "frame_w_mm": 80},
+    90:  {"shaft_dia_mm": 15, "shaft_len_mm": 35, "boss_dia_mm": 40, "bolt_pcd_mm": 100, "bolt_hole_dia_mm": 6.0, "frame_w_mm": 90},
+    104: {"shaft_dia_mm": 18, "shaft_len_mm": 40, "boss_dia_mm": 50, "bolt_pcd_mm": 115, "bolt_hole_dia_mm": 7.0, "frame_w_mm": 104},
+}
+
+
+def get_ik_gear_dimensions(frame_mm: int) -> Optional[dict]:
+    """Return physical dimension dict for an IK gear head by frame size."""
+    return IK_GEAR_DIMENSIONS.get(frame_mm)
+
 
 IK_BRAND_PROMPTS = {
     "sas": "SAS IK series. Example formats: '5IK60GU-CF' (motor), '5GU50KB' (gear head), '5IK60GU-CF-5GU50KB' (combined).",
@@ -2032,11 +2107,13 @@ def api_scan_ik():
         )
         result["warnings"].extend(gwarn)
         result["sas_gear_code"] = compose_sas_gear_code(sas_gear)
+        gear_dims = get_ik_gear_dimensions(sas_gear.frame_mm)
         result["gear_specs"] = {
             "frame_mm": sas_gear.frame_mm,
             "ratio": sas_gear.ratio,
             "mount": sas_gear.mount,
             "pinion_type": sas_gear.pinion_type,
+            "dimensions": gear_dims,
         }
 
     # Compose full code if both available
