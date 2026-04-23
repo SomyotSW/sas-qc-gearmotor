@@ -106,11 +106,13 @@
     .brand-btn.to-brand   { border-color: rgba(22,156,74,0.3); }
     .brand-btn .brand-value {
       font-weight: 700;
-      font-size: 1rem;
+      font-size: 0.88rem;
       margin-top: auto;
-      white-space: nowrap;
+      white-space: normal;
       overflow: hidden;
       text-overflow: ellipsis;
+      word-break: break-word;
+      line-height: 1.25;
     }
     .brand-btn .brand-value.empty {
       color: var(--ink-soft);
@@ -1072,6 +1074,7 @@
   </div>
 
   <input type="file" class="hidden-input" id="cameraInput" accept="image/*" capture="environment">
+  <!-- uploadInput intentionally has no capture= so it opens gallery/files -->
   <input type="file" class="hidden-input" id="uploadInput" accept="image/*">
 
   <!-- Sheet backdrop -->
@@ -1200,6 +1203,9 @@
       openSheet(el.brandSheet);
     }
 
+    // Brand IDs that are SAS own-brand — hidden when picking competitor nameplate
+    const SAS_BRAND_IDS = new Set(['sas', 'sas_ik', 'zd', 'suntech']);
+
     function renderBrandList() {
       if (!state.brands.length) {
         el.brandList.innerHTML = `
@@ -1213,8 +1219,20 @@
           </div>`;
         return;
       }
+      // When picking the competitor nameplate, hide SAS/ZD/Suntech (own brand)
+      const visibleBrands = state.pickerFor === 'from'
+        ? state.brands.filter(b => !SAS_BRAND_IDS.has(b.id))
+        : state.brands;
+      if (state.pickerFor === 'from' && !visibleBrands.length) {
+        el.brandList.innerHTML = `
+          <div style="text-align:center;padding:40px 20px;color:var(--ink-soft)">
+            <div style="font-size:2rem;margin-bottom:12px;">🔍</div>
+            <div>ยังไม่มีแบรนด์คู่แข่งในระบบ</div>
+          </div>`;
+        return;
+      }
       const target = state.pickerFor === 'from' ? state.fromBrand : state.toBrand;
-      el.brandList.innerHTML = state.brands.map(b => {
+      el.brandList.innerHTML = visibleBrands.map(b => {
         const isSelected = target && target.id === b.id;
         const catalogs = (b.catalogs || []).length;
         const initials = (b.name.match(/[A-Z]/g) || []).slice(0,3).join('') || b.name.slice(0,2).toUpperCase();
@@ -1389,6 +1407,19 @@
       const dimCompare = data.dimension_compare || null;
       const flangeOptions = data.flange_options || null;
 
+      // Build electrical spec strings
+      const phaseStr = spec.phase != null
+        ? (spec.phase === 1 ? '1-Phase' : spec.phase === 3 ? '3-Phase' : String(spec.phase) + '-Phase')
+        : null;
+      const voltageStr = (() => {
+        const parts = [];
+        if (spec.voltage) parts.push(spec.voltage);
+        if (spec.frequency_hz) parts.push(spec.frequency_hz + ' Hz');
+        if (spec.poles) parts.push(spec.poles + 'P');
+        return parts.length ? parts.join(' / ') : null;
+      })();
+      const currentStr = spec.current_a != null ? spec.current_a + ' A' : null;
+
       const specHtml = `
         <div class="section-title">Extracted specs</div>
         <div class="spec-grid">
@@ -1398,7 +1429,12 @@
           ${specItem('TORQUE', spec.torque_nm ? spec.torque_nm + ' Nm' : null)}
           ${specItem('INPUT RPM', spec.input_rpm)}
           ${specItem('OUTPUT RPM', spec.output_rpm)}
-          ${specItem('FRAME', spec.frame_size ? spec.frame_size + (spec.poles ? ' / ' + spec.poles + 'P' : '') : null)}
+          ${specItem('PHASE', phaseStr)}
+          ${specItem('VOLTAGE / Hz / POLES', voltageStr)}
+          ${specItem('CURRENT', currentStr)}
+          ${specItem('IP RATING', spec.ip_rating)}
+          ${specItem('EFF. CLASS', spec.efficiency_class)}
+          ${specItem('FRAME', spec.frame_size)}
           ${specItem('MOUNTING', spec.mounting_position)}
           ${specItem('SERVICE FACTOR (fB)',
             (matches[0] && matches[0].service_factor != null)

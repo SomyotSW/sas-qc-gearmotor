@@ -223,7 +223,7 @@ ORIENTAL_GEAR_RE = re.compile(
     r"(GN|GE)"
     r"(10X)?"
     r"(\d{1,3}(?:\.\d)?)"
-    r"(S|K|RH|RA)"
+    r"(SA|KA|RAA|RH|RA|S|K)"   # SA/KA/RAA = RoHS variants; order: longer tokens first
     r"$"
 )
 

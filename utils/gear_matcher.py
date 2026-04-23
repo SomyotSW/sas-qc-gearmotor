@@ -123,6 +123,8 @@ class NameplateSpec:
     torque_nm: Optional[float] = None
     voltage: Optional[str] = None
     frequency_hz: Optional[int] = None
+    phase: Optional[int] = None        # 1 or 3
+    current_a: Optional[float] = None  # motor current in Amperes
     frame_size: Optional[str] = None
     poles: Optional[int] = None
     mounting_position: Optional[str] = None
@@ -431,6 +433,8 @@ Extract into JSON with this EXACT shape (use null for fields you cannot read cle
   "torque_lb_in": number,
   "voltage": "e.g. 460V 3ph",
   "frequency_hz": 50 or 60,
+  "phase": 1 or 3,
+  "current_a": number (motor current in Amperes, e.g. 1.5),
   "frame_size": "e.g. 90L or 71M",
   "poles": number,
   "mounting_position": "e.g. M1, M1A, B3",
@@ -751,6 +755,8 @@ def read_nameplate(image_bytes: bytes, mime_type: str) -> NameplateSpec:
         torque_nm=_num(raw.get("torque_nm")),
         voltage=raw.get("voltage"),
         frequency_hz=_num(raw.get("frequency_hz")),
+        phase=_num(raw.get("phase")),
+        current_a=_num(raw.get("current_a")),
         frame_size=raw.get("frame_size"),
         poles=_num(raw.get("poles")),
         mounting_position=raw.get("mounting_position"),
@@ -1886,20 +1892,12 @@ def api_scan():
 
 
 # ============================================================
+# IK Series — 2-photo scanner (Phase A)
 # ============================================================
-# IK Gear Head — Physical Dimensions Reference Table
-# Source: SAS / Oriental Motor IK Series catalog
-# Key dimensions for cross-brand comparison:
-#   shaft_dia_mm      : output shaft diameter (mm)
-#   shaft_len_mm      : output shaft length (mm)
-#   boss_dia_mm       : boss (pilot) diameter φ34 / φ25 etc.
-#   bolt_pcd_mm       : bolt hole pitch circle diameter (distance between 4 holes diagonal)
-#   bolt_hole_dia_mm  : bolt hole diameter
-#   frame_w_mm        : frame width (square face)
+# IK Gear Head Physical Dimensions (SAS / Oriental Motor IK Series)
+# Used to show shaft/bolt specs for cross-brand comparison
 # ============================================================
 IK_GEAR_DIMENSIONS = {
-    # frame_mm: { pinion: { ... } }
-    # GN and GU share the same physical frame per size
     42:  {"shaft_dia_mm": 8,  "shaft_len_mm": 20, "boss_dia_mm": 20, "bolt_pcd_mm": 50,  "bolt_hole_dia_mm": 4.5, "frame_w_mm": 42},
     60:  {"shaft_dia_mm": 10, "shaft_len_mm": 25, "boss_dia_mm": 25, "bolt_pcd_mm": 70,  "bolt_hole_dia_mm": 5.0, "frame_w_mm": 60},
     70:  {"shaft_dia_mm": 12, "shaft_len_mm": 30, "boss_dia_mm": 30, "bolt_pcd_mm": 80,  "bolt_hole_dia_mm": 5.5, "frame_w_mm": 70},
@@ -1918,7 +1916,7 @@ IK_BRAND_PROMPTS = {
     "sas": "SAS IK series. Example formats: '5IK60GU-CF' (motor), '5GU50KB' (gear head), '5IK60GU-CF-5GU50KB' (combined).",
     "zd": "ZD IK series — uses same code format as SAS. Example: '5IK60GU-CF' (motor), '5GU50KB' (gear head).",
     "suntech": "Suntech IK series — uses same code format as SAS. Example: '5IK60GU-CF' (motor), '5GU50KB' (gear head).",
-    "oriental": "Oriental Motor 'World K' series. Motor example: '4IK25GN-CW2', '5IK60GE-UT4F'. Gear head example: '4GN18S', '5GN50K'.",
+    "oriental": "Oriental Motor 'World K' series. Motor example: '4IK25GN-CW2', '5IK60GE-UT4F'. Gear head example: '4GN18S', '5GN50K', '4GN18SA', '4GN50KA'. IMPORTANT: Gear head suffix is a LETTER code (S, K, SA, KA, RH, RA, RAA) — NOT a number. e.g. '4GN18SA' ends in 'SA' (letter S + letter A), never '5A'.",
     "spg": "SPG Co. Ltd. Standard AC Geared Motor. Motor example: 'S9I60GBH', 'S6I03GA'. Gear head example: 'S9KC50BH', 'S6DT3B'. Note: starts with 'S' (brand letter).",
     "panasonic": "Panasonic Compact AC Geared Motor. Motor example: 'M91Z60G4L', 'M71X10G4L'. Gear head example: 'MX9G50B', 'MX7G10XB'. Note: starts with 'M' (brand letter), gear head starts with 'MX'.",
 }
@@ -2089,12 +2087,39 @@ def api_scan_ik():
         sas_motor, mwarn = translate_motor(motor_spec)
         result["warnings"].extend(mwarn)
         result["sas_motor_code"] = compose_sas_motor_code(sas_motor)
+
+        # SAS translated specs
+        vs = sas_motor.voltage_spec or {}
+        speed_adj = sas_motor.extras.get("speed_adjustable", False)
         result["motor_specs"] = {
-            "frame_mm": sas_motor.frame_mm,
-            "power_w": sas_motor.power_w,
-            "pinion_type": sas_motor.pinion_type,
-            "voltage_code": sas_motor.voltage_code,
-            "motor_type": sas_motor.motor_type,
+            "frame_mm":        sas_motor.frame_mm,
+            "power_w":         sas_motor.power_w,
+            "pinion_type":     sas_motor.pinion_type,
+            "voltage_code":    sas_motor.voltage_code,
+            "motor_type":      sas_motor.motor_type,
+            "phase":           vs.get("phase"),
+            "voltage":         vs.get("voltage"),
+            "frequency":       vs.get("freq"),
+            "poles":           vs.get("poles"),
+            "speed_adjustable": speed_adj,
+            "options":         sas_motor.option,
+        }
+
+        # Original brand specs (for side-by-side comparison)
+        orig_vs = motor_spec.voltage_spec or {}
+        result["orig_motor_specs"] = {
+            "brand":           brand,
+            "code":            motor_spec.raw_code,
+            "frame_mm":        motor_spec.frame_mm,
+            "power_w":         motor_spec.power_w,
+            "pinion_type":     motor_spec.pinion_type,
+            "voltage_code":    motor_spec.voltage_code,
+            "motor_type":      motor_spec.motor_type,
+            "phase":           orig_vs.get("phase"),
+            "voltage":         orig_vs.get("voltage"),
+            "frequency":       orig_vs.get("freq"),
+            "poles":           orig_vs.get("poles"),
+            "options":         motor_spec.option,
         }
 
     # Translate gear head
@@ -2109,11 +2134,23 @@ def api_scan_ik():
         result["sas_gear_code"] = compose_sas_gear_code(sas_gear)
         gear_dims = get_ik_gear_dimensions(sas_gear.frame_mm)
         result["gear_specs"] = {
-            "frame_mm": sas_gear.frame_mm,
-            "ratio": sas_gear.ratio,
-            "mount": sas_gear.mount,
+            "frame_mm":    sas_gear.frame_mm,
+            "ratio":       sas_gear.ratio,
+            "mount":       sas_gear.mount,
             "pinion_type": sas_gear.pinion_type,
-            "dimensions": gear_dims,
+            "dimensions":  gear_dims,
+        }
+
+        # Original brand gear specs (for side-by-side comparison)
+        orig_gear_dims = get_ik_gear_dimensions(gear_spec.frame_mm)
+        result["orig_gear_specs"] = {
+            "brand":       brand,
+            "code":        gear_spec.raw_code,
+            "frame_mm":    gear_spec.frame_mm,
+            "ratio":       gear_spec.ratio,
+            "mount":       gear_spec.mount,
+            "pinion_type": gear_spec.pinion_type,
+            "dimensions":  orig_gear_dims,
         }
 
     # Compose full code if both available

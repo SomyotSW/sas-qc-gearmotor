@@ -275,6 +275,108 @@
     }
     .specs-grid .value { font-weight: 600; color: var(--ink); }
 
+    /* ============ Comparison Card ============ */
+    .compare-section {
+      margin-top: 20px;
+    }
+    .compare-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+      margin-bottom: 12px;
+    }
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    @media (max-width: 560px) {
+      .compare-grid { grid-template-columns: 1fr; }
+    }
+    .compare-col {
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1.5px solid var(--border);
+    }
+    .compare-col.sas-col {
+      border-color: var(--accent);
+      box-shadow: 0 4px 16px rgba(22,156,74,0.12);
+    }
+    .compare-col-head {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      background: var(--ink);
+      color: var(--paper);
+    }
+    .compare-col.sas-col .compare-col-head {
+      background: var(--accent);
+    }
+    .compare-col-code {
+      font-size: 13px;
+      font-weight: 700;
+      opacity: 0.9;
+      letter-spacing: 0.02em;
+      word-break: break-all;
+    }
+    .compare-col-body {
+      padding: 10px 14px;
+      background: var(--surface);
+    }
+    .compare-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      font-size: 12px;
+      gap: 8px;
+    }
+    .compare-row:last-child { border-bottom: none; }
+    .compare-row .ck {
+      color: var(--ink-soft);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .compare-row .cv {
+      font-weight: 600;
+      text-align: right;
+      word-break: break-word;
+    }
+    .compare-row .cv.diff {
+      color: var(--warn);
+    }
+    .compare-row .cv.same {
+      color: var(--ink-soft);
+    }
+
+    /* Warranty banner */
+    .warranty-banner {
+      margin-top: 12px;
+      background: linear-gradient(135deg, rgba(22,156,74,0.1), rgba(52,210,112,0.06));
+      border: 1.5px solid rgba(22,156,74,0.35);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .warranty-icon { font-size: 22px; flex-shrink: 0; }
+    .warranty-text { font-size: 12px; line-height: 1.5; }
+    .warranty-text strong { color: var(--accent); }
+
     /* Gear head dimension block */
     .dim-block {
       margin-top: 10px;
@@ -616,6 +718,12 @@
     els.result.classList.add('show');
   }
 
+  // Brand display name map
+  const BRAND_NAMES = {
+    oriental: 'Oriental Motor', spg: 'SPG', panasonic: 'Panasonic',
+    zd: 'ZD', suntech: 'Suntech', sas: 'SAS',
+  };
+
   function renderResult(data) {
     let html = '';
     const warnings = data.warnings || [];
@@ -625,7 +733,7 @@
       });
     }
 
-    // Full SAS code card (only if both pieces scanned)
+    // ── Full SAS code ──
     if (data.sas_full_code) {
       html += `
         <div class="result-card">
@@ -635,39 +743,55 @@
         </div>`;
     }
 
-    // Split cards — motor only in 2-col grid
+    // ── Motor comparison ──
     if (data.sas_motor_code || state.motorImage) {
-      html += '<div class="split-codes">';
-      if (data.sas_motor_code) {
-        html += `
-          <div>
-            <strong>Motor</strong>
-            <div class="code-med">${escapeHtml(data.sas_motor_code)}</div>
-            ${data.motor_specs ? renderSpecs(data.motor_specs) : ''}
-          </div>`;
+      if (data.sas_motor_code && data.motor_specs) {
+        html += `<div class="result-card" style="margin-top:14px">
+          <h3>Motor</h3>
+          ${renderCompareSection(
+              data.orig_motor_specs, data.raw_motor_code,
+              data.motor_specs,      data.sas_motor_code,
+              'motor'
+          )}
+        </div>`;
       } else if (state.motorImage) {
-        html += `<div><strong>Motor</strong><div style="color:var(--danger);font-size:12px">สแกนไม่สำเร็จ</div></div>`;
+        html += `<div class="result-card" style="margin-top:14px">
+          <h3>Motor</h3>
+          <div style="color:var(--danger);font-size:12px">สแกนไม่สำเร็จ</div>
+        </div>`;
       }
-      html += '</div>';
     }
 
-    // Gear head — full width card (has dimension table)
-    if (data.sas_gear_code) {
-      html += `
-        <div class="result-card" style="margin-top:14px">
+    // ── Gear head comparison ──
+    if (data.sas_gear_code || state.gearImage) {
+      if (data.sas_gear_code && data.gear_specs) {
+        html += `<div class="result-card" style="margin-top:14px">
           <h3>Gear Head</h3>
-          <div class="code-med" style="margin-bottom:8px">${escapeHtml(data.sas_gear_code)}</div>
-          ${data.gear_specs ? renderSpecs(data.gear_specs) : ''}
+          ${renderCompareSection(
+              data.orig_gear_specs, data.raw_gear_code,
+              data.gear_specs,      data.sas_gear_code,
+              'gear'
+          )}
         </div>`;
-    } else if (state.gearImage) {
-      html += `
-        <div class="result-card" style="margin-top:14px">
+      } else if (state.gearImage) {
+        html += `<div class="result-card" style="margin-top:14px">
           <h3>Gear Head</h3>
           <div style="color:var(--danger);font-size:12px">สแกนไม่สำเร็จ</div>
         </div>`;
+      }
     }
 
-    // Raw read-back
+    // ── Warranty + SAS advantage banner ──
+    html += `
+      <div class="warranty-banner">
+        <div class="warranty-icon">🛡️</div>
+        <div class="warranty-text">
+          แบรนด์ทั่วไปรับประกัน <strong>12 เดือน</strong> — SAS รับประกัน <strong style="font-size:14px">18 เดือน</strong><br>
+          ขนาด Frame เดียวกัน · ใช้แทนกันได้ทันที · Stock พร้อมส่งในไทย
+        </div>
+      </div>`;
+
+    // ── Raw readback ──
     if (data.raw_motor_code || data.raw_gear_code) {
       html += `
         <div class="result-card" style="margin-top:14px">
@@ -684,14 +808,135 @@
     els.result.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  // ── Comparison section renderer ──
+  function renderCompareSection(origSpecs, origCode, sasSpecs, sasCode, kind) {
+    const brandLabel = origSpecs
+      ? (BRAND_NAMES[origSpecs.brand] || (origSpecs.brand || '').toUpperCase())
+      : 'ต้นฉบับ';
+
+    const origRows = buildCompareRows(origSpecs, kind);
+    const sasRows  = buildCompareRows(sasSpecs,  kind);
+
+    // Mark differences
+    const allKeys = [...new Set([...origRows.map(r=>r.k), ...sasRows.map(r=>r.k)])];
+    const origMap = Object.fromEntries(origRows.map(r=>[r.k, r.v]));
+    const sasMap  = Object.fromEntries(sasRows.map(r=>[r.k, r.v]));
+
+    let origHtml = '', sasHtml = '';
+    allKeys.forEach(k => {
+      const ov = origMap[k] ?? '—';
+      const sv = sasMap[k]  ?? '—';
+      const isDiff = ov !== sv && ov !== '—' && sv !== '—';
+      const cls = isDiff ? 'diff' : (ov === sv ? 'same' : '');
+      origHtml += `<div class="compare-row"><span class="ck">${escapeHtml(k)}</span><span class="cv ${cls}">${escapeHtml(String(ov))}</span></div>`;
+      sasHtml  += `<div class="compare-row"><span class="ck">${escapeHtml(k)}</span><span class="cv ${cls}">${escapeHtml(String(sv))}</span></div>`;
+    });
+
+    // Dimension comparison for gear
+    let dimHtml = '';
+    if (kind === 'gear' && sasSpecs && sasSpecs.dimensions) {
+      dimHtml = renderDimCompare(
+        origSpecs && origSpecs.dimensions,
+        sasSpecs.dimensions
+      );
+    }
+
+    return `
+      <div class="compare-grid">
+        <div class="compare-col">
+          <div class="compare-col-head">
+            <span>📷 ${escapeHtml(brandLabel)}</span>
+            <span class="compare-col-code">${escapeHtml(origCode || origSpecs?.code || '—')}</span>
+          </div>
+          <div class="compare-col-body">${origHtml || '<div style="color:var(--ink-soft);font-size:12px;padding:8px 0">ไม่มีข้อมูลต้นฉบับ</div>'}</div>
+        </div>
+        <div class="compare-col sas-col">
+          <div class="compare-col-head">
+            <span>✅ SAS</span>
+            <span class="compare-col-code">${escapeHtml(sasCode || '—')}</span>
+          </div>
+          <div class="compare-col-body">${sasHtml}</div>
+        </div>
+      </div>
+      ${dimHtml}`;
+  }
+
+  function buildCompareRows(specs, kind) {
+    if (!specs) return [];
+    const rows = [];
+    const add = (k, v) => { if (v != null && v !== '' && v !== undefined) rows.push({k, v}); };
+    if (kind === 'motor') {
+      add('Frame',     specs.frame_mm ? specs.frame_mm + ' mm' : null);
+      add('Power',     specs.power_w  ? specs.power_w  + ' W'  : null);
+      add('Type',      specs.motor_type ? ({'I':'Induction','R':'Reversible','T':'Torque'}[specs.motor_type] || specs.motor_type) : null);
+      add('Phase',     specs.phase    ? specs.phase + '-Phase' : null);
+      add('Voltage',   specs.voltage);
+      add('Frequency', specs.frequency);
+      add('Poles',     specs.poles    ? specs.poles + 'P'      : null);
+      add('Pinion',    specs.pinion_type);
+      add('V. Code',   specs.voltage_code);
+      if (specs.options && specs.options.length) add('Options', specs.options.join(', '));
+    } else {
+      add('Frame',  specs.frame_mm ? specs.frame_mm + ' mm' : null);
+      add('Ratio',  specs.ratio    ? '1:' + specs.ratio     : null);
+      add('Pinion', specs.pinion_type);
+      add('Mount',  specs.mount);
+    }
+    return rows;
+  }
+
+  function renderDimCompare(origDims, sasDims) {
+    const fields = [
+      ['Shaft Ø',      'shaft_dia_mm',    'φ', ' mm'],
+      ['Shaft Length', 'shaft_len_mm',    '',  ' mm'],
+      ['Boss Ø',       'boss_dia_mm',     'φ', ' mm'],
+      ['Bolt PCD',     'bolt_pcd_mm',     'φ', ' mm'],
+      ['Bolt Hole Ø',  'bolt_hole_dia_mm','φ', ' mm'],
+      ['Frame',        'frame_w_mm',      '',  '×' + (sasDims?.frame_w_mm || '?') + ' mm'],
+    ];
+    let origHtml = '', sasHtml = '';
+    fields.forEach(([label, key, pre, suf]) => {
+      const ov = origDims ? origDims[key] : null;
+      const sv = sasDims  ? sasDims[key]  : null;
+      const isDiff = ov != null && sv != null && ov !== sv;
+      const cls = isDiff ? 'diff' : (ov === sv ? 'same' : '');
+      const fmt = (v, k) => v != null ? (k === 'frame_w_mm' ? `${v}×${v} mm` : `${pre}${v}${suf}`) : '—';
+      origHtml += `<div class="compare-row"><span class="ck">${escapeHtml(label)}</span><span class="cv ${cls}">${escapeHtml(fmt(ov, key))}</span></div>`;
+      sasHtml  += `<div class="compare-row"><span class="ck">${escapeHtml(label)}</span><span class="cv ${cls}">${escapeHtml(fmt(sv, key))}</span></div>`;
+    });
+    return `
+      <div class="compare-section">
+        <div class="compare-title">📐 ขนาดทางกายภาพ — เทียบกัน</div>
+        <div class="compare-grid">
+          <div class="compare-col">
+            <div class="compare-col-head"><span>📷 ต้นฉบับ</span></div>
+            <div class="compare-col-body">${origHtml}</div>
+          </div>
+          <div class="compare-col sas-col">
+            <div class="compare-col-head"><span>✅ SAS</span></div>
+            <div class="compare-col-body">${sasHtml}</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
   function renderSpecs(specs) {
     const rows = [];
     if (specs.frame_mm)     rows.push(['Frame', specs.frame_mm + 'mm']);
     if (specs.power_w)      rows.push(['Power', specs.power_w + 'W']);
     if (specs.ratio)        rows.push(['Ratio', '1:' + specs.ratio]);
-    if (specs.motor_type)   rows.push(['Type', specs.motor_type]);
+    if (specs.motor_type) {
+      const typeMap = { 'I': 'Induction', 'R': 'Reversible', 'T': 'Torque' };
+      rows.push(['Type', (typeMap[specs.motor_type] || specs.motor_type)]);
+    }
+    if (specs.phase)        rows.push(['Phase', specs.phase + '-Phase']);
+    if (specs.voltage)      rows.push(['Voltage', specs.voltage]);
+    if (specs.frequency)    rows.push(['Frequency', specs.frequency]);
+    if (specs.poles)        rows.push(['Poles', specs.poles + 'P']);
     if (specs.pinion_type)  rows.push(['Pinion', specs.pinion_type]);
-    if (specs.voltage_code) rows.push(['Voltage', specs.voltage_code]);
+    if (specs.voltage_code) rows.push(['Voltage Code', specs.voltage_code]);
+    if (specs.speed_adjustable) rows.push(['Speed Adj.', 'Yes (R)']);
+    if (specs.options && specs.options.length) rows.push(['Options', specs.options.join(', ')]);
     if (specs.mount)        rows.push(['Mount', specs.mount]);
     if (!rows.length && !specs.dimensions) return '';
 
