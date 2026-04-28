@@ -6,209 +6,304 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body {
-      background: url("/static/BG.png") no-repeat center center fixed;
-      background-size: cover;
-      font-family: 'Segoe UI', sans-serif;
-    }
+    body { background:url("/static/BG.png") no-repeat center center fixed; background-size:cover; font-family:'Segoe UI',sans-serif; }
+    .overlay::before { content:""; position:fixed; inset:0; background-color:rgba(255,255,255,0.85); z-index:0; }
+    .sas-logo { position:fixed; top:15px; left:15px; height:50px; z-index:10; }
+    .overlay { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; position:relative; z-index:2; }
+    .layout-row { display:flex; align-items:center; justify-content:center; gap:0; position:relative; z-index:3; }
+    .side-img { height:min(75vh,520px); width:auto; object-fit:contain; pointer-events:none; flex-shrink:0; }
+    .welcome-container { background:#e9f4ff; padding:40px 30px; border-radius:12px; text-align:center; box-shadow:0 0 15px rgba(0,0,0,0.2); width:420px; flex-shrink:0; position:relative; z-index:4; }
+    .btn-sas { width:100%; display:block; margin-top:15px; padding:14px 16px; border-radius:12px; border:1px solid rgba(255,255,255,0.55); background:linear-gradient(180deg,#5aa7ff 0%,#2f79d8 100%); color:#fff!important; font-weight:700; letter-spacing:0.2px; box-shadow:0 10px 18px rgba(0,70,160,0.30),inset 0 1px 0 rgba(255,255,255,0.40),inset 0 -2px 0 rgba(0,0,0,0.12); transform:translateY(0); transition:transform 0.08s ease,box-shadow 0.12s ease,filter 0.12s ease; }
+    .btn-sas:hover { filter:brightness(1.03); transform:translateY(-1px); text-decoration:none; }
+    .btn-sas:active { transform:translateY(2px) scale(0.99); }
+    .btn-sas-start { width:100%; display:block; margin-top:22px; padding:18px 16px; border-radius:14px; border:1px solid rgba(255,255,255,0.55); background:linear-gradient(180deg,#34d270 0%,#169c4a 100%); color:#fff!important; font-weight:800; font-size:1.15rem; letter-spacing:0.6px; text-transform:uppercase; box-shadow:0 12px 22px rgba(15,125,60,0.35),inset 0 1px 0 rgba(255,255,255,0.45),inset 0 -2px 0 rgba(0,0,0,0.15); transform:translateY(0); transition:transform 0.08s ease,box-shadow 0.12s ease,filter 0.12s ease; position:relative; overflow:hidden; }
+    .btn-sas-start::before { content:""; position:absolute; inset:0; background:radial-gradient(400px circle at var(--x,50%) var(--y,50%),rgba(255,255,255,0.22),transparent 40%); opacity:0; transition:opacity 0.2s ease; }
+    .btn-sas-start:hover { filter:brightness(1.05); transform:translateY(-1px); text-decoration:none; }
+    .btn-sas-start:hover::before { opacity:1; }
+    .btn-sas-start:active { transform:translateY(2px) scale(0.99); }
+    .btn-sas-start::after { content:""; position:absolute; inset:-4px; border-radius:18px; border:2px solid rgba(22,156,74,0.45); animation:pulseGreen 2.4s ease-out infinite; pointer-events:none; }
+    @keyframes pulseGreen { 0%{transform:scale(1);opacity:0.8;} 70%{transform:scale(1.06);opacity:0;} 100%{transform:scale(1.06);opacity:0;} }
+    .btn-sas-monthly { width:100%; display:block; margin-top:15px; padding:14px 16px; border-radius:12px; border:1px solid rgba(255,255,255,0.55); background:linear-gradient(180deg,#b06aff 0%,#7c3aed 100%); color:#fff!important; font-weight:700; letter-spacing:0.2px; cursor:pointer; box-shadow:0 10px 18px rgba(100,40,200,0.32),inset 0 1px 0 rgba(255,255,255,0.40),inset 0 -2px 0 rgba(0,0,0,0.12); transform:translateY(0); transition:transform 0.08s ease,box-shadow 0.12s ease,filter 0.12s ease; }
+    .btn-sas-monthly:hover { filter:brightness(1.07); transform:translateY(-1px); }
+    .btn-sas-monthly:active { transform:translateY(2px) scale(0.99); }
+    @media(max-width:768px){ .side-img{display:none;} .welcome-container{width:100%;max-width:420px;} }
 
-    /* พื้นขาวโปร่ง */
-    .overlay::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      background-color: rgba(255, 255, 255, 0.85);
-      z-index: 0;
-    }
+    /* ══════════ MONTHLY SALES OVERLAY ══════════ */
+    #ms-overlay { display:none; position:fixed; inset:0; background:#060c14; z-index:1000; overflow-y:auto; font-family:'Sarabun','Noto Sans Thai','Segoe UI',sans-serif; }
+    #ms-overlay.ms-active { display:block; animation:msIn 0.35s ease; }
+    @keyframes msIn { from{opacity:0;transform:scale(1.015);} to{opacity:1;transform:scale(1);} }
+    #ms-overlay::before { content:""; position:fixed; inset:0; z-index:0; pointer-events:none; background-image:linear-gradient(rgba(0,200,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,255,0.025) 1px,transparent 1px); background-size:52px 52px; animation:gridMove 25s linear infinite; }
+    @keyframes gridMove { from{background-position:0 0;} to{background-position:52px 52px;} }
+    #ms-overlay::after { content:""; position:fixed; inset:0; z-index:0; pointer-events:none; background:radial-gradient(ellipse 700px 400px at 5% 15%,rgba(59,130,246,0.07) 0%,transparent 70%),radial-gradient(ellipse 500px 350px at 95% 75%,rgba(16,185,129,0.07) 0%,transparent 70%),radial-gradient(ellipse 400px 280px at 50% 105%,rgba(245,158,11,0.05) 0%,transparent 70%); }
+    .ms-inner { max-width:1160px; margin:0 auto; padding:20px 16px 44px; position:relative; z-index:1; }
+    .ms-header { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:14px; }
+    .ms-back-btn { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#7a8eaa; cursor:pointer; font-size:12px; display:inline-flex; align-items:center; gap:6px; margin-bottom:10px; padding:6px 14px; border-radius:20px; font-family:inherit; transition:all 0.2s; letter-spacing:0.5px; }
+    .ms-back-btn:hover { background:rgba(255,255,255,0.1); color:#fff; transform:translateX(-3px); }
+    .ms-title { color:#fff; font-weight:900; font-size:clamp(22px,3.5vw,32px); letter-spacing:-0.5px; line-height:1; text-shadow:0 0 40px rgba(100,180,255,0.25); }
+    .ms-subtitle { color:#4a5a78; font-size:13px; margin-top:6px; }
+    .ms-subtitle b { color:#7aa0cc; }
+    .ms-upload-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .ms-upload-btn { display:inline-flex; align-items:center; gap:6px; padding:7px 16px; border-radius:20px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.09); color:#7a8eaa; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; transition:all 0.2s; letter-spacing:0.5px; }
+    .ms-upload-btn:hover { background:rgba(255,255,255,0.1); color:#fff; border-color:rgba(255,255,255,0.2); transform:translateY(-1px); }
 
-    .sas-logo {
-      position: fixed;
-      top: 15px;
-      left: 15px;
-      height: 50px;
-      z-index: 10;
-    }
+    /* ── Ticker ── */
+    #ms-ticker-wrap { width:100%; background:#020810; border-top:1px solid rgba(0,220,255,0.12); border-bottom:1px solid rgba(0,220,255,0.12); height:66px; overflow:hidden; position:relative; margin-bottom:18px; box-shadow:0 0 30px rgba(0,180,255,0.06); }
+    #ms-ticker-wrap::before { content:""; position:absolute; inset:0; pointer-events:none; z-index:4; background:linear-gradient(90deg,#020810 0%,transparent 8%,transparent 92%,#020810 100%); }
+    #ms-ticker-wrap::after { content:""; position:absolute; inset:0; pointer-events:none; z-index:3; background:repeating-linear-gradient(0deg,transparent,transparent 4px,rgba(0,0,0,0.08) 4px,rgba(0,0,0,0.08) 5px); }
+    #ms-ticker-track { display:flex; align-items:center; height:100%; white-space:nowrap; }
+    .ms-tick-item { display:inline-flex; align-items:center; gap:10px; padding:0 30px; height:100%; flex-shrink:0; border-right:1px solid rgba(255,255,255,0.04); font-family:'Courier New','Consolas',monospace; }
+    .tk-label { font-size:9px; letter-spacing:3px; text-transform:uppercase; opacity:0.4; font-weight:700; color:#fff; }
+    .tk-val { font-size:24px; font-weight:900; letter-spacing:2px; text-shadow:0 0 8px currentColor,0 0 22px currentColor,0 0 44px currentColor; filter:brightness(1.35); }
+    .tk-sep { color:rgba(255,255,255,0.13); font-size:15px; margin:0 2px; }
+    .tk-grand{color:#00ffff;} .tk-t1{color:#60c8ff;} .tk-t2{color:#00ffb3;} .tk-t3{color:#ffcc00;}
+    .tk-r1{color:#FFE84D;} .tk-r2{color:#E0E0E0;} .tk-r3{color:#FFB347;} .tk-r4{color:#c084fc;} .tk-r5{color:#f9a8d4;}
 
-    /* wrapper กลาง */
-    .overlay {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      position: relative;
-      z-index: 2;
-    }
+    /* ── Cards ── */
+    .ms-grid-2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; margin-bottom:16px; }
+    .ms-grid-3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; }
+    .ms-card { border-radius:18px; background:linear-gradient(145deg,#101822 0%,#0c1018 100%); border:1px solid rgba(255,255,255,0.07); padding:20px 22px; transition:transform 0.25s ease,box-shadow 0.25s ease,border-color 0.25s ease; }
+    .ms-card:hover { transform:translateY(-5px); border-color:rgba(255,255,255,0.13); box-shadow:0 24px 56px rgba(0,0,0,0.5); }
+    .ms-card-title { color:#fff; font-weight:800; font-size:14px; margin-bottom:16px; letter-spacing:0.3px; }
+    .ms-team-card { border-radius:18px; background:linear-gradient(145deg,#101822 0%,#0c1018 100%); border:1px solid rgba(255,255,255,0.07); display:flex; flex-direction:column; overflow:hidden; transition:transform 0.28s ease,box-shadow 0.28s ease,border-color 0.28s ease; animation:cardUp 0.5s ease both; }
+    @keyframes cardUp { from{opacity:0;transform:translateY(18px);} to{opacity:1;transform:translateY(0);} }
+    .ms-team-card:hover { transform:translateY(-6px) scale(1.012); border-color:rgba(255,255,255,0.14); }
+    .ms-team-header { padding:16px 20px; display:flex; align-items:center; justify-content:space-between; }
+    .ms-team-summary { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px 20px; border-bottom:1px solid rgba(255,255,255,0.04); }
+    .ms-pill { background:rgba(255,255,255,0.04); border-radius:12px; padding:8px 10px; text-align:center; transition:background 0.2s; }
+    .ms-pill:hover { background:rgba(255,255,255,0.08); }
+    .ms-bars { padding:10px 20px 16px; overflow-y:auto; max-height:320px; }
 
-    /* แถวรูปซ้าย + กล่อง + รูปขวา */
-    .layout-row {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0;
-      position: relative;
-      z-index: 3;
-    }
+    /* ── Bar rows with hover life ── */
+    .ms-bar-row { display:flex; align-items:center; gap:10px; padding:6px 8px; margin:1px -8px; border-radius:10px; transition:background 0.18s,transform 0.2s; cursor:default; }
+    .ms-bar-row:hover { background:rgba(255,255,255,0.05); transform:translateX(5px); }
+    .ms-bar-row:hover .ms-bname { color:#fff!important; letter-spacing:0.5px; }
+    .ms-bar-row:hover .ms-bfill { filter:brightness(1.4) saturate(1.2); }
 
-    /* รูปข้างกล่อง */
-    .side-img {
-      height: min(75vh, 520px);
-      width: auto;
-      object-fit: contain;
-      pointer-events: none;
-      flex-shrink: 0;
-    }
+    /* ── Top5 rows ── */
+    .ms-top-row { display:flex; align-items:center; gap:10px; padding:6px 8px; margin:1px -8px; border-radius:10px; transition:background 0.18s,transform 0.2s; cursor:default; }
+    .ms-top-row:hover { background:rgba(255,255,255,0.05); transform:translateX(6px); }
+    .ms-top-row:hover .ms-tname { letter-spacing:1px; color:#fff!important; }
 
-    /* กล่อง menu */
-    .welcome-container {
-      background: #e9f4ff;
-      padding: 40px 30px;
-      border-radius: 12px;
-      text-align: center;
-      box-shadow: 0 0 15px rgba(0,0,0,0.2);
-      width: 420px;
-      flex-shrink: 0;
-      position: relative;
-      z-index: 4;
-    }
+    /* ── Animated bar ── */
+    .ms-bar-track { background:#0a1520; border-radius:5px; height:7px; overflow:hidden; }
+    .ms-bfill { height:100%; border-radius:5px; transition:width 1.3s cubic-bezier(0.22,1,0.36,1),filter 0.2s; position:relative; }
+    .ms-bfill::after { content:""; position:absolute; top:0; right:0; width:8px; height:100%; background:rgba(255,255,255,0.55); filter:blur(3px); border-radius:5px; }
 
-    h1 {
-      color: #007bff;
-      margin-bottom: 15px;
-    }
+    /* rank badge */
+    .ms-rbadge { width:26px; height:26px; border-radius:7px; background:rgba(255,255,255,0.05); color:#6a7a96; font-size:11px; font-weight:800; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; transition:background 0.18s,color 0.18s; }
+    .ms-bar-row:hover .ms-rbadge { background:rgba(255,255,255,0.1); color:#fff; }
 
-    .btn-sas {
-      width: 100%;
-      display: block;
-      margin-top: 15px;
-      padding: 14px 16px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.55);
-      background: linear-gradient(180deg, #5aa7ff 0%, #2f79d8 100%);
-      color: #ffffff !important;
-      font-weight: 700;
-      letter-spacing: 0.2px;
-      box-shadow:
-        0 10px 18px rgba(0, 70, 160, 0.30),
-        inset 0 1px 0 rgba(255,255,255,0.40),
-        inset 0 -2px 0 rgba(0,0,0,0.12);
-      transform: translateY(0);
-      transition: transform 0.08s ease, box-shadow 0.12s ease, filter 0.12s ease;
-    }
-    .btn-sas:hover {
-      filter: brightness(1.03);
-      transform: translateY(-1px);
-      text-decoration: none;
-    }
-    .btn-sas:active {
-      transform: translateY(2px) scale(0.99);
-    }
+    /* donut transition */
+    #ms-donut circle:not(:first-child) { transition:stroke-dasharray 1.3s cubic-bezier(0.22,1,0.36,1); }
 
-    /* ===== 🆕 ปุ่ม START สีเขียว → Gear Motor Matcher ===== */
-    .btn-sas-start {
-      width: 100%;
-      display: block;
-      margin-top: 22px;
-      padding: 18px 16px;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,0.55);
-      background: linear-gradient(180deg, #34d270 0%, #169c4a 100%);
-      color: #ffffff !important;
-      font-weight: 800;
-      font-size: 1.15rem;
-      letter-spacing: 0.6px;
-      text-transform: uppercase;
-      box-shadow:
-        0 12px 22px rgba(15, 125, 60, 0.35),
-        inset 0 1px 0 rgba(255,255,255,0.45),
-        inset 0 -2px 0 rgba(0,0,0,0.15);
-      transform: translateY(0);
-      transition: transform 0.08s ease, box-shadow 0.12s ease, filter 0.12s ease;
-      position: relative;
-      overflow: hidden;
-    }
-    .btn-sas-start::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(
-        400px circle at var(--x, 50%) var(--y, 50%),
-        rgba(255,255,255,0.22),
-        transparent 40%
-      );
-      opacity: 0;
-      transition: opacity 0.2s ease;
-    }
-    .btn-sas-start:hover {
-      filter: brightness(1.05);
-      transform: translateY(-1px);
-      text-decoration: none;
-    }
-    .btn-sas-start:hover::before { opacity: 1; }
-    .btn-sas-start:active { transform: translateY(2px) scale(0.99); }
-
-    /* ขอบเขียว pulse ให้เด่น */
-    .btn-sas-start::after {
-      content: "";
-      position: absolute;
-      inset: -4px;
-      border-radius: 18px;
-      border: 2px solid rgba(22, 156, 74, 0.45);
-      animation: pulseGreen 2.4s ease-out infinite;
-      pointer-events: none;
-    }
-    @keyframes pulseGreen {
-      0%   { transform: scale(1);    opacity: 0.8; }
-      70%  { transform: scale(1.06); opacity: 0;   }
-      100% { transform: scale(1.06); opacity: 0;   }
-    }
-
-    /* มือถือ — ซ่อนรูปข้าง */
-    @media (max-width: 768px) {
-      .side-img { display: none; }
-      .welcome-container { width: 100%; max-width: 420px; }
-    }
+    .ms-footer { text-align:center; color:#1e2d42; font-size:11px; margin-top:30px; letter-spacing:0.6px; }
+    #ms-overlay ::-webkit-scrollbar{width:5px;} #ms-overlay ::-webkit-scrollbar-track{background:transparent;} #ms-overlay ::-webkit-scrollbar-thumb{background:#1a2a3a;border-radius:3px;}
   </style>
 </head>
 <body>
   <img src="/static/logo_sas.png" alt="SAS Logo" class="sas-logo">
-
   <div class="overlay">
     <div class="layout-row">
-
-      <!-- รูปซ้าย -->
       <img src="/static/3.png" alt="" class="side-img">
-
-      <!-- กล่อง menu -->
       <div class="welcome-container">
-        <h1>SYNERGY SYSTEM</h1>
-        <h1>Update 5.4.26</h1>
-        <a href="https://www.synergy-as.com" target="_blank" class="btn btn-lg btn-sas">🌐 www.synergy-as.com</a>
-        <a href="https://www.motorsas.com" target="_blank" class="btn btn-lg btn-sas">⚙️ www.motorsas.com</a>
         <a href="/login" class="btn btn-lg btn-sas">🔐 SAS QC Report</a>
         <a href="/stock" class="btn btn-lg btn-sas">📦 STOCK ON SHELF</a>
         <a href="/check-status" class="btn btn-lg btn-sas">✈️ เช็คสถานะสินค้า</a>
+        <button onclick="openMonthlySales()" class="btn btn-lg btn-sas-monthly">📊 Monthly Sales</button>
+        <a href="/matcher/" class="btn btn-lg btn-sas-start" id="btnStart">🚀 START &nbsp;·&nbsp; Gear Motor Matcher</a>
+      </div>
+      <img src="/static/2.png" alt="" class="side-img">
+    </div>
+  </div>
+  <script>
+    const btnStart=document.getElementById('btnStart');
+    btnStart?.addEventListener('pointermove',e=>{ const r=btnStart.getBoundingClientRect(); btnStart.style.setProperty('--x',`${e.clientX-r.left}px`); btnStart.style.setProperty('--y',`${e.clientY-r.top}px`); });
+  </script>
 
-        <!-- 🆕 ปุ่มสีเขียว START → Gear Motor Matcher -->
-        <a href="/matcher/" class="btn btn-lg btn-sas-start" id="btnStart">
-          🚀 START &nbsp;·&nbsp; Gear Motor Matcher
-        </a>
+  <!-- ══════════ MONTHLY SALES OVERLAY ══════════ -->
+  <div id="ms-overlay">
+    <div class="ms-inner">
+      <div class="ms-header">
+        <div>
+          <button class="ms-back-btn" onclick="closeMonthlySales()">← กลับหน้าหลัก</button>
+          <div class="ms-title">📊 Monthly Sales</div>
+          <div class="ms-subtitle">Motor (MO) · April 2026 · ยอดรวมทุกทีม: <b id="ms-grand-total">฿0</b></div>
+        </div>
+        <div class="ms-upload-row">
+          <label class="ms-upload-btn"><input type="file" accept=".xlsx,.xls" style="display:none" onchange="handleUpload(event,'team1')">📤 Team 1</label>
+          <label class="ms-upload-btn"><input type="file" accept=".xlsx,.xls" style="display:none" onchange="handleUpload(event,'team2')">📤 Team 2</label>
+          <label class="ms-upload-btn"><input type="file" accept=".xlsx,.xls" style="display:none" onchange="handleUpload(event,'team3')">📤 Team 3</label>
+        </div>
       </div>
 
-      <!-- รูปขวา -->
-      <img src="/static/2.png" alt="" class="side-img">
+      <div id="ms-ticker-wrap"><div id="ms-ticker-track"></div></div>
 
+      <div class="ms-grid-2">
+        <div class="ms-card">
+          <div class="ms-card-title">🍩 สัดส่วน MO ทั้งหมด</div>
+          <div style="display:flex;align-items:center;gap:22px">
+            <svg viewBox="0 0 176 176" style="width:132px;height:132px;flex-shrink:0;transform:rotate(-90deg)">
+              <circle cx="88" cy="88" r="68" fill="none" stroke="#0a1520" stroke-width="18"/>
+              <circle id="ms-sl0" cx="88" cy="88" r="68" fill="none" stroke="#3B82F6" stroke-width="18" stroke-dasharray="0 427" stroke-dashoffset="0" style="filter:drop-shadow(0 0 5px #3B82F6)"/>
+              <circle id="ms-sl1" cx="88" cy="88" r="68" fill="none" stroke="#10B981" stroke-width="18" stroke-dasharray="0 427" stroke-dashoffset="0" style="filter:drop-shadow(0 0 5px #10B981)"/>
+              <circle id="ms-sl2" cx="88" cy="88" r="68" fill="none" stroke="#F59E0B" stroke-width="18" stroke-dasharray="0 427" stroke-dashoffset="0" style="filter:drop-shadow(0 0 5px #F59E0B)"/>
+              <text id="ms-donut-label" x="88" y="93" text-anchor="middle" fill="white" font-size="13" font-weight="bold" style="transform:rotate(90deg);transform-origin:88px 88px">฿0</text>
+            </svg>
+            <div id="ms-legend" style="flex:1;display:flex;flex-direction:column;gap:13px"></div>
+          </div>
+        </div>
+        <div class="ms-card">
+          <div class="ms-card-title">🔥 Top 5 Sellers (ทุกทีม)</div>
+          <div id="ms-top5" style="display:flex;flex-direction:column;gap:4px"></div>
+        </div>
+      </div>
+
+      <div class="ms-grid-3" id="ms-team-cards"></div>
+      <div class="ms-footer">MONTHLY ORDER RECEIVED REPORT · อัพโหลด .xlsx เพื่ออัพเดตข้อมูลแต่ละเดือน</div>
     </div>
   </div>
 
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
   <script>
-    // เอฟเฟกต์แสงตามเมาส์บนปุ่มเขียว
-    const btnStart = document.getElementById('btnStart');
-    btnStart?.addEventListener('pointermove', (e) => {
-      const r = btnStart.getBoundingClientRect();
-      btnStart.style.setProperty('--x', `${e.clientX - r.left}px`);
-      btnStart.style.setProperty('--y', `${e.clientY - r.top}px`);
+  const MS_TEAMS = {
+    team1:{name:"Team 1",color:"#3B82F6",sales:[{name:"TW",total:89980},{name:"TL",total:24050}]},
+    team2:{name:"Team 2",color:"#10B981",sales:[{name:"NR",total:113570},{name:"CK",total:76650},{name:"NM",total:7400}]},
+    team3:{name:"Team 3",color:"#F59E0B",sales:[{name:"CA",total:655350},{name:"TWS",total:34147},{name:"BW",total:15675},{name:"SI",total:7660}]},
+  };
+
+  function msFmt(n){ if(n>=1e6)return(n/1e6).toFixed(2)+'M'; if(n>=1e3)return(n/1e3).toFixed(1)+'K'; return n.toLocaleString(); }
+
+  function animCount(el,target,dur=1300){
+    const t0=performance.now(),from=parseInt(el.dataset.val||0)||0; el.dataset.val=target;
+    function step(now){ const p=Math.min((now-t0)/dur,1),e=1-Math.pow(1-p,4); el.textContent='฿'+Math.round(from+(target-from)*e).toLocaleString(); if(p<1)requestAnimationFrame(step); }
+    requestAnimationFrame(step);
+  }
+
+  function parseXLSX(file){
+    return new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=e=>{
+        try{
+          const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(ws,{header:1});
+          let s=-1; for(let i=0;i<raw.length;i++){ if(String(raw[i][1]||"").trim()==="Motor (MO)"){s=i+1;break;} }
+          if(s===-1){resolve(null);return;}
+          const map={};
+          for(let i=s;i<raw.length;i++){ const r=raw[i],c1=String(r[1]||"").trim(); if(c1&&c1.includes("(")&&!isNaN(Number(r[0])))break; if(!r[0]||isNaN(Number(r[0])))continue; const name=String(r[9]||"").trim(),price=parseFloat(r[10])||0; if(name&&name!=="nan"&&price>0)map[name]=(map[name]||0)+price; }
+          resolve(Object.entries(map).map(([n,t])=>({name:n,total:Math.round(t)})).sort((a,b)=>b.total-a.total)||null);
+        }catch(err){reject(err);}
+      };
+      reader.readAsArrayBuffer(file);
     });
+  }
+
+  async function handleUpload(e,key){
+    const file=e.target.files[0]; if(!file)return;
+    try{ const s=await parseXLSX(file); if(s&&s.length){MS_TEAMS[key].sales=s;renderMS();alert('✅ '+MS_TEAMS[key].name+' อัพเดตแล้ว');} else alert('ไม่พบข้อมูล Motor (MO)'); }catch{alert('อ่านไฟล์ไม่ได้');} e.target.value='';
+  }
+
+  function renderDonut(teams){
+    const C=2*Math.PI*68,tots=teams.map(t=>({name:t.name,color:t.color,total:t.sales.reduce((s,x)=>s+x.total,0)})),grand=tots.reduce((s,t)=>s+t.total,0);
+    let cum=0;
+    tots.forEach((t,i)=>{ const p=grand>0?t.total/grand:0,el=document.getElementById('ms-sl'+i); el.style.stroke=t.color; el.setAttribute('stroke-dasharray',`${p*C} ${C}`); el.setAttribute('stroke-dashoffset',`${-cum*C}`); cum+=p; });
+    document.getElementById('ms-donut-label').textContent='฿'+msFmt(grand);
+    document.getElementById('ms-legend').innerHTML=tots.map(t=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:4px 6px;border-radius:8px;transition:background 0.18s;cursor:default" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
+        <div style="width:12px;height:12px;border-radius:4px;background:${t.color};flex-shrink:0;box-shadow:0 0 8px ${t.color}99"></div>
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between"><span style="color:#8a9ab8;font-size:12px;font-weight:600">${t.name}</span><span style="color:#fff;font-size:13px;font-weight:800">${grand>0?((t.total/grand)*100).toFixed(1):0}%</span></div>
+          <div style="color:${t.color};font-size:12px;font-weight:700;text-shadow:0 0 8px ${t.color}66">฿${msFmt(t.total)}</div>
+        </div>
+      </div>`).join('');
+    animCount(document.getElementById('ms-grand-total'),grand);
+  }
+
+  function renderTop5(teams){
+    const all=teams.flatMap(t=>t.sales.map(s=>({...s,teamName:t.name,color:t.color}))).sort((a,b)=>b.total-a.total).slice(0,5),max=all[0]?.total||1;
+    const medals=['🥇','🥈','🥉','4','5'];
+    document.getElementById('ms-top5').innerHTML=all.map((s,i)=>`
+      <div class="ms-top-row">
+        <span style="font-size:${i<3?'1.2rem':'11px'};flex-shrink:0;width:28px;text-align:center;${i>=3?'background:rgba(255,255,255,0.07);border-radius:6px;padding:3px 5px;color:#8899bb;font-weight:800;':''}display:inline-flex;align-items:center;justify-content:center">${medals[i]}</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span class="ms-tname" style="color:#ccd8e8;font-size:14px;font-weight:700;transition:letter-spacing 0.2s,color 0.2s">${s.name}</span>
+            <span style="font-size:14px;font-weight:800;color:${s.color};text-shadow:0 0 10px ${s.color}66">฿${msFmt(s.total)}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="ms-bar-track" style="flex:1"><div class="ms-bfill" style="width:${(s.total/max)*100}%;background:linear-gradient(90deg,${s.color}66,${s.color})"></div></div>
+            <span style="color:#3a4d64;font-size:10px;width:46px;text-align:right;flex-shrink:0;font-weight:600">${s.teamName}</span>
+          </div>
+        </div>
+      </div>`).join('');
+  }
+
+  function renderTeamCards(teams){
+    document.getElementById('ms-team-cards').innerHTML=teams.map((t,ti)=>{
+      const sorted=[...t.sales].sort((a,b)=>b.total-a.total),max=sorted[0]?.total||1,total=sorted.reduce((s,x)=>s+x.total,0);
+      const medals=['🥇','🥈','🥉'];
+      const bars=sorted.map((s,i)=>`
+        <div class="ms-bar-row">
+          <div style="width:28px;flex-shrink:0;display:flex;justify-content:center;align-items:center">${i<3?`<span style="font-size:1.1rem">${medals[i]}</span>`:`<span class="ms-rbadge">${i+1}</span>`}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+              <span class="ms-bname" style="color:#9ab0cc;font-weight:700;font-size:13px;transition:color 0.18s,letter-spacing 0.2s">${s.name}</span>
+              <span style="color:#fff;font-weight:800;font-size:13px;margin-left:8px;flex-shrink:0;text-shadow:0 0 8px ${t.color}55">฿${msFmt(s.total)}</span>
+            </div>
+            <div class="ms-bar-track"><div class="ms-bfill" style="width:${Math.max(5,(s.total/max)*100)}%;background:linear-gradient(90deg,${t.color}55,${t.color})"></div></div>
+          </div>
+        </div>`).join('');
+      return `
+        <div class="ms-team-card" style="box-shadow:0 8px 44px ${t.color}12;border-color:${t.color}1e;animation-delay:${ti*0.1}s">
+          <div class="ms-team-header" style="background:linear-gradient(135deg,${t.color}18 0%,transparent 100%);border-bottom:1px solid ${t.color}22">
+            <div>
+              <div style="color:#fff;font-weight:900;font-size:19px;letter-spacing:-0.3px;text-shadow:0 0 20px ${t.color}44">${t.name}</div>
+              <div style="color:#3a4d64;font-size:11px;margin-top:2px;letter-spacing:0.8px">MOTOR (MO) · APR 2026</div>
+            </div>
+            <label class="ms-upload-btn" style="border-color:${t.color}33"><input type="file" accept=".xlsx,.xls" style="display:none" onchange="handleUpload(event,'${t.key}')">📤 อัพโหลด</label>
+          </div>
+          <div class="ms-team-summary">
+            <div class="ms-pill">
+              <div style="color:#3a4d64;font-size:10px;margin-bottom:3px;letter-spacing:1px;text-transform:uppercase">ยอดรวมทีม</div>
+              <div style="color:#fff;font-weight:900;font-size:15px;text-shadow:0 0 14px ${t.color}44">฿${msFmt(total)}</div>
+            </div>
+            <div class="ms-pill" style="border:1px solid ${t.color}22">
+              <div style="color:#3a4d64;font-size:10px;margin-bottom:3px;letter-spacing:1px;text-transform:uppercase">🏆 Top Sale</div>
+              <div style="color:${t.color};font-weight:900;font-size:15px;text-shadow:0 0 14px ${t.color}88">${sorted[0]?.name||'–'}</div>
+            </div>
+          </div>
+          <div class="ms-bars">${bars}</div>
+        </div>`;
+    }).join('');
+  }
+
+  let _raf=null,_pos=0;
+  function buildTicker(teams){
+    const grand=teams.flatMap(t=>t.sales).reduce((s,x)=>s+x.total,0);
+    const top5=teams.flatMap(t=>t.sales.map(s=>({...s,tn:t.name,color:t.color}))).sort((a,b)=>b.total-a.total).slice(0,5);
+    const rc=['tk-r1','tk-r2','tk-r3','tk-r4','tk-r5'],tc=['tk-t1','tk-t2','tk-t3'],m=['🥇','🥈','🥉','④','⑤'];
+    let h=`<div class="ms-tick-item tk-grand"><span class="tk-label">TOTAL&nbsp;ALL&nbsp;TEAMS</span><span class="tk-sep">▶</span><span class="tk-val tk-grand">฿${grand.toLocaleString()}</span></div>`;
+    teams.forEach((t,i)=>{
+      const tot=t.sales.reduce((s,x)=>s+x.total,0);
+      h+=`<div class="ms-tick-item ${tc[i]}"><span class="tk-label">${t.name}</span><span class="tk-sep">◆</span><span class="tk-val ${tc[i]}">฿${tot.toLocaleString()}</span></div>`;
+      [...t.sales].sort((a,b)=>b.total-a.total).forEach(s=>{ h+=`<div class="ms-tick-item ${tc[i]}"><span class="tk-label" style="opacity:0.28">${t.name}</span><span class="tk-sep" style="opacity:0.18">·</span><span class="tk-label">${s.name}</span><span class="tk-sep">▸</span><span class="tk-val ${tc[i]}">฿${s.total.toLocaleString()}</span></div>`; });
+    });
+    h+=`<div class="ms-tick-item tk-r1"><span class="tk-label" style="font-size:10px;opacity:0.75;letter-spacing:4px">★ TOP SELLERS ★</span></div>`;
+    top5.forEach((s,i)=>{ h+=`<div class="ms-tick-item ${rc[i]}"><span style="font-size:14px">${m[i]}</span><span class="tk-label">${s.name}</span><span class="tk-sep">▸</span><span class="tk-val ${rc[i]}">฿${s.total.toLocaleString()}</span></div>`; });
+    return h;
+  }
+  function startTicker(teams){
+    const track=document.getElementById('ms-ticker-track'); if(!track)return;
+    const h=buildTicker(teams); track.innerHTML=h+h+h;
+    if(_raf)cancelAnimationFrame(_raf); _pos=0;
+    requestAnimationFrame(()=>{ const w=track.scrollWidth/3; function tick(){_pos-=0.72;if(_pos<=-w)_pos+=w;track.style.transform=`translateX(${_pos}px)`;_raf=requestAnimationFrame(tick);} _raf=requestAnimationFrame(tick); });
+  }
+  function stopTicker(){ if(_raf){cancelAnimationFrame(_raf);_raf=null;} }
+
+  function renderMS(){
+    const teams=['team1','team2','team3'].map(k=>({...MS_TEAMS[k],key:k}));
+    renderDonut(teams); renderTop5(teams); renderTeamCards(teams); startTicker(teams);
+  }
+  function openMonthlySales(){ renderMS(); document.getElementById('ms-overlay').classList.add('ms-active'); document.body.style.overflow='hidden'; }
+  function closeMonthlySales(){ stopTicker(); document.getElementById('ms-overlay').classList.remove('ms-active'); document.body.style.overflow=''; }
   </script>
 </body>
 </html>
