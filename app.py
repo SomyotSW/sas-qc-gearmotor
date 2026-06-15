@@ -919,6 +919,19 @@ def autodownload(serial_number):
                      download_name=f"{serial_number}_QC_Report.pdf",
                      mimetype='application/pdf')
 
+# ============================================================
+# 🎓 SAS Training Level 2
+# ============================================================
+@app.route('/sas_training_level2.html')
+@app.route('/sas-training-level2')
+def sas_training_level2():
+    return render_template('sas_training_level2.html')
+
+
+@app.route('/sas_quiz2.html')
+@app.route('/sas-quiz2')
+def sas_quiz2():
+    return render_template('sas_quiz2.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
