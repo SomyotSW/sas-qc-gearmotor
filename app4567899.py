@@ -517,18 +517,6 @@ INSPECTOR_MAP = {
 def home():
     return render_template('index.html')
 
-# ✅ SAS Training Level 1 + Quiz
-# Flask ไม่เปิดไฟล์ใน templates ด้วย URL ตรง ๆ ต้องประกาศ route ให้ render_template
-@app.route('/sas_training_level1.html')
-@app.route('/sas-training-level1')
-def sas_training_level1():
-    return render_template('sas_training_level1.html')
-
-@app.route('/sas_quiz.html')
-@app.route('/sas-quiz')
-def sas_quiz():
-    return render_template('sas_quiz.html')
-
 @app.route("/healthz")
 def healthz():
     return "ok", 200
