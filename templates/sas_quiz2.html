@@ -29,11 +29,61 @@ let userData={},shuffled=[],curr=0,score=0,wrongList=[],timeLeft=2400,timerInt=n
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');window.scrollTo(0,0)}
 function normName(s){return String(s||'').replace(/\s+/g,'').trim().toLowerCase()}
 function normPhone(s){return String(s||'').replace(/\D/g,'')}
-function scoreOf(v){let n=Number(v?.score ?? v?.Score ?? v?.คะแนน ?? v?.point ?? v?.points ?? v?.result);return Number.isFinite(n)?n:-1}
-function objectMatchesLevel1(o,nameN,phoneN){if(!o||typeof o!=='object')return false;let sc=scoreOf(o);if(sc<PASS_SCORE)return false;let txt=JSON.stringify(o).toLowerCase();let levelish=txt.includes('level 1')||txt.includes('level1')||txt.includes('quiz 1')||txt.includes('quiz1')||txt.includes('training level 1')||txt.includes('sas sales training program');let on=normName(o.name||o.fullname||o.fullName||o.employee_name||o.user||o.Name||o['ชื่อ']||'');let op=normPhone(o.phone||o.tel||o.mobile||o.Phone||o['เบอร์โทร']||'');let nameOk=nameN&&on&&on===nameN;let phoneOk=phoneN&&op&&(op===phoneN||op.endsWith(phoneN)||phoneN.endsWith(op));return (nameOk||phoneOk) && (levelish||sc>=PASS_SCORE)}
-function searchAny(obj,nameN,phoneN,depth=0){if(depth>7||obj==null)return false;if(Array.isArray(obj))return obj.some(x=>searchAny(x,nameN,phoneN,depth+1));if(typeof obj==='object'){if(objectMatchesLevel1(obj,nameN,phoneN))return true;return Object.values(obj).some(x=>searchAny(x,nameN,phoneN,depth+1))}return false}
-function hasLevel1PassLocal(name,phone){const nameN=normName(name),phoneN=normPhone(phone);const preferred=['sasQuizLevel1LB','sas_quiz_level1_lb','sasQuizLeaderboard','sasQuizLB','sas_quiz_lb','sas_quiz_level1_results','sas_training_level1_results','sas_level1_scores','sas_quiz_fixed_certificate_25'];let keys=[];for(let k of preferred){if(localStorage.getItem(k)!=null)keys.push(k)}for(let i=0;i<localStorage.length;i++){let k=localStorage.key(i);if(!keys.includes(k)&&/sas|quiz|level|leader|cert/i.test(k))keys.push(k)}for(let k of keys){let raw=localStorage.getItem(k);if(!raw)continue;try{let val=JSON.parse(raw);if(searchAny(val,nameN,phoneN))return true}catch(e){let low=String(raw).toLowerCase();let hasScore=/score"?\s*:?\s*(2[5-9]|30)|คะแนน\s*(2[5-9]|30)\s*\/\s*30/.test(low);let hasName=nameN&&normName(raw).includes(nameN);let hasPhone=phoneN&&normPhone(raw).includes(phoneN);let levelish=/level\s*1|level1|quiz\s*1|quiz1/.test(low);if(hasScore&&(hasName||hasPhone)&&levelish)return true}}
-return false}
+function scoreOf(v){
+  if(v==null)return -1;
+  if(typeof v==='number')return Number.isFinite(v)?v:-1;
+  let candidates=[v.score,v.Score,v['คะแนน'],v.point,v.points,v.result,v.totalScore,v.finalScore,v.correct,v.correctCount,v.passScore];
+  for(let x of candidates){let n=Number(String(x??'').replace(/[^0-9.]/g,''));if(Number.isFinite(n)&&n>=0)return n}
+  let txt=JSON.stringify(v);
+  let m=txt.match(/(?:score|คะแนน|correct|result|point)[^0-9]{0,12}(30|2[5-9])\s*(?:\/\s*30)?/i)||txt.match(/(30|2[5-9])\s*\/\s*30/);
+  return m?Number(m[1]):-1;
+}
+function rowName(o){return normName(o?.name||o?.fullname||o?.fullName||o?.employee_name||o?.user||o?.Name||o?.['ชื่อ']||o?.['ชื่อ-นามสกุล']||o?.['ชื่อและนามสกุล']||'')}
+function rowPhone(o){return normPhone(o?.phone||o?.tel||o?.mobile||o?.Phone||o?.['เบอร์โทร']||o?.['โทรศัพท์']||'')}
+function objectMatchesLevel1(o,nameN,phoneN){
+  if(!o||typeof o!=='object')return false;
+  let sc=scoreOf(o); if(sc<PASS_SCORE)return false;
+  let on=rowName(o), op=rowPhone(o);
+  let txt=JSON.stringify(o).toLowerCase();
+  let nameOk=nameN&&((on&&on===nameN)||normName(txt).includes(nameN));
+  let phoneOk=phoneN&&((op&&(op===phoneN||op.endsWith(phoneN)||phoneN.endsWith(op)))||normPhone(txt).includes(phoneN));
+  return !!(nameOk||phoneOk);
+}
+function searchAny(obj,nameN,phoneN,depth=0){
+  if(depth>10||obj==null)return false;
+  if(Array.isArray(obj))return obj.some(x=>searchAny(x,nameN,phoneN,depth+1));
+  if(typeof obj==='object'){
+    if(objectMatchesLevel1(obj,nameN,phoneN))return true;
+    return Object.values(obj).some(x=>searchAny(x,nameN,phoneN,depth+1));
+  }
+  if(typeof obj==='string')return textMatchesLevel1(obj,nameN,phoneN);
+  return false;
+}
+function textMatchesLevel1(raw,nameN,phoneN){
+  let text=String(raw||'');
+  let nameOk=nameN&&normName(text).includes(nameN);
+  let phoneOk=phoneN&&normPhone(text).includes(phoneN);
+  let scoreOk=/(?:score|คะแนน|correct|result|point)[^0-9]{0,15}(30|2[5-9])\s*(?:\/\s*30)?/i.test(text)||/(30|2[5-9])\s*\/\s*30/.test(text);
+  return !!((nameOk||phoneOk)&&scoreOk);
+}
+function getStorageItems(store){
+  let out=[];
+  try{for(let i=0;i<store.length;i++){let k=store.key(i);out.push({k,raw:store.getItem(k),source:store===localStorage?'localStorage':'sessionStorage'})}}catch(e){}
+  return out;
+}
+function hasLevel1PassLocal(name,phone){
+  const nameN=normName(name), phoneN=normPhone(phone);
+  const items=[...getStorageItems(localStorage),...getStorageItems(sessionStorage)];
+  // รอบแรก: เช็กทุก key แบบละเอียด เพราะ Level 1 เวอร์ชันเก่าอาจใช้ชื่อ key เป็น leaderboard เฉย ๆ ไม่ได้มีคำว่า sas/quiz
+  for(let it of items){
+    let raw=it.raw; if(!raw)continue;
+    try{let val=JSON.parse(raw); if(searchAny(val,nameN,phoneN))return true}catch(e){ if(textMatchesLevel1(raw,nameN,phoneN))return true }
+  }
+  // fallback: บางเวอร์ชันแยกเก็บชื่อกับคะแนนคนละ key ให้รวมข้อความทั้งหมดแล้วตรวจอีกชั้น
+  let joined=items.map(x=>`${x.k}:${x.raw}`).join('\n');
+  if(textMatchesLevel1(joined,nameN,phoneN))return true;
+  return false;
+}
 async function saveQuizResultServer(level,name,pos,phone,scoreVal,total=30,passed=(scoreVal>=PASS_SCORE)){try{await fetch('/api/training-quiz/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({level,name,pos,phone,score:scoreVal,total,passed})})}catch(e){console.warn('save quiz result failed',e)}}
 async function checkLevel1PassServer(name,phone){try{let res=await fetch('/api/training-quiz/check-level1',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone})});if(!res.ok)return false;let data=await res.json();return !!(data&&data.ok&&data.passed)}catch(e){console.warn('check level1 failed',e);return false}}
 async function hasLevel1Pass(name,phone){if(hasLevel1PassLocal(name,phone)){await saveQuizResultServer('level1',name,'',phone,PASS_SCORE,30,true);return true}return await checkLevel1PassServer(name,phone)}
@@ -46,7 +96,7 @@ function answerQ(i){if(answered)return;answered=true;let q=shuffled[curr],btns=[
 function nextQ(){curr++;if(curr>=30)finishQuiz();else renderQ()}
 function finishQuiz(){clearInterval(timerInt);document.getElementById('pb').style.width='100%';updateLB(userData.name,userData.pos,userData.phone,score);showScreen('result-screen');document.getElementById('res-score').textContent=score;let arc=document.getElementById('sarc');setTimeout(()=>{arc.style.strokeDashoffset=364.4*(1-score/30)},100);document.getElementById('cert-wrap').style.display='none';if(score>=PASS_SCORE){arc.style.stroke=score===30?'var(--gold)':'var(--green)';document.getElementById('res-status').innerHTML=score===30?'🏆 สมบูรณ์แบบ! 30/30':'🎉 ผ่าน Level 2! '+score+'/30';document.getElementById('res-status').style.color=score===30?'var(--gold)':'var(--green)';document.getElementById('res-msg').textContent='ยินดีด้วย! คุณผ่านเกณฑ์ Level 2 และรับ Certificate PDF ได้เลยครับ';document.getElementById('cert-wrap').style.display='flex';saveLevel2Pass()}else{arc.style.stroke='var(--red)';document.getElementById('res-status').innerHTML='❌ ไม่ผ่าน '+score+'/30';document.getElementById('res-status').style.color='var(--red)';document.getElementById('res-msg').textContent='ยังไม่ผ่านเกณฑ์ Level 2 (ต้องการ 25 ข้อขึ้นไป) กลับไปอ่านบทเรียนแล้วทำใหม่อีกครั้ง'}if(wrongList.length){document.getElementById('wlist').style.display='block';document.getElementById('witems').innerHTML=wrongList.map(w=>'<div class="wi"><div class="wq">ข้อ '+w.num+': '+w.q+'</div><div class="wa">✓ '+w.correct+'</div></div>').join('')}else document.getElementById('wlist').style.display='none'}
 function retryQuiz(){document.getElementById('wlist').style.display='none';document.getElementById('cert-wrap').style.display='none';shuffled=shuffle(QUESTIONS);curr=0;score=0;wrongList=[];timeLeft=2400;document.getElementById('tdisp').classList.remove('warn');document.getElementById('tdisp').textContent='40:00';showScreen('quiz-screen');startTimer();renderQ()}
-function saveLevel2Pass(){let key='sas_quiz_level2_results';let arr=[];try{arr=JSON.parse(localStorage.getItem(key)||'[]')}catch(e){}arr.push({...userData,score,level:'Level 2',passed:true,date:new Date().toISOString()});localStorage.setItem(key,JSON.stringify(arr.slice(-200)))}
+function saveLevel2Pass(){let key='sas_quiz_level2_results';let arr=[];try{arr=JSON.parse(localStorage.getItem(key)||'[]')}catch(e){}arr.push({...userData,score,level:'Level 2',passed:true,date:new Date().toISOString()});localStorage.setItem(key,JSON.stringify(arr.slice(-200)));saveQuizResultServer('level2',userData.name,userData.pos,userData.phone,score,30,true)}
 function updateLB(name,pos,phone,scoreVal){let lb=[];try{lb=JSON.parse(localStorage.getItem(LB_KEY)||'[]')}catch(e){}let now=new Date();let item={name,pos,phone,score:scoreVal,level:'Level 2',date:now.toLocaleDateString('th-TH')+' '+now.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})};let id=normPhone(phone)||normName(name);let ix=lb.findIndex(x=>(normPhone(x.phone)||normName(x.name))===id);if(ix>=0){if(scoreVal>=Number(lb[ix].score||0))lb[ix]=item}else lb.push(item);lb.sort((a,b)=>b.score-a.score);localStorage.setItem(LB_KEY,JSON.stringify(lb.slice(0,200)));saveQuizResultServer('level2',name,pos,phone,scoreVal,30,scoreVal>=PASS_SCORE)}
 async function getLB(){let local=[];try{local=JSON.parse(localStorage.getItem(LB_KEY)||'[]')}catch(e){}try{let res=await fetch('/api/training-quiz/leaderboard/level2');if(res.ok){let data=await res.json();if(data&&data.ok&&Array.isArray(data.rows))return data.rows.map(r=>({name:r.name,pos:r.pos||r.position||'',phone:r.phone,score:r.score,date:r.date||r.created_at||''}))}}catch(e){console.warn('load central leaderboard failed',e)}return local}
 async function showLeaderboard(){clearInterval(timerInt);let lb=await getLB();let body=document.getElementById('lbbody');if(!lb.length){body.innerHTML='<tr><td class="empty" colspan="6">ยังไม่มีข้อมูลอันดับ Level 2</td></tr>'}else{body.innerHTML=lb.map((r,i)=>'<tr><td><span class="rb '+(i===0?'r1':i===1?'r2':i===2?'r3':'ro')+'">'+(i+1)+'</span></td><td><b>'+escapeHtml(r.name)+'</b></td><td>'+escapeHtml(r.pos)+'</td><td>'+maskPhone(r.phone)+'</td><td><b>'+r.score+'/30</b></td><td>'+escapeHtml(r.date||'')+'</td></tr>').join('')}showScreen('lb-screen')}
