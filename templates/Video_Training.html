@@ -7,16 +7,20 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     :root{
-      --bg:#0a0a0f;
+      --bg:#07070b;
       --panel:#11131a;
       --panel-2:#171b24;
       --line:rgba(255,255,255,0.08);
-      --text:#f5f7fb;
-      --muted:#a5afc3;
+      --text:#f7f8fc;
+      --muted:#a6afc4;
       --accent:#e50914;
-      --accent2:#ff4d6d;
+      --accent2:#ff4667;
+      --gold:#ffd36a;
       --blue:#5aa7ff;
-      --shadow:0 18px 50px rgba(0,0,0,0.45);
+      --ok:#2cd573;
+      --danger:#ff5959;
+      --shadow:0 18px 50px rgba(0,0,0,0.46);
+      --soft-shadow:0 14px 34px rgba(0,0,0,0.28);
     }
     *{box-sizing:border-box}
     html{scroll-behavior:smooth}
@@ -27,8 +31,9 @@
       background:
         radial-gradient(circle at top left, rgba(229,9,20,0.18), transparent 30%),
         radial-gradient(circle at right center, rgba(90,167,255,0.13), transparent 26%),
-        linear-gradient(180deg,#090a0f 0%,#0c1018 42%,#0a0a0f 100%);
+        linear-gradient(180deg,#07070b 0%,#0c1018 42%,#07070b 100%);
       min-height:100vh;
+      overflow-x:hidden;
     }
     .bg-noise::before{
       content:"";
@@ -36,44 +41,110 @@
       background-image:linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px);
       background-size:32px 32px;
       mask-image:linear-gradient(to bottom, rgba(0,0,0,.9), rgba(0,0,0,.45));
+      z-index:0;
     }
     .topbar{
       position:sticky; top:0; z-index:40;
-      backdrop-filter:blur(14px);
-      background:rgba(9,10,15,0.78);
-      border-bottom:1px solid rgba(255,255,255,0.05);
+      backdrop-filter:blur(16px);
+      background:rgba(7,7,11,0.82);
+      border-bottom:1px solid rgba(255,255,255,0.06);
+      box-shadow:0 10px 28px rgba(0,0,0,.25);
     }
     .topbar-inner{
-      max-width:1240px; margin:auto; padding:14px 22px;
-      display:flex; align-items:center; justify-content:space-between; gap:16px;
+      width:100%; margin:auto; padding:12px 22px;
+      display:grid;
+      grid-template-columns: minmax(260px, 320px) minmax(360px, 1fr) auto;
+      align-items:center; gap:14px;
     }
-    .brand{display:flex; align-items:center; gap:12px; text-decoration:none; color:#fff;}
-    .brand img{height:40px; width:auto; object-fit:contain; filter:drop-shadow(0 4px 10px rgba(0,0,0,.4));}
-    .brand-title{font-weight:900; letter-spacing:.3px;}
-    .brand-sub{font-size:.84rem; color:var(--muted); margin-top:1px;}
-    .nav-actions{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+    .brand{display:flex; align-items:center; gap:12px; text-decoration:none; color:#fff; min-width:0;}
+    .brand img{height:42px; width:auto; object-fit:contain; filter:drop-shadow(0 4px 10px rgba(0,0,0,.4));}
+    .brand-title{font-weight:950; letter-spacing:.3px; white-space:nowrap;}
+    .brand-sub{font-size:.84rem; color:var(--muted); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+    .episode-strip{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      overflow-x:auto;
+      padding:4px 3px;
+      scroll-snap-type:x proximity;
+      scrollbar-width:thin;
+      scrollbar-color:rgba(255,255,255,.22) transparent;
+    }
+    .episode-strip::-webkit-scrollbar{height:6px}
+    .episode-strip::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2); border-radius:999px}
+    .ep-tab{
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.055);
+      color:#d8deec;
+      font-weight:900;
+      letter-spacing:.2px;
+      padding:10px 14px;
+      min-width:68px;
+      border-radius:999px;
+      scroll-snap-align:center;
+      cursor:pointer;
+      transition:transform .28s cubic-bezier(.2,.8,.2,1), background .28s ease, border-color .28s ease, color .28s ease, box-shadow .28s ease;
+      position:relative;
+      overflow:hidden;
+    }
+    .ep-tab::before{
+      content:"";
+      position:absolute; inset:0;
+      background:linear-gradient(90deg, transparent, rgba(255,255,255,.16), transparent);
+      transform:translateX(-130%);
+      transition:transform .55s ease;
+    }
+    .ep-tab:hover{transform:translateY(-2px); color:#fff; border-color:rgba(255,255,255,.22); background:rgba(255,255,255,.095)}
+    .ep-tab:hover::before{transform:translateX(130%)}
+    .ep-tab.active{
+      color:#fff;
+      background:linear-gradient(180deg,var(--accent2),var(--accent));
+      border-color:rgba(255,255,255,.24);
+      box-shadow:0 12px 25px rgba(229,9,20,.30);
+      transform:translateY(-1px) scale(1.02);
+    }
+
+    .nav-actions{display:flex; align-items:center; gap:10px; flex-wrap:nowrap; justify-content:flex-end;}
     .btn-back,.btn-yt{
       display:inline-flex; align-items:center; justify-content:center; gap:8px;
-      border-radius:999px; padding:10px 18px; font-weight:800; text-decoration:none;
-      transition:all .28s ease; border:1px solid transparent;
+      border-radius:999px; padding:10px 18px; font-weight:850; text-decoration:none;
+      transition:all .28s cubic-bezier(.2,.8,.2,1); border:1px solid transparent; white-space:nowrap;
     }
     .btn-back{background:rgba(255,255,255,0.06); color:#fff; border-color:rgba(255,255,255,0.08);}
     .btn-back:hover{transform:translateY(-1px); background:rgba(255,255,255,0.12); color:#fff;}
     .btn-yt{background:linear-gradient(180deg,var(--accent2),var(--accent)); color:#fff; box-shadow:0 10px 24px rgba(229,9,20,.25);}
     .btn-yt:hover{transform:translateY(-2px); color:#fff; filter:brightness(1.05);}
 
+    .view-fade{
+      position:relative; z-index:1;
+      opacity:1;
+      transform:translateY(0);
+      transition:opacity .28s ease, transform .28s ease, filter .28s ease;
+    }
+    .view-fade.is-switching{opacity:.35; transform:translateY(8px); filter:blur(.5px)}
+
     .hero{max-width:1240px; margin:0 auto; padding:34px 22px 22px;}
     .hero-card{
       position:relative; overflow:hidden;
       border-radius:28px; border:1px solid var(--line);
       background:
-        linear-gradient(115deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)),
-        linear-gradient(135deg, rgba(229,9,20,0.18), rgba(14,18,28,0.88) 45%, rgba(15,20,30,1));
+        linear-gradient(115deg, rgba(255,255,255,0.065), rgba(255,255,255,0.02)),
+        linear-gradient(135deg, rgba(229,9,20,0.20), rgba(14,18,28,0.88) 45%, rgba(15,20,30,1));
       box-shadow:var(--shadow);
+      isolation:isolate;
     }
     .hero-card::before{
       content:""; position:absolute; inset:0; pointer-events:none;
-      background:linear-gradient(90deg, rgba(255,255,255,.05), transparent 24%, transparent 75%, rgba(255,255,255,.04));
+      background:linear-gradient(90deg, rgba(255,255,255,.055), transparent 24%, transparent 75%, rgba(255,255,255,.04));
+      z-index:-1;
+    }
+    .hero-card::after{
+      content:"";
+      position:absolute; width:430px; height:430px; border-radius:50%;
+      right:-170px; top:-180px;
+      background:radial-gradient(circle, rgba(229,9,20,.32), transparent 62%);
+      z-index:-1;
     }
     .hero-content{
       display:grid; grid-template-columns:1.15fr .85fr; gap:28px;
@@ -82,64 +153,86 @@
     }
     .eyebrow{
       display:inline-flex; align-items:center; gap:8px; color:#ffd6db;
-      font-size:.92rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase; margin-bottom:14px;
+      font-size:.92rem; font-weight:850; letter-spacing:.6px; text-transform:uppercase; margin-bottom:14px;
     }
-    .hero h1{font-size:clamp(2rem,4vw,3.55rem); line-height:1.02; font-weight:900; margin:0 0 14px;}
-    .hero p.lead{font-size:1.05rem; color:#d7dced; max-width:780px; margin-bottom:18px;}
+    .hero h1{font-size:clamp(2rem,4vw,3.55rem); line-height:1.02; font-weight:950; margin:0 0 14px; letter-spacing:-1px;}
+    .hero p.lead{font-size:1.05rem; color:#d7dced; max-width:780px; margin-bottom:18px; line-height:1.75;}
     .meta-row{display:flex; gap:12px; flex-wrap:wrap; margin-top:16px;}
     .meta-pill{
       padding:10px 14px; border-radius:999px; background:rgba(255,255,255,.08);
-      border:1px solid rgba(255,255,255,.08); color:#fff; font-weight:700; font-size:.92rem;
+      border:1px solid rgba(255,255,255,.08); color:#fff; font-weight:780; font-size:.92rem;
+      transition:transform .28s ease, background .28s ease;
     }
+    .meta-pill:hover{transform:translateY(-2px); background:rgba(255,255,255,.12)}
+    .hero-cta-row{display:flex; gap:12px; flex-wrap:wrap; margin-top:18px;}
+    .btn-next-hero,.btn-scroll-video{
+      border:none; border-radius:18px; padding:13px 18px; font-weight:900; color:#fff;
+      transition:transform .26s cubic-bezier(.2,.8,.2,1), filter .26s ease, background .26s ease;
+      text-decoration:none; display:inline-flex; align-items:center; justify-content:center; gap:9px;
+    }
+    .btn-next-hero{background:linear-gradient(180deg,var(--accent2),var(--accent)); box-shadow:0 12px 26px rgba(229,9,20,.25);}
+    .btn-scroll-video{background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.10);}
+    .btn-next-hero:hover,.btn-scroll-video:hover{transform:translateY(-2px); color:#fff; filter:brightness(1.05)}
+
     .poster-wrap{display:flex; justify-content:center; align-items:center;}
     .poster-card{
-      width:min(100%,360px); min-height:330px; border-radius:24px;
-      background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
-      border:1px solid rgba(255,255,255,.08);
+      width:min(100%,370px); min-height:340px; border-radius:24px;
+      background:linear-gradient(180deg, rgba(255,255,255,.105), rgba(255,255,255,.04));
+      border:1px solid rgba(255,255,255,.09);
       padding:22px; display:flex; flex-direction:column; justify-content:space-between;
       box-shadow:0 18px 40px rgba(0,0,0,.36);
       transform:perspective(1000px) rotateY(-7deg);
-      transition:transform .45s ease, box-shadow .45s ease;
+      transition:transform .45s cubic-bezier(.2,.8,.2,1), box-shadow .45s ease;
     }
     .poster-card:hover{transform:perspective(1000px) rotateY(-2deg) translateY(-4px); box-shadow:0 24px 50px rgba(0,0,0,.5);}
     .poster-thumb{
-      border-radius:18px; padding:22px; min-height:180px;
+      border-radius:18px; padding:22px; min-height:190px;
       display:flex; align-items:center; justify-content:center; text-align:center;
       background:radial-gradient(circle at top, rgba(229,9,20,.25), rgba(255,255,255,.02) 46%), #0f1219;
       border:1px solid rgba(255,255,255,.06);
+      position:relative;
+      overflow:hidden;
     }
-    .poster-thumb h2{font-size:1.3rem; font-weight:900; margin:0;}
+    .poster-thumb::after{
+      content:""; position:absolute; inset:0;
+      background:linear-gradient(135deg, transparent 0 42%, rgba(255,255,255,.08), transparent 58% 100%);
+      transform:translateX(-80%);
+      animation:posterShine 5.4s ease-in-out infinite;
+    }
+    @keyframes posterShine{0%,48%{transform:translateX(-85%)}72%,100%{transform:translateX(85%)}}
+    .poster-thumb h2{font-size:1.3rem; font-weight:950; margin:0; position:relative; z-index:1; line-height:1.45;}
     .poster-badge{
       display:inline-flex; width:max-content; padding:8px 12px; border-radius:999px;
-      background:rgba(229,9,20,.18); color:#fff; font-weight:800; font-size:.82rem; border:1px solid rgba(255,255,255,.06);
+      background:rgba(229,9,20,.18); color:#fff; font-weight:850; font-size:.82rem; border:1px solid rgba(255,255,255,.06);
     }
-    .poster-foot{color:#c8d0df; font-size:.95rem; line-height:1.55;}
+    .poster-foot{color:#c8d0df; font-size:.95rem; line-height:1.58;}
 
     .section{max-width:1240px; margin:0 auto; padding:18px 22px 8px;}
-    .section-title{font-weight:900; font-size:1.9rem; margin:0 0 8px;}
-    .section-sub{color:var(--muted); margin:0 0 18px;}
+    .section-title{font-weight:950; font-size:1.9rem; margin:0 0 8px; letter-spacing:-.3px;}
+    .section-sub{color:var(--muted); margin:0 0 18px; line-height:1.6;}
     .grid-3{display:grid; grid-template-columns:repeat(3,1fr); gap:18px;}
     .topic-card{
-      background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
-      border:1px solid var(--line); border-radius:22px; padding:22px; box-shadow:var(--shadow);
-      transition:transform .35s ease, border-color .35s ease, background .35s ease;
+      background:linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.032));
+      border:1px solid var(--line); border-radius:22px; padding:22px; box-shadow:var(--soft-shadow);
+      transition:transform .35s cubic-bezier(.2,.8,.2,1), border-color .35s ease, background .35s ease;
+      min-height:192px;
     }
     .topic-card:hover{
       transform:translateY(-6px);
       border-color:rgba(255,255,255,.18);
-      background:linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.04));
+      background:linear-gradient(180deg, rgba(255,255,255,.078), rgba(255,255,255,.04));
     }
     .topic-num{
       width:42px; height:42px; border-radius:14px;
       background:linear-gradient(180deg,var(--accent2),var(--accent));
       display:flex; align-items:center; justify-content:center;
-      font-weight:900; box-shadow:0 10px 25px rgba(229,9,20,.28); margin-bottom:16px;
+      font-weight:950; box-shadow:0 10px 25px rgba(229,9,20,.28); margin-bottom:16px;
     }
-    .topic-card h3{font-size:1.08rem; font-weight:800; margin:0 0 8px;}
-    .topic-card p{color:#cfd6e4; margin:0; line-height:1.6;}
+    .topic-card h3{font-size:1.08rem; font-weight:850; margin:0 0 8px;}
+    .topic-card p{color:#cfd6e4; margin:0; line-height:1.64;}
 
     .player-card,.quiz-card{
-      background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
+      background:linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.032));
       border:1px solid var(--line); border-radius:26px; box-shadow:var(--shadow); overflow:hidden;
     }
     .player-head,.quiz-head{padding:22px 24px 10px;}
@@ -147,48 +240,56 @@
     .ratio-box{
       position:relative; width:100%; padding-top:56.25%;
       border-radius:22px; overflow:hidden; border:1px solid rgba(255,255,255,.08); background:#050507;
+      box-shadow:0 18px 46px rgba(0,0,0,.38);
     }
     .ratio-box iframe{position:absolute; inset:0; width:100%; height:100%; border:0;}
-    .watch-note{padding:0 24px 24px; color:#bfc8d8; line-height:1.7;}
+    .watch-note{padding:0 24px 22px; color:#bfc8d8; line-height:1.72;}
+    .mini-progress{
+      display:flex; align-items:center; gap:10px; padding:0 24px 24px;
+    }
+    .progress-track{height:7px; border-radius:999px; overflow:hidden; background:rgba(255,255,255,.10); flex:1;}
+    .progress-fill{height:100%; width:12.5%; background:linear-gradient(90deg,var(--accent2),var(--accent)); border-radius:999px; transition:width .35s ease;}
+    .progress-text{font-weight:850; color:#fff; min-width:max-content;}
 
     .quiz-wrap{display:grid; grid-template-columns:1fr; gap:18px; padding:0 24px 24px;}
     .question-card{
       border:1px solid rgba(255,255,255,.06);
       border-radius:20px;
-      background:rgba(255,255,255,.03);
+      background:rgba(255,255,255,.032);
       padding:18px;
-      transition:transform .28s ease, border-color .28s ease, box-shadow .28s ease;
+      transition:transform .28s cubic-bezier(.2,.8,.2,1), border-color .28s ease, box-shadow .28s ease;
     }
     .question-card:hover{
       transform:translateY(-4px);
       border-color:rgba(255,255,255,.12);
       box-shadow:0 15px 30px rgba(0,0,0,.22);
     }
-    .q-title{font-weight:800; margin-bottom:12px;}
+    .q-title{font-weight:850; margin-bottom:12px; line-height:1.5;}
     .option-list{display:grid; gap:10px;}
     .option-item{
-      display:flex; align-items:center; gap:10px;
+      display:flex; align-items:flex-start; gap:10px;
       padding:12px 14px;
       border-radius:16px;
       background:rgba(255,255,255,.04);
       border:1px solid rgba(255,255,255,.06);
       cursor:pointer;
       transition:all .22s ease;
+      line-height:1.45;
     }
     .option-item:hover{
       background:rgba(255,255,255,.08);
       border-color:rgba(255,255,255,.12);
     }
-    .option-item input{accent-color:#e50914; transform:scale(1.08);}
-    .quiz-actions{display:flex; gap:12px; flex-wrap:wrap; padding:0 24px 24px;}
-    .btn-primary-premium,.btn-secondary-premium{
-      border:none; border-radius:16px; padding:14px 20px; font-weight:800; transition:all .25s ease;
+    .option-item input{accent-color:#e50914; transform:scale(1.08); margin-top:4px;}
+    .quiz-actions,.bottom-ep-actions{display:flex; gap:12px; flex-wrap:wrap; padding:0 24px 24px;}
+    .btn-primary-premium,.btn-secondary-premium,.btn-next-bottom{
+      border:none; border-radius:16px; padding:14px 20px; font-weight:900; transition:all .25s cubic-bezier(.2,.8,.2,1);
     }
-    .btn-primary-premium{
+    .btn-primary-premium,.btn-next-bottom{
       background:linear-gradient(180deg,var(--accent2),var(--accent));
       color:#fff; box-shadow:0 12px 26px rgba(229,9,20,.25);
     }
-    .btn-primary-premium:hover{transform:translateY(-2px); filter:brightness(1.05);}
+    .btn-primary-premium:hover,.btn-next-bottom:hover{transform:translateY(-2px); filter:brightness(1.05);}
     .btn-secondary-premium{
       background:rgba(255,255,255,.08); color:#fff; border:1px solid rgba(255,255,255,.08);
     }
@@ -198,26 +299,35 @@
       border:1px solid rgba(255,255,255,.06);
       background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
     }
-    .result-score{font-size:1.3rem; font-weight:900; margin-bottom:6px;}
-    .result-text{color:#c8d0df; line-height:1.7; margin:0;}
+    .result-score{font-size:1.3rem; font-weight:950; margin-bottom:6px;}
+    .result-text{color:#c8d0df; line-height:1.72; margin:0;}
     .footer-note{
       max-width:1240px; margin:0 auto; padding:16px 22px 40px;
       color:#7f8ca3; font-size:.95rem; text-align:center;
     }
 
+    @media (max-width: 1180px){
+      .topbar-inner{grid-template-columns: minmax(220px, 280px) 1fr;}
+      .episode-strip{grid-column:1 / -1; order:3;}
+      .nav-actions{grid-column:2; grid-row:1;}
+    }
     @media (max-width: 991px){
       .hero-content{grid-template-columns:1fr;}
       .grid-3{grid-template-columns:1fr 1fr;}
       .poster-card{transform:none; width:100%;}
     }
     @media (max-width: 767px){
+      .topbar-inner{grid-template-columns:1fr; padding-left:16px; padding-right:16px;}
+      .brand{justify-content:flex-start;}
+      .nav-actions{grid-column:auto; grid-row:auto; width:100%; justify-content:flex-start; flex-wrap:wrap;}
+      .episode-strip{grid-column:auto; order:0; width:100%;}
       .topbar-inner, .hero, .section, .footer-note{padding-left:16px; padding-right:16px;}
       .hero-content{padding:24px 18px;}
       .grid-3{grid-template-columns:1fr;}
-      .player-frame-wrap, .player-head, .quiz-head, .quiz-wrap, .quiz-actions, .watch-note{padding-left:16px; padding-right:16px;}
+      .player-frame-wrap, .player-head, .quiz-head, .quiz-wrap, .quiz-actions, .watch-note, .mini-progress, .bottom-ep-actions{padding-left:16px; padding-right:16px;}
       .result-box{margin-left:16px; margin-right:16px;}
-      .nav-actions{width:100%; justify-content:flex-start;}
-      .btn-back,.btn-yt{width:100%;}
+      .btn-back,.btn-yt{flex:1 1 180px;}
+      .hero h1{letter-spacing:-.4px;}
     }
   </style>
 </head>
@@ -230,155 +340,453 @@
         <img src="/static/logo_sas.png" alt="SAS Logo">
         <div>
           <div class="brand-title">SAS Video Training</div>
-          <div class="brand-sub">Learning Hub · EP.1 AC Gear Motor</div>
+          <div class="brand-sub" id="brandSub">Learning Hub · EP.1 AC Gear Motor</div>
         </div>
       </a>
+
+      <div class="episode-strip" id="episodeStrip" aria-label="Episode navigation">
+        <button class="ep-tab active" type="button" data-ep="1">EP.1</button>
+        <button class="ep-tab" type="button" data-ep="2">EP.2</button>
+        <button class="ep-tab" type="button" data-ep="3">EP.3</button>
+        <button class="ep-tab" type="button" data-ep="4">EP.4</button>
+        <button class="ep-tab" type="button" data-ep="5">EP.5</button>
+        <button class="ep-tab" type="button" data-ep="6">EP.6</button>
+        <button class="ep-tab" type="button" data-ep="7">EP.7</button>
+        <button class="ep-tab" type="button" data-ep="8">EP.8</button>
+      </div>
+
       <div class="nav-actions">
         <a class="btn-back" href="/">← กลับหน้าหลัก</a>
-        <a class="btn-yt" href="https://youtu.be/3RCp0T4i8Eo" target="_blank" rel="noopener">▶ เปิด YouTube</a>
+        <a class="btn-yt" id="youtubeBtn" href="https://youtu.be/3RCp0T4i8Eo" target="_blank" rel="noopener">▶ เปิด YouTube</a>
       </div>
     </div>
   </div>
 
-  <section class="hero">
-    <div class="hero-card">
-      <div class="hero-content">
-        <div>
-          <div class="eyebrow">🎬 EP.1 · VIDEO TRAINING</div>
-          <h1>Training AC Gear Motor : <br>SAS Transmission</h1>
-          <p class="lead">
-            ในวิดีโอนี้จะพาเรียนรู้ภาพรวมของ <b>AC Gear Motor</b> แบบเข้าใจง่าย
-            ตั้งแต่โครงสร้างการทำงาน การเลือกใช้งานเบื้องต้น ความสัมพันธ์ของรอบ/แรงบิด/อัตราทด
-            รวมถึงสิ่งสำคัญที่ทีมขายและผู้ใช้งานควรรู้ก่อนเลือกหรือ Replacement รุ่นเดิม
-          </p>
-          <div class="meta-row">
-            <div class="meta-pill">⚙️ AC Gear Motor Basics</div>
-            <div class="meta-pill">📘 Suitable for Sales Training</div>
-            <div class="meta-pill">🧠 พร้อมแบบฝึกหัด 5 ข้อ</div>
-          </div>
-        </div>
-        <div class="poster-wrap">
-          <div class="poster-card">
-            <span class="poster-badge">SAS Transmission Learning Series</span>
-            <div class="poster-thumb">
-              <h2>EP.1<br>Training AC Gear Motor<br>: SAS Transmission</h2>
-            </div>
-            <div class="poster-foot">
-              เนื้อหาสั้น กระชับ และตรงประเด็น สำหรับทบทวนพื้นฐานสำคัญก่อนนำไปใช้งานจริง
-              หรือใช้ต่อยอดสำหรับ Level Training ถัดไป
+  <main class="view-fade" id="viewFade">
+    <section class="hero" id="top">
+      <div class="hero-card">
+        <div class="hero-content">
+          <div>
+            <div class="eyebrow" id="eyebrow">🎬 EP.1 · VIDEO TRAINING</div>
+            <h1 id="heroTitle">Training AC Gear Motor : <br>SAS Transmission</h1>
+            <p class="lead" id="heroLead">
+              ในวิดีโอนี้จะพาเรียนรู้ภาพรวมของ <b>AC Gear Motor</b> แบบเข้าใจง่าย
+              ตั้งแต่โครงสร้างการทำงาน การเลือกใช้งานเบื้องต้น ความสัมพันธ์ของรอบ/แรงบิด/อัตราทด
+              รวมถึงสิ่งสำคัญที่ทีมขายและผู้ใช้งานควรรู้ก่อนเลือกหรือ Replacement รุ่นเดิม
+            </p>
+            <div class="meta-row" id="metaRow"></div>
+            <div class="hero-cta-row">
+              <a class="btn-scroll-video" href="#videoSection">▶ รับชมวิดีโอ</a>
+              <button class="btn-next-hero" type="button" id="nextHeroBtn">ดู EP. ถัดไป →</button>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="section">
-    <h2 class="section-title">สิ่งที่วิดีโอนี้จะสอน</h2>
-    <p class="section-sub">สรุปหัวข้อหลักที่ควรรู้ก่อนเริ่มดูวิดีโอ เพื่อให้เข้าใจภาพรวมได้ไวขึ้น</p>
-    <div class="grid-3">
-      <div class="topic-card"><div class="topic-num">1</div><h3>AC Gear Motor คืออะไร</h3><p>ทำความเข้าใจหน้าที่ของมอเตอร์และชุดเกียร์ ว่าทำงานร่วมกันอย่างไร และเหมาะกับงานประเภทไหน</p></div>
-      <div class="topic-card"><div class="topic-num">2</div><h3>การดูค่าแรงบิดและรอบ</h3><p>เข้าใจความสัมพันธ์ระหว่างกำลัง รอบ และแรงบิด เพื่อไม่เลือกสินค้าเกินหรือขาดจากความต้องการใช้งานจริง</p></div>
-      <div class="topic-card"><div class="topic-num">3</div><h3>ความสำคัญของ Gear Ratio</h3><p>เรียนรู้ว่าอัตราทดมีผลต่อความเร็วรอบออกและแรงบิดอย่างไร และเหตุใดจึงเป็นจุดสำคัญในการคัดเลือก</p></div>
-      <div class="topic-card"><div class="topic-num">4</div><h3>หลักการเลือกใช้งานเบื้องต้น</h3><p>ดูองค์ประกอบหลัก เช่น ประเภทงาน แรงดันไฟ ขนาดมอเตอร์ และรูปแบบติดตั้ง เพื่อเลือก AC Gear Motor ให้เหมาะสม</p></div>
-      <div class="topic-card"><div class="topic-num">5</div><h3>แนวคิดการ Replacement</h3><p>รู้ว่าข้อมูลใดต้องเช็กก่อนเปลี่ยนแทนแบรนด์เดิม เช่น ขนาดหน้าแปลน เพลาทางออก อัตราทด กำลัง และตำแหน่งติดตั้ง</p></div>
-      <div class="topic-card"><div class="topic-num">6</div><h3>มุมมองสำหรับทีมขาย</h3><p>โฟกัสประเด็นที่ลูกค้าต้องการรู้จริง เพื่ออธิบายสินค้าให้เข้าใจง่ายขึ้นและปิดการขายได้มั่นใจขึ้น</p></div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="player-card">
-      <div class="player-head">
-        <h2 class="section-title" style="font-size:1.7rem; margin-bottom:4px;">รับชมวิดีโอ</h2>
-        <p class="section-sub" style="margin-bottom:0;">เชิญรับชมได้เลยครับ ด้านล่างคือหน้าต่าง YouTube ของวิดีโอนี้</p>
-      </div>
-      <div class="player-frame-wrap">
-        <div class="ratio-box">
-          <iframe src="https://www.youtube.com/embed/3RCp0T4i8Eo" title="Training AC Gear Motor : SAS Transmission" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-        </div>
-      </div>
-      <div class="watch-note">
-        หลังดูวิดีโอจบ แนะนำให้ทำแบบฝึกหัดสั้น ๆ ด้านล่างเพื่อทบทวนแกนความรู้ที่สำคัญที่สุดของ EP.1 นี้ครับ
-      </div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="quiz-card">
-      <div class="quiz-head">
-        <h2 class="section-title" style="font-size:1.7rem; margin-bottom:4px;">แบบฝึกหัดสั้น ๆ</h2>
-        <p class="section-sub" style="margin-bottom:0;">5 ข้อสั้น ๆ สำหรับทบทวนเนื้อหาหลักที่จำเป็นต้องรู้</p>
-      </div>
-      <div class="quiz-wrap" id="quizWrap">
-
-        <div class="question-card" data-answer="b">
-          <div class="q-title">1) หน้าที่หลักของ Gear Motor คืออะไร</div>
-          <div class="option-list">
-            <label class="option-item"><input type="radio" name="q1" value="a"> เพิ่มแรงดันไฟฟ้าให้สูงขึ้น</label>
-            <label class="option-item"><input type="radio" name="q1" value="b"> ลดรอบและเพิ่มแรงบิดให้เหมาะกับงาน</label>
-            <label class="option-item"><input type="radio" name="q1" value="c"> เปลี่ยนไฟ AC เป็น DC</label>
+          <div class="poster-wrap">
+            <div class="poster-card">
+              <span class="poster-badge">SAS Transmission Learning Series</span>
+              <div class="poster-thumb"><h2 id="posterTitle">EP.1<br>Training AC Gear Motor<br>: SAS Transmission</h2></div>
+              <div class="poster-foot" id="posterFoot">
+                เนื้อหาสั้น กระชับ และตรงประเด็น สำหรับทบทวนพื้นฐานสำคัญก่อนนำไปใช้งานจริง
+                หรือใช้ต่อยอดสำหรับ Level Training ถัดไป
+              </div>
+            </div>
           </div>
         </div>
-
-        <div class="question-card" data-answer="c">
-          <div class="q-title">2) หากต้องการรอบออกช้าลง โดยทั่วไปควรพิจารณาอะไร</div>
-          <div class="option-list">
-            <label class="option-item"><input type="radio" name="q2" value="a"> ลดขนาดสายไฟ</label>
-            <label class="option-item"><input type="radio" name="q2" value="b"> เพิ่มแรงดันไฟฟ้า</label>
-            <label class="option-item"><input type="radio" name="q2" value="c"> เลือกอัตราทดเกียร์ให้เหมาะสม</label>
-          </div>
-        </div>
-
-        <div class="question-card" data-answer="a">
-          <div class="q-title">3) ข้อมูลใดสำคัญมากในการ Replacement แทนแบรนด์เดิม</div>
-          <div class="option-list">
-            <label class="option-item"><input type="radio" name="q3" value="a"> กำลัง, อัตราทด, ขนาดติดตั้ง และเพลาออก</label>
-            <label class="option-item"><input type="radio" name="q3" value="b"> สีตัวเครื่องอย่างเดียว</label>
-            <label class="option-item"><input type="radio" name="q3" value="c"> เฉพาะชื่อแบรนด์เดิม</label>
-          </div>
-        </div>
-
-        <div class="question-card" data-answer="b">
-          <div class="q-title">4) เมื่ออัตราทดมากขึ้น โดยทั่วไปผลที่มักเกิดขึ้นคืออะไร</div>
-          <div class="option-list">
-            <label class="option-item"><input type="radio" name="q4" value="a"> รอบออกสูงขึ้นทันที</label>
-            <label class="option-item"><input type="radio" name="q4" value="b"> รอบออกลดลงและแรงบิดมีแนวโน้มสูงขึ้น</label>
-            <label class="option-item"><input type="radio" name="q4" value="c"> มอเตอร์หยุดทำงานอัตโนมัติ</label>
-          </div>
-        </div>
-
-        <div class="question-card" data-answer="c">
-          <div class="q-title">5) ทีมขายควรเข้าใจเนื้อหานี้ไปเพื่ออะไรเป็นหลัก</div>
-          <div class="option-list">
-            <label class="option-item"><input type="radio" name="q5" value="a"> เพื่อจำสีสินค้าทุกเฉด</label>
-            <label class="option-item"><input type="radio" name="q5" value="b"> เพื่อข้ามการถามข้อมูลลูกค้า</label>
-            <label class="option-item"><input type="radio" name="q5" value="c"> เพื่อให้วิเคราะห์ความต้องการลูกค้าและแนะนำรุ่นได้แม่นขึ้น</label>
-          </div>
-        </div>
-
       </div>
+    </section>
 
-      <div class="quiz-actions">
-        <button class="btn-primary-premium" onclick="submitQuiz()">✅ ตรวจคำตอบ</button>
-        <button class="btn-secondary-premium" onclick="resetQuiz()">↺ เริ่มใหม่</button>
+    <section class="section">
+      <h2 class="section-title">สิ่งที่วิดีโอนี้จะสอน</h2>
+      <p class="section-sub" id="topicSub">สรุปหัวข้อหลักที่ควรรู้ก่อนเริ่มดูวิดีโอ เพื่อให้เข้าใจภาพรวมได้ไวขึ้น</p>
+      <div class="grid-3" id="topicGrid"></div>
+    </section>
+
+    <section class="section" id="videoSection">
+      <div class="player-card">
+        <div class="player-head">
+          <h2 class="section-title" style="font-size:1.7rem; margin-bottom:4px;">รับชมวิดีโอ</h2>
+          <p class="section-sub" style="margin-bottom:0;" id="watchSub">เชิญรับชมได้เลยครับ ด้านล่างคือหน้าต่าง YouTube ของวิดีโอนี้</p>
+        </div>
+        <div class="player-frame-wrap">
+          <div class="ratio-box">
+            <iframe id="youtubeFrame" src="https://www.youtube.com/embed/3RCp0T4i8Eo" title="Training AC Gear Motor : SAS Transmission" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+          </div>
+        </div>
+        <div class="mini-progress">
+          <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+          <div class="progress-text" id="progressText">EP.1 / 8</div>
+        </div>
+        <div class="watch-note" id="watchNote">
+          หลังดูวิดีโอจบ แนะนำให้ทำแบบฝึกหัดสั้น ๆ ด้านล่างเพื่อทบทวนแกนความรู้ที่สำคัญที่สุดของ EP.1 นี้ครับ
+        </div>
       </div>
+    </section>
 
-      <div class="result-box" id="resultBox">
-        <div class="result-score" id="resultScore"></div>
-        <p class="result-text" id="resultText"></p>
+    <section class="section">
+      <div class="quiz-card">
+        <div class="quiz-head">
+          <h2 class="section-title" style="font-size:1.7rem; margin-bottom:4px;">แบบฝึกหัดสั้น ๆ</h2>
+          <p class="section-sub" style="margin-bottom:0;" id="quizSub">5 ข้อสั้น ๆ สำหรับทบทวนเนื้อหาหลักที่จำเป็นต้องรู้</p>
+        </div>
+        <div class="quiz-wrap" id="quizWrap"></div>
+
+        <div class="quiz-actions">
+          <button class="btn-primary-premium" type="button" onclick="submitQuiz()">✅ ตรวจคำตอบ</button>
+          <button class="btn-secondary-premium" type="button" onclick="resetQuiz(false)">↺ เริ่มใหม่</button>
+        </div>
+
+        <div class="result-box" id="resultBox">
+          <div class="result-score" id="resultScore"></div>
+          <p class="result-text" id="resultText"></p>
+        </div>
+
+        <div class="bottom-ep-actions">
+          <button class="btn-next-bottom" type="button" id="nextBottomBtn">ดู EP. ถัดไป →</button>
+          <button class="btn-secondary-premium" type="button" onclick="goToTop()">กลับขึ้นด้านบน ↑</button>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <div class="footer-note">SAS Transmission · Video Training EP.1 · Designed for a premium smooth learning experience</div>
+    <div class="footer-note" id="footerNote">SAS Transmission · Video Training EP.1 · Designed for a premium smooth learning experience</div>
+  </main>
 
   <script>
+    const episodes = {
+      1: {
+        id:1,
+        youtubeId:'3RCp0T4i8Eo',
+        youtubeUrl:'https://youtu.be/3RCp0T4i8Eo',
+        brand:'Learning Hub · EP.1 AC Gear Motor',
+        title:'Training AC Gear Motor : <br>SAS Transmission',
+        plainTitle:'Training AC Gear Motor : SAS Transmission',
+        poster:'EP.1<br>Training AC Gear Motor<br>: SAS Transmission',
+        lead:'ในวิดีโอนี้จะพาเรียนรู้ภาพรวมของ <b>AC Gear Motor</b> แบบเข้าใจง่าย ตั้งแต่โครงสร้างการทำงาน การเลือกใช้งานเบื้องต้น ความสัมพันธ์ของรอบ/แรงบิด/อัตราทด รวมถึงสิ่งสำคัญที่ทีมขายและผู้ใช้งานควรรู้ก่อนเลือกหรือ Replacement รุ่นเดิม',
+        metas:['⚙️ AC Gear Motor Basics','📘 Suitable for Sales Training','🧠 พร้อมแบบฝึกหัด 5 ข้อ'],
+        posterFoot:'เนื้อหาสั้น กระชับ และตรงประเด็น สำหรับทบทวนพื้นฐานสำคัญก่อนนำไปใช้งานจริง หรือใช้ต่อยอดสำหรับ Level Training ถัดไป',
+        topics:[
+          ['AC Gear Motor คืออะไร','ทำความเข้าใจหน้าที่ของมอเตอร์และชุดเกียร์ ว่าทำงานร่วมกันอย่างไร และเหมาะกับงานประเภทไหน'],
+          ['การดูค่าแรงบิดและรอบ','เข้าใจความสัมพันธ์ระหว่างกำลัง รอบ และแรงบิด เพื่อไม่เลือกสินค้าเกินหรือขาดจากความต้องการใช้งานจริง'],
+          ['ความสำคัญของ Gear Ratio','เรียนรู้ว่าอัตราทดมีผลต่อความเร็วรอบออกและแรงบิดอย่างไร และเหตุใดจึงเป็นจุดสำคัญในการคัดเลือก'],
+          ['หลักการเลือกใช้งานเบื้องต้น','ดูองค์ประกอบหลัก เช่น ประเภทงาน แรงดันไฟ ขนาดมอเตอร์ และรูปแบบติดตั้ง เพื่อเลือก AC Gear Motor ให้เหมาะสม'],
+          ['แนวคิดการ Replacement','รู้ว่าข้อมูลใดต้องเช็กก่อนเปลี่ยนแทนแบรนด์เดิม เช่น ขนาดหน้าแปลน เพลาทางออก อัตราทด กำลัง และตำแหน่งติดตั้ง'],
+          ['มุมมองสำหรับทีมขาย','โฟกัสประเด็นที่ลูกค้าต้องการรู้จริง เพื่ออธิบายสินค้าให้เข้าใจง่ายขึ้นและปิดการขายได้มั่นใจขึ้น']
+        ],
+        quiz:[
+          ['หน้าที่หลักของ Gear Motor คืออะไร',['เพิ่มแรงดันไฟฟ้าให้สูงขึ้น','ลดรอบและเพิ่มแรงบิดให้เหมาะกับงาน','เปลี่ยนไฟ AC เป็น DC'],1],
+          ['หากต้องการรอบออกช้าลง โดยทั่วไปควรพิจารณาอะไร',['ลดขนาดสายไฟ','เพิ่มแรงดันไฟฟ้า','เลือกอัตราทดเกียร์ให้เหมาะสม'],2],
+          ['ข้อมูลใดสำคัญมากในการ Replacement แทนแบรนด์เดิม',['กำลัง, อัตราทด, ขนาดติดตั้ง และเพลาออก','สีตัวเครื่องอย่างเดียว','เฉพาะชื่อแบรนด์เดิม'],0],
+          ['เมื่ออัตราทดมากขึ้น โดยทั่วไปผลที่มักเกิดขึ้นคืออะไร',['รอบออกสูงขึ้นทันที','รอบออกลดลงและแรงบิดมีแนวโน้มสูงขึ้น','มอเตอร์หยุดทำงานอัตโนมัติ'],1],
+          ['ทีมขายควรเข้าใจเนื้อหานี้ไปเพื่ออะไรเป็นหลัก',['เพื่อจำสีสินค้าทุกเฉด','เพื่อข้ามการถามข้อมูลลูกค้า','เพื่อให้วิเคราะห์ความต้องการลูกค้าและแนะนำรุ่นได้แม่นขึ้น'],2]
+        ]
+      },
+      2: {
+        id:2,
+        youtubeId:'DYQu7NyzK40',
+        youtubeUrl:'https://youtu.be/DYQu7NyzK40',
+        brand:'Learning Hub · EP.2 Key Data',
+        title:'EP.2 Key Data for <br>AC Gear Motor Selection',
+        plainTitle:'EP.2 Key Data for AC Gear Motor Selection',
+        poster:'EP.2<br>Key Data for Selection<br>AC Gear Motor',
+        lead:'ใน EP.2 จะพาโฟกัสข้อมูลหลักที่ต้องถามลูกค้าและต้องอ่านจาก Nameplate ก่อนเลือก AC Gear Motor เช่น กำลังไฟ แรงดัน จำนวนเฟส รอบ อัตราทด รูปแบบติดตั้ง และเงื่อนไขหน้างาน เพื่อให้เลือกสินค้าได้เร็วและลดความผิดพลาดในการเสนอรุ่น',
+        metas:['📋 Nameplate Data','🔎 Customer Requirement','✅ ลดความผิดพลาดตอนเลือก'],
+        posterFoot:'เหมาะสำหรับทีมขายและทีมเทคนิคที่ต้องการเก็บข้อมูลหน้างานให้ครบก่อนเทียบรุ่นหรือเสนอสินค้าใหม่',
+        topics:[
+          ['ข้อมูลจาก Nameplate','รู้ว่าค่าใดต้องอ่านก่อน เช่น Power, Voltage, Phase, Pole, RPM, Ratio และ Frequency'],
+          ['ข้อมูลจากหน้างานจริง','ถามโหลด ลักษณะการทำงาน ชั่วโมงใช้งาน ทิศทางหมุน และพื้นที่ติดตั้งให้ครบก่อนสรุปรุ่น'],
+          ['Voltage และ Phase','เข้าใจความสำคัญของไฟ 1 เฟส/3 เฟส และแรงดันใช้งาน เพื่อป้องกันการเลือกผิดระบบ'],
+          ['รอบและอัตราทด','แยกให้ออกว่ารอบมอเตอร์กับรอบออกหลังเกียร์ไม่ใช่ค่าเดียวกัน'],
+          ['Mounting Position','ดูตำแหน่งติดตั้งให้ถูก เพราะมีผลต่อรูปแบบการใช้งาน การระบายความร้อน และการเติมน้ำมันเกียร์'],
+          ['สรุปข้อมูลก่อนเสนอราคา','จัดข้อมูลให้ครบก่อนส่งต่อ เพื่อให้ใบเสนอราคาและการเทียบรุ่นมีความแม่นยำขึ้น']
+        ],
+        quiz:[
+          ['ข้อมูลใดควรอ่านจาก Nameplate เป็นอันดับแรก ๆ',['Power, Voltage, RPM, Ratio','สีของกล่องสินค้า','จำนวนสกรูฝาครอบ'],0],
+          ['ทำไมต้องถามลักษณะโหลดและชั่วโมงใช้งาน',['เพื่อประเมินความเหมาะสมและความทนทานของรุ่นที่เลือก','เพื่อเลือกสีมอเตอร์','เพื่อกำหนดชื่อไฟล์เท่านั้น'],0],
+          ['ไฟ 1 เฟสกับ 3 เฟสสำคัญอย่างไร',['มีผลต่อการต่อใช้งานและการเลือกมอเตอร์ให้เข้ากับระบบไฟ','ไม่มีผลใด ๆ','ใช้แทนกันได้เสมอ'],0],
+          ['Mounting Position มีความสำคัญเพราะอะไร',['มีผลต่อรูปแบบติดตั้งและการดูแลน้ำมันเกียร์','มีผลเฉพาะสีภายนอก','ใช้ดูราคาอย่างเดียว'],0],
+          ['ก่อนเสนอราคา ควรทำอย่างไร',['เก็บข้อมูลให้ครบและตรวจซ้ำก่อนเทียบรุ่น','เดาอัตราทดจากรูป','ส่งรุ่นใดก็ได้ที่มีสต็อก'],0]
+        ]
+      },
+      3: {
+        id:3,
+        youtubeId:'0d1Iktvgnk4',
+        youtubeUrl:'https://youtu.be/0d1Iktvgnk4',
+        brand:'Learning Hub · EP.3 Ratio & Torque',
+        title:'EP.3 Gear Ratio, RPM <br>and Torque Basics',
+        plainTitle:'EP.3 Gear Ratio, RPM and Torque Basics',
+        poster:'EP.3<br>Gear Ratio · RPM<br>Torque Basics',
+        lead:'EP.3 จะช่วยให้เข้าใจความสัมพันธ์ของอัตราทด รอบขาออก และแรงบิดแบบใช้งานจริง ว่าทำไมอัตราทดที่สูงขึ้นจึงทำให้รอบลดลง และทำไมแรงบิดจึงเป็นหัวใจสำคัญของการเลือก Gear Motor ให้ไม่เล็กเกินหรือใหญ่เกินงาน',
+        metas:['⚙️ Gear Ratio','🔁 Output RPM','💪 Torque Thinking'],
+        posterFoot:'บทเรียนนี้ช่วยให้ทีมขายอธิบายเหตุผลการเลือกรุ่นให้ลูกค้าเข้าใจง่ายขึ้น ไม่ใช่เลือกจากวัตต์อย่างเดียว',
+        topics:[
+          ['Gear Ratio คืออะไร','อัตราทดคือความสัมพันธ์ระหว่างรอบมอเตอร์และรอบออกหลังผ่านชุดเกียร์'],
+          ['คำนวณรอบออกเบื้องต้น','รอบออกประมาณเท่ากับรอบมอเตอร์หารด้วยอัตราทด ใช้เพื่อประเมินความเร็วงาน'],
+          ['Torque สำคัญอย่างไร','แรงบิดคือความสามารถในการหมุนโหลด ยิ่งโหลดหนักยิ่งต้องพิจารณาค่าแรงบิดให้พอ'],
+          ['เลือกจาก Power อย่างเดียวไม่ได้','มอเตอร์วัตต์เท่ากันแต่อัตราทดต่างกัน จะได้รอบและแรงบิดที่ต่างกัน'],
+          ['เผื่อ Service Factor','งานหนัก งานกระแทก หรือใช้งานต่อเนื่องควรมีการเผื่อความปลอดภัยในการเลือกรุ่น'],
+          ['สื่อสารกับลูกค้า','ถามความเร็วที่ต้องการ โหลดที่หมุน และรูปแบบการทำงาน เพื่อแปลงเป็นข้อมูลเลือก Gear Motor']
+        ],
+        quiz:[
+          ['ถ้าอัตราทดเพิ่มขึ้น โดยทั่วไป Output RPM จะเป็นอย่างไร',['ลดลง','เพิ่มขึ้นทันที','ไม่เปลี่ยนแปลงเสมอ'],0],
+          ['แรงบิดเกี่ยวข้องกับอะไรเป็นหลัก',['ความสามารถในการหมุนโหลด','สีของมอเตอร์','ความยาวสายไฟเท่านั้น'],0],
+          ['สูตรประมาณการรอบออกคือข้อใด',['Motor RPM ÷ Gear Ratio','Motor RPM × Voltage','Gear Ratio ÷ Power'],0],
+          ['ทำไมไม่ควรเลือกจากวัตต์อย่างเดียว',['เพราะต้องดูรอบ อัตราทด แรงบิด และโหลดประกอบด้วย','เพราะวัตต์ไม่มีอยู่จริง','เพราะสีสำคัญกว่า'],0],
+          ['Service Factor ช่วยเรื่องอะไร',['เผื่อความปลอดภัยสำหรับสภาพงานจริง','เพิ่มความเงาของสี','เปลี่ยนไฟ AC เป็น DC'],0]
+        ]
+      },
+      4: {
+        id:4,
+        youtubeId:'ZVs_oVwfgV8',
+        youtubeUrl:'https://youtu.be/ZVs_oVwfgV8',
+        brand:'Learning Hub · EP.4 Replacement',
+        title:'EP.4 Replacement Guide <br>Brand เดิมเป็น SAS',
+        plainTitle:'EP.4 Replacement Guide Brand เดิมเป็น SAS',
+        poster:'EP.4<br>Replacement Guide<br>Original Brand → SAS',
+        lead:'EP.4 จะเน้นหลักคิดในการ Replacement เกียร์มอเตอร์เดิมเป็น SAS Transmission โดยดูจุดสำคัญที่ต้องเหมือนหรือเทียบได้ เช่น ระยะติดตั้ง หน้าแปลน เพลาขาออก อัตราทด กำลัง รอบ แรงดัน และตำแหน่ง Terminal Box เพื่อให้เปลี่ยนแล้วติดตั้งได้จริง',
+        metas:['🔁 Replacement','📐 Dimension Check','🛠️ Drop-in Thinking'],
+        posterFoot:'เหมาะสำหรับงานที่ลูกค้ามีรุ่นเดิมอยู่แล้วและต้องการเปลี่ยนแทนให้เร็ว คุ้มค่า และลดความเสี่ยงหน้างาน',
+        topics:[
+          ['เช็ก Model เดิม','เริ่มจากอ่านรุ่นเดิม ถ่าย Nameplate และเก็บรูปติดตั้งจริงให้ครบ'],
+          ['Dimension สำคัญที่สุด','ตรวจหน้าแปลน รูยึด เพลาขาออก Keyway และระยะรวม เพื่อให้ใส่แทนได้'],
+          ['Ratio และ RPM','อัตราทดและรอบออกต้องใกล้เคียงกับของเดิม เพื่อให้เครื่องจักรทำงานเหมือนเดิม'],
+          ['Motor Power และ Voltage','กำลัง แรงดัน เฟส และความถี่ต้องเหมาะกับระบบไฟและโหลดเดิม'],
+          ['ทิศทางและตำแหน่งกล่องสาย','ดูทิศทางเพลา ตำแหน่ง Terminal Box และพื้นที่เดินสายก่อนยืนยันรุ่น'],
+          ['สรุปความเสี่ยงก่อนขาย','แจ้งจุดที่เหมือน จุดที่ต่าง และจุดที่ต้องยืนยัน เพื่อให้ลูกค้าตัดสินใจได้มั่นใจ']
+        ],
+        quiz:[
+          ['งาน Replacement ต้องเช็กอะไรสำคัญที่สุด',['Dimension ติดตั้งและข้อมูลไฟฟ้า/อัตราทด','สีมอเตอร์เท่านั้น','ชื่อคนสั่งซื้อ'],0],
+          ['ทำไมต้องถ่ายรูป Nameplate เดิม',['เพื่ออ่านข้อมูลรุ่น กำลัง อัตราทด และแรงดันให้ถูกต้อง','เพื่อใช้ตกแต่งหน้าเว็บ','เพื่อดูอายุพนักงาน'],0],
+          ['หาก Ratio ต่างจากเดิมมาก อาจเกิดอะไร',['ความเร็วเครื่องจักรเปลี่ยนและกระทบการทำงาน','สีตัวเครื่องเปลี่ยน','สายไฟยาวขึ้นอัตโนมัติ'],0],
+          ['Drop-in Replacement หมายถึงอะไร',['เปลี่ยนแทนโดยพยายามให้ระยะติดตั้งและฟังก์ชันใกล้เคียงของเดิมที่สุด','เปลี่ยนอะไรก็ได้ไม่ต้องดูขนาด','เปลี่ยนเฉพาะสี'],0],
+          ['ควรสรุปอะไรให้ลูกค้าก่อนขาย',['จุดที่เหมือน จุดที่ต่าง และจุดที่ต้องยืนยัน','เฉพาะราคาถูกสุด','เฉพาะน้ำหนักกล่อง'],0]
+        ]
+      },
+      5: {
+        id:5,
+        youtubeId:'7blEad029iI',
+        youtubeUrl:'https://youtu.be/7blEad029iI',
+        brand:'Learning Hub · EP.5 Installation',
+        title:'EP.5 Installation Point <br>and Mounting Awareness',
+        plainTitle:'EP.5 Installation Point and Mounting Awareness',
+        poster:'EP.5<br>Installation Point<br>Mounting Awareness',
+        lead:'EP.5 จะพาไล่จุดสำคัญก่อนติดตั้งและก่อนส่งสินค้าให้ลูกค้า เช่น ทิศทางการติดตั้ง การยึดฐาน การจัดแนวเพลา การระบายความร้อน พื้นที่รอบตัวมอเตอร์ และสิ่งที่ต้องระวังเพื่อยืดอายุการใช้งานของ Gear Motor',
+        metas:['🧰 Installation','📍 Mounting Position','🛡️ ลดปัญหาหลังขาย'],
+        posterFoot:'บทเรียนนี้ช่วยลดปัญหาหน้างานหลังส่งสินค้า และช่วยให้ทีมขายถามข้อมูลติดตั้งได้ครบขึ้น',
+        topics:[
+          ['Mounting Position','ตำแหน่งติดตั้งต้องสอดคล้องกับรุ่นและการใช้งานจริง โดยเฉพาะงานเกียร์ที่เกี่ยวข้องกับน้ำมัน'],
+          ['การยึดและ Alignment','ฐานยึดต้องแข็งแรงและเพลาต้องได้แนว เพื่อลดการสั่นและลดโหลดที่ไม่จำเป็น'],
+          ['พื้นที่ระบายความร้อน','ควรเว้นพื้นที่รอบมอเตอร์เพื่อให้ระบายความร้อนได้ ไม่อับจนเกินไป'],
+          ['Coupling และ Load','การต่อโหลดควรตรงแนว ไม่บิด ไม่ฝืน และไม่ทำให้เกิดแรงกระแทกเกินจำเป็น'],
+          ['ตรวจเสียงและการสั่น','หลังติดตั้งควรทดลองเดินเครื่องและสังเกตเสียง ความร้อน และการสั่นผิดปกติ'],
+          ['ส่งมอบอย่างมืออาชีพ','บันทึกข้อมูลรุ่น สภาพติดตั้ง และคำแนะนำเบื้องต้นเพื่อใช้ติดตามหลังการขาย']
+        ],
+        quiz:[
+          ['Alignment สำคัญเพราะอะไร',['ช่วยลดการสั่นและโหลดผิดปกติที่เพลา','ทำให้สีสดขึ้น','ทำให้แรงดันไฟสูงขึ้น'],0],
+          ['หลังติดตั้งควรสังเกตอะไร',['เสียง ความร้อน และการสั่น','สีของกล่อง','น้ำหนักใบเสนอราคา'],0],
+          ['พื้นที่ระบายความร้อนมีผลอย่างไร',['ช่วยให้มอเตอร์ไม่ร้อนสะสมเกินไป','ช่วยเพิ่มอัตราทด','ช่วยเปลี่ยนเฟสไฟ'],0],
+          ['การต่อโหลดที่ไม่ตรงแนวอาจทำให้เกิดอะไร',['สั่น เสียงดัง หรืออายุการใช้งานลดลง','รอบเพิ่มขึ้นสองเท่าเสมอ','กล่องสายเปลี่ยนตำแหน่งเอง'],0],
+          ['ทีมขายควรถามข้อมูลติดตั้งเพื่ออะไร',['เพื่อเลือกและแนะนำรุ่นให้เหมาะกับหน้างานจริง','เพื่อให้ใบเสนอราคายาวขึ้น','เพื่อเลี่ยงการคุยกับลูกค้า'],0]
+        ]
+      },
+      6: {
+        id:6,
+        youtubeId:'CjsxyyVzGk0',
+        youtubeUrl:'https://youtu.be/CjsxyyVzGk0',
+        brand:'Learning Hub · EP.6 Problem Solving',
+        title:'EP.6 Common Problems <br>and Basic Checking',
+        plainTitle:'EP.6 Common Problems and Basic Checking',
+        poster:'EP.6<br>Common Problems<br>Basic Checking',
+        lead:'EP.6 จะสรุปอาการที่มักพบในงาน Gear Motor เช่น เสียงดัง ร้อนผิดปกติ สั่น รอบตก น้ำมันรั่ว หรือโหลดเกิน พร้อมแนวทางถามข้อมูลและเช็กเบื้องต้น เพื่อแยกสาเหตุระหว่างปัญหาจากตัวสินค้า ระบบไฟ โหลด และการติดตั้ง',
+        metas:['🩺 Troubleshooting','🌡️ Heat & Vibration','📞 ถามข้อมูลลูกค้าเป็นระบบ'],
+        posterFoot:'เหมาะสำหรับใช้เป็นแนวทางรับเรื่องลูกค้าเบื้องต้น ก่อนส่งต่อทีมเทคนิคหรือสรุปแนวทางแก้ไข',
+        topics:[
+          ['เสียงดังผิดปกติ','อาจเกี่ยวข้องกับการติดตั้ง โหลด เกียร์ภายใน Bearing หรือการต่อเพลาที่ไม่ได้แนว'],
+          ['อุณหภูมิสูง','ต้องดูโหลด ชั่วโมงใช้งาน การระบายความร้อน แรงดันไฟ และสภาพแวดล้อม'],
+          ['การสั่นสะเทือน','ตรวจฐานยึด Alignment Coupling และโหลดที่ต่ออยู่กับเพลา'],
+          ['รอบตกหรือแรงไม่พอ','เช็กโหลดจริง อัตราทด แรงดันไฟ และการเลือกรุ่นว่าเหมาะกับงานหรือไม่'],
+          ['น้ำมันรั่วหรือซีลมีปัญหา','ดูตำแหน่งติดตั้ง ระดับน้ำมัน ซีล และแรงดันภายในชุดเกียร์'],
+          ['เก็บข้อมูลก่อนสรุป','ขอรูป วิดีโอ Nameplate และสภาพหน้างาน เพื่อวิเคราะห์อย่างเป็นระบบ']
+        ],
+        quiz:[
+          ['หาก Gear Motor เสียงดัง ควรถามข้อมูลใดเพิ่ม',['สภาพติดตั้ง โหลด และวิดีโอเสียงขณะทำงาน','สีรองเท้าของผู้ใช้งาน','จำนวนคนในโรงงาน'],0],
+          ['มอเตอร์ร้อนผิดปกติควรดูอะไร',['โหลดจริง การระบายความร้อน แรงดันไฟ และชั่วโมงใช้งาน','เฉพาะสติ๊กเกอร์','เฉพาะสีตัวถัง'],0],
+          ['การสั่นอาจเกี่ยวข้องกับอะไร',['ฐานยึด Alignment และ Coupling','ชื่อแบรนด์เท่านั้น','โลโก้บนกล่อง'],0],
+          ['ทำไมต้องขอรูปหรือวิดีโอหน้างาน',['ช่วยวิเคราะห์อาการและลดการเดาผิด','เพื่อใช้โพสต์ทันที','เพื่อดูความสวยของโรงงาน'],0],
+          ['ก่อนสรุปว่า Gear Motor เสีย ควรทำอย่างไร',['แยกสาเหตุจากสินค้า ระบบไฟ โหลด และการติดตั้ง','สรุปทันทีโดยไม่ตรวจ','เปลี่ยนรุ่นที่แพงที่สุดเสมอ'],0]
+        ]
+      },
+      7: {
+        id:7,
+        youtubeId:'j4sC3C670GY',
+        youtubeUrl:'https://youtu.be/j4sC3C670GY',
+        brand:'Learning Hub · EP.7 Sales Application',
+        title:'EP.7 Sales Application <br>for Real Customer Case',
+        plainTitle:'EP.7 Sales Application for Real Customer Case',
+        poster:'EP.7<br>Sales Application<br>Real Customer Case',
+        lead:'EP.7 จะเชื่อมความรู้เทคนิคเข้ากับการขายจริง ตั้งแต่การถามคำถามให้ถูกจุด การแปลงข้อมูลลูกค้าเป็นรุ่นสินค้า การอธิบายคุณค่าเรื่องราคา ความคุ้มค่า การรับประกัน และการลด Downtime ให้ลูกค้าเห็นภาพก่อนตัดสินใจ',
+        metas:['🤝 Sales Training','💬 Customer Question','🎯 Value Selling'],
+        posterFoot:'บทเรียนนี้ช่วยให้ทีมขายคุยกับลูกค้าแบบมีหลัก ไม่ใช่ขายจากราคาอย่างเดียว แต่ขายด้วยเหตุผลทางเทคนิคและความคุ้มค่า',
+        topics:[
+          ['ถามปัญหาให้เจอ','เริ่มจากถามอาการ งานที่ใช้ โหลด ความเร็ว และปัญหาที่ลูกค้ากังวลจริง'],
+          ['แปลงข้อมูลเป็นรุ่นสินค้า','ใช้ข้อมูล Power, Ratio, Voltage, Mounting และ Dimension เพื่อคัดรุ่น SAS ที่เหมาะสม'],
+          ['อธิบายคุณค่า','ชี้ให้เห็นเรื่องความคุ้มค่า การเปลี่ยนแทนได้ง่าย การรับประกัน และบริการหลังขาย'],
+          ['รับมือเรื่องราคา','ไม่แข่งราคาอย่างเดียว แต่เทียบความเสี่ยง Downtime ความเร็วในการส่งมอบ และความมั่นใจในการเลือก'],
+          ['ปิดการขายอย่างมืออาชีพ','สรุปข้อมูลที่ยืนยันแล้ว จุดที่ต้องตรวจเพิ่ม และ Next Step ให้ชัดเจน'],
+          ['สร้างความเชื่อมั่น','ใช้ข้อมูลเทคนิค ภาพประกอบ และคำอธิบายง่าย ๆ เพื่อให้ลูกค้าตัดสินใจเร็วขึ้น']
+        ],
+        quiz:[
+          ['การถามลูกค้าที่ดีควรเริ่มจากอะไร',['ปัญหา งานที่ใช้ โหลด และความเร็วที่ต้องการ','ถามเฉพาะงบประมาณ','ถามแค่สีที่ชอบ'],0],
+          ['Value Selling หมายถึงอะไร',['ขายด้วยคุณค่าและเหตุผล ไม่ใช่ราคาอย่างเดียว','ขายแพงที่สุดเสมอ','ขายโดยไม่ถามข้อมูล'],0],
+          ['ข้อมูลใดช่วยคัดรุ่น SAS ได้แม่นขึ้น',['Power, Ratio, Voltage, Mounting, Dimension','ชื่อเล่นลูกค้าอย่างเดียว','เวลาที่ลูกค้าทักมาเท่านั้น'],0],
+          ['เมื่อลูกค้าเทียบราคา ควรอธิบายอะไรเพิ่ม',['ความเสี่ยง Downtime การรับประกัน และความเหมาะสมของรุ่น','บอกว่าราคาไม่มีเหตุผล','ไม่ต้องตอบอะไร'],0],
+          ['Next Step ที่ดีควรเป็นอย่างไร',['ชัดเจนว่าต้องยืนยันข้อมูลใดและจะส่งอะไรให้ลูกค้าต่อ','ปล่อยให้ลูกค้าคิดเองทั้งหมด','เปลี่ยนเรื่องคุย'],0]
+        ]
+      },
+      8: {
+        id:8,
+        youtubeId:'3uK2wh3NJG8',
+        youtubeUrl:'https://youtu.be/3uK2wh3NJG8',
+        brand:'Learning Hub · EP.8 Review & Next Level',
+        title:'EP.8 Final Review <br>and Next Level Training',
+        plainTitle:'EP.8 Final Review and Next Level Training',
+        poster:'EP.8<br>Final Review<br>Next Level Training',
+        lead:'EP.8 เป็นการทบทวนภาพรวมของซีรีส์ Training AC Gear Motor ทั้งหมด ตั้งแต่การอ่านข้อมูล การเลือกอัตราทด การดูแรงบิด การ Replacement การติดตั้ง การแก้ปัญหา และการนำไปใช้คุยกับลูกค้า เพื่อเตรียมต่อยอดสู่ Level Training ที่สูงขึ้น',
+        metas:['🏁 Final Review','🧠 Knowledge Check','🚀 Ready for Next Level'],
+        posterFoot:'หลังจบ EP.8 ผู้เรียนควรจับประเด็นหลักได้ครบ และพร้อมนำไปใช้กับงานขาย งานเทคนิค หรือการเทียบรุ่นหน้างานจริง',
+        topics:[
+          ['ทบทวนภาพรวม','รวมแกนความรู้ทั้งหมดของ AC Gear Motor ตั้งแต่พื้นฐานจนถึงการใช้งานจริง'],
+          ['อ่านข้อมูลให้เป็น','ย้ำการอ่าน Nameplate และข้อมูลหน้างานที่จำเป็นก่อนเลือกรุ่น'],
+          ['คิดด้วย Ratio และ Torque','เข้าใจว่ารอบและแรงบิดเป็นหัวใจของการเลือก Gear Motor'],
+          ['Replacement อย่างมั่นใจ','รู้ว่าจุดใดต้องเหมือน จุดใดเทียบได้ และจุดใดต้องยืนยันกับลูกค้า'],
+          ['ลดปัญหาหลังขาย','ติดตั้งและเก็บข้อมูลอย่างถูกต้องเพื่อป้องกันเสียงดัง ร้อน สั่น หรือเลือกผิดรุ่น'],
+          ['พร้อมไป Level ถัดไป','นำความรู้พื้นฐานนี้ไปต่อยอดกับการคำนวณ การเลือก Service Factor และเคสจริงที่ซับซ้อนขึ้น']
+        ],
+        quiz:[
+          ['แกนหลักของการเลือก Gear Motor คืออะไร',['ดูโหลด รอบ อัตราทด แรงบิด และสภาพติดตั้งประกอบกัน','ดูสีสินค้าอย่างเดียว','เลือกจากรุ่นที่จำง่าย'],0],
+          ['ก่อน Replacement ต้องยืนยันอะไร',['Dimension, Ratio, Power, Voltage และ Mounting','เฉพาะราคา','เฉพาะกล่องบรรจุ'],0],
+          ['อาการร้อน สั่น เสียงดัง ควรทำอย่างไร',['เก็บข้อมูลและแยกสาเหตุอย่างเป็นระบบ','สรุปทันทีว่าเสียทั้งหมด','ไม่ต้องสนใจ'],0],
+          ['ทีมขายควรใช้ความรู้นี้เพื่ออะไร',['ถามข้อมูลลูกค้า วิเคราะห์รุ่น และอธิบายคุณค่าให้ชัด','ใช้จำศัพท์เท่านั้น','ใช้แทนใบเสนอราคา'],0],
+          ['หลังจบซีรีส์นี้ ควรต่อยอดเรื่องใด',['การคำนวณ Torque, Service Factor และเคส Replacement ที่ซับซ้อนขึ้น','การเลือกสีพื้นหลังเว็บ','การตั้งชื่อไฟล์เพลง'],0]
+        ]
+      }
+    };
+
+    let currentEp = 1;
+    const totalEp = Object.keys(episodes).length;
+
+    function safeText(value){
+      return String(value ?? '');
+    }
+
+    function renderEpisode(ep, shouldScrollTop = true){
+      const data = episodes[ep] || episodes[1];
+      currentEp = data.id;
+      const view = document.getElementById('viewFade');
+      view.classList.add('is-switching');
+
+      setTimeout(() => {
+        document.title = `Video Training - SAS Transmission EP.${data.id}`;
+        document.getElementById('brandSub').textContent = data.brand;
+        document.getElementById('youtubeBtn').href = data.youtubeUrl;
+        document.getElementById('eyebrow').textContent = `🎬 EP.${data.id} · VIDEO TRAINING`;
+        document.getElementById('heroTitle').innerHTML = data.title;
+        document.getElementById('heroLead').innerHTML = data.lead;
+        document.getElementById('posterTitle').innerHTML = data.poster;
+        document.getElementById('posterFoot').textContent = data.posterFoot;
+        document.getElementById('youtubeFrame').src = `https://www.youtube.com/embed/${data.youtubeId}`;
+        document.getElementById('youtubeFrame').title = data.plainTitle;
+        document.getElementById('watchNote').textContent = `หลังดูวิดีโอจบ แนะนำให้ทำแบบฝึกหัดสั้น ๆ ด้านล่างเพื่อทบทวนแกนความรู้ที่สำคัญที่สุดของ EP.${data.id} นี้ครับ`;
+        document.getElementById('quizSub').textContent = `5 ข้อสั้น ๆ สำหรับทบทวนเนื้อหาหลักของ EP.${data.id} ที่จำเป็นต้องรู้`;
+        document.getElementById('progressText').textContent = `EP.${data.id} / ${totalEp}`;
+        document.getElementById('progressFill').style.width = `${(data.id / totalEp) * 100}%`;
+        document.getElementById('footerNote').textContent = `SAS Transmission · Video Training EP.${data.id} · Designed for a premium smooth learning experience`;
+
+        const metaRow = document.getElementById('metaRow');
+        metaRow.innerHTML = '';
+        data.metas.forEach(meta => {
+          const div = document.createElement('div');
+          div.className = 'meta-pill';
+          div.textContent = meta;
+          metaRow.appendChild(div);
+        });
+
+        const topicGrid = document.getElementById('topicGrid');
+        topicGrid.innerHTML = '';
+        data.topics.forEach((topic, index) => {
+          const card = document.createElement('div');
+          card.className = 'topic-card';
+          card.innerHTML = `<div class="topic-num">${index + 1}</div><h3>${safeText(topic[0])}</h3><p>${safeText(topic[1])}</p>`;
+          topicGrid.appendChild(card);
+        });
+
+        renderQuiz(data.quiz);
+        resetQuiz(true);
+        updateEpisodeTabs();
+        updateNextButtons();
+
+        if(shouldScrollTop){
+          window.scrollTo({top:0, behavior:'smooth'});
+        }
+        setTimeout(() => view.classList.remove('is-switching'), 50);
+      }, 170);
+    }
+
+    function renderQuiz(quiz){
+      const wrap = document.getElementById('quizWrap');
+      wrap.innerHTML = '';
+      quiz.forEach((item, idx) => {
+        const question = item[0];
+        const options = item[1];
+        const answerIndex = item[2];
+        const card = document.createElement('div');
+        card.className = 'question-card';
+        card.dataset.answer = String(answerIndex);
+        const optionsHtml = options.map((opt, optIndex) => `
+          <label class="option-item">
+            <input type="radio" name="q${idx + 1}" value="${optIndex}">
+            <span>${safeText(opt)}</span>
+          </label>
+        `).join('');
+        card.innerHTML = `
+          <div class="q-title">${idx + 1}) ${safeText(question)}</div>
+          <div class="option-list">${optionsHtml}</div>
+        `;
+        wrap.appendChild(card);
+      });
+    }
+
+    function updateEpisodeTabs(){
+      document.querySelectorAll('.ep-tab').forEach(btn => {
+        const isActive = Number(btn.dataset.ep) === currentEp;
+        btn.classList.toggle('active', isActive);
+        if(isActive){ btn.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'}); }
+      });
+    }
+
+    function getNextEp(){
+      return currentEp >= totalEp ? 1 : currentEp + 1;
+    }
+
+    function updateNextButtons(){
+      const next = getNextEp();
+      const label = currentEp >= totalEp ? 'กลับไป EP.1 →' : `ดู EP.${next} ถัดไป →`;
+      document.getElementById('nextHeroBtn').textContent = label;
+      document.getElementById('nextBottomBtn').textContent = label;
+    }
+
+    function goNext(){
+      renderEpisode(getNextEp(), true);
+    }
+
+    function goToTop(){
+      window.scrollTo({top:0, behavior:'smooth'});
+    }
+
     function submitQuiz(){
       const cards = document.querySelectorAll('.question-card');
       let score = 0;
+      let answered = 0;
 
       cards.forEach(card => {
-        const answer = card.dataset.answer;
+        const answer = Number(card.dataset.answer);
         const checked = card.querySelector('input[type="radio"]:checked');
         const options = card.querySelectorAll('.option-item');
 
@@ -388,8 +796,10 @@
         });
 
         if(checked){
+          answered++;
+          const selectedIndex = Number(checked.value);
           const selectedLabel = checked.closest('.option-item');
-          if(checked.value === answer){
+          if(selectedIndex === answer){
             score++;
             selectedLabel.style.borderColor='rgba(44, 213, 115, .55)';
             selectedLabel.style.background='rgba(44, 213, 115, .14)';
@@ -412,26 +822,38 @@
       resultBox.style.display = 'block';
       resultScore.textContent = `คุณได้ ${score}/5 คะแนน`;
 
-      if(score === 5){
-        resultText.textContent = 'ยอดเยี่ยมมากครับ คุณเข้าใจแกนหลักของ EP.1 ได้ครบถ้วน พร้อมต่อยอดไปสู่การใช้งานจริงหรือการเทรนนิ่งระดับถัดไป';
+      if(answered < cards.length){
+        resultText.textContent = `ยังทำไม่ครบครับ ตอนนี้ตอบแล้ว ${answered}/5 ข้อ สามารถตรวจคะแนนที่ตอบแล้วได้ และแนะนำให้เลือกคำตอบให้ครบทุกข้อก่อนทบทวนรอบสุดท้าย`;
+      }else if(score === 5){
+        resultText.textContent = `ยอดเยี่ยมมากครับ คุณเข้าใจแกนหลักของ EP.${currentEp} ได้ครบถ้วน พร้อมต่อยอดไปสู่การใช้งานจริงหรือการเทรนนิ่งระดับถัดไป`;
       }else if(score >= 3){
-        resultText.textContent = 'ทำได้ดีครับ แนะนำทบทวนวิดีโออีกหนึ่งรอบ โดยเน้นเรื่อง Gear Ratio, Torque และจุดสำคัญของการ Replacement';
+        resultText.textContent = `ทำได้ดีครับ แนะนำทบทวนวิดีโอ EP.${currentEp} อีกหนึ่งรอบ โดยโฟกัสหัวข้อที่ตอบผิดเพื่อให้เข้าใจแน่นขึ้น`;
       }else{
-        resultText.textContent = 'แนะนำให้รับชมวิดีโออีกครั้งครับ โดยโฟกัสเรื่องหน้าที่ของ Gear Motor, อัตราทด, และข้อมูลสำคัญที่ต้องใช้ในการเลือกสินค้า';
+        resultText.textContent = `แนะนำให้รับชมวิดีโอ EP.${currentEp} อีกครั้งครับ แล้วกลับมาทำแบบฝึกหัดใหม่ โดยเน้นหัวข้อหลักที่ใช้เลือกสินค้าและคุยกับลูกค้าจริง`;
       }
 
       resultBox.scrollIntoView({behavior:'smooth', block:'center'});
     }
 
-    function resetQuiz(){
+    function resetQuiz(silent = false){
       document.querySelectorAll('input[type="radio"]').forEach(i => i.checked = false);
       document.querySelectorAll('.option-item').forEach(o => {
         o.style.borderColor='rgba(255,255,255,.06)';
         o.style.background='rgba(255,255,255,.04)';
       });
       document.getElementById('resultBox').style.display = 'none';
-      window.scrollTo({top:0, behavior:'smooth'});
+      if(!silent){
+        document.getElementById('quizWrap').scrollIntoView({behavior:'smooth', block:'start'});
+      }
     }
+
+    document.querySelectorAll('.ep-tab').forEach(btn => {
+      btn.addEventListener('click', () => renderEpisode(Number(btn.dataset.ep), true));
+    });
+    document.getElementById('nextHeroBtn').addEventListener('click', goNext);
+    document.getElementById('nextBottomBtn').addEventListener('click', goNext);
+
+    renderEpisode(1, false);
   </script>
 </body>
 </html>
