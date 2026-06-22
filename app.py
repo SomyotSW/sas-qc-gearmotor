@@ -957,6 +957,15 @@ def sas_quiz3():
 
 
 # ============================================================
+# 📊 Sales Dashboard
+# ============================================================
+@app.route('/sales_dashboard.html')
+@app.route('/sales-dashboard')
+def sales_dashboard():
+    return render_template('sales_dashboard.html')
+
+
+# ============================================================
 # 🏆 SAS Training Quiz Database API
 # ใช้ Firebase Realtime Database เป็นฐานกลาง เพื่อเช็คข้ามเครื่อง
 # ============================================================
