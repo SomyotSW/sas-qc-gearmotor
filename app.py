@@ -957,15 +957,6 @@ def sas_quiz3():
 
 
 # ============================================================
-# 📊 Sales Dashboard
-# ============================================================
-@app.route('/sales_dashboard.html')
-@app.route('/sales-dashboard')
-def sales_dashboard():
-    return render_template('sales_dashboard.html')
-
-
-# ============================================================
 # 🏆 SAS Training Quiz Database API
 # ใช้ Firebase Realtime Database เป็นฐานกลาง เพื่อเช็คข้ามเครื่อง
 # ============================================================
@@ -1208,6 +1199,87 @@ def training_quiz_leaderboard(level):
         return jsonify({'ok': True, 'level': level_key, 'rows': rows[:200]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e), 'rows': []}), 500
+
+
+
+# ============================================================
+# 📊 SALES DASHBOARD — Routes + API
+# ============================================================
+sales_ref = db.reference("/sales_quotations")
+
+@app.route('/sales-dashboard')
+@app.route('/sales_dashboard.html')
+def sales_dashboard():
+    return render_template('sales_dashboard.html')
+
+@app.route('/api/sales/records', methods=['GET'])
+def api_sales_records():
+    try:
+        data = sales_ref.get() or {}
+        records = list(data.values())
+        records.sort(key=lambda x: x.get('date', ''), reverse=True)
+        return jsonify({'ok': True, 'records': records})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/sales/upload', methods=['POST'])
+def api_sales_upload():
+    try:
+        file     = request.files.get('file')
+        meta_raw = request.form.get('meta', '{}')
+        meta     = json.loads(meta_raw)
+        if not file or not file.filename.endswith('.pdf'):
+            return jsonify({'ok': False, 'error': 'ต้องเป็นไฟล์ PDF'}), 400
+        filename  = secure_filename(file.filename)
+        r2_key    = f"sales_pdf/{filename}"
+        pdf_bytes = file.read()
+        pdf_url   = r2_upload_bytes(pdf_bytes, r2_key, 'application/pdf')
+        record_id = meta.get('id') or filename.replace('.pdf', '')
+        safe_id   = record_id.replace('/', '_').replace('.', '_')
+        record = {
+            'id':         record_id,
+            'filename':   filename,
+            'pdf_url':    pdf_url,
+            'saleShort':  meta.get('saleShort', 'XX'),
+            'customer':   meta.get('customer', ''),
+            'date':       meta.get('date', ''),
+            'month':      meta.get('date', '')[:7] if meta.get('date') else '',
+            'exVat':      float(meta.get('exVat', 0)),
+            'vat':        float(meta.get('vat', 0)),
+            'total':      float(meta.get('total', 0)),
+            'items':      meta.get('items', []),
+            'delivery':   meta.get('delivery', '-'),
+            'payment':    meta.get('payment', '-'),
+            'status':     None,
+            'note':       '',
+            'uploaded_at': datetime.datetime.utcnow().isoformat(),
+        }
+        sales_ref.child(safe_id).set(record)
+        return jsonify({'ok': True, 'record': record})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/sales/record/<record_id>', methods=['PATCH'])
+def api_sales_patch(record_id):
+    try:
+        body    = request.get_json(force=True) or {}
+        safe_id = record_id.replace('/', '_').replace('.', '_')
+        allowed = {k: body[k] for k in ('status', 'note') if k in body}
+        if not allowed:
+            return jsonify({'ok': False, 'error': 'nothing to update'}), 400
+        sales_ref.child(safe_id).update(allowed)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/sales/record/<record_id>', methods=['DELETE'])
+def api_sales_delete(record_id):
+    try:
+        safe_id = record_id.replace('/', '_').replace('.', '_')
+        sales_ref.child(safe_id).delete()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

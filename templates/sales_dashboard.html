@@ -2,436 +2,375 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sales Dashboard · SAS</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <style>
-:root {
-  --bg:        #06101e;
-  --bg2:       #0a1828;
-  --bg3:       #0d1f35;
-  --card:      #0f2540;
-  --card2:     #112849;
-  --border:    rgba(56,130,220,0.18);
-  --border2:   rgba(56,130,220,0.32);
-  --blue1:     #3B82F6;
-  --blue2:     #60A5FA;
-  --blue3:     #93C5FD;
-  --cyan:      #22D3EE;
-  --teal:      #10B981;
-  --amber:     #F59E0B;
-  --pink:      #EC4899;
-  --purple:    #A78BFA;
-  --red:       #F87171;
-  --txt:       #e2eaf5;
-  --txt2:      #7a9cbd;
-  --txt3:      #3d5a7a;
-  --radius:    14px;
-  --radius-sm: 8px;
+:root{
+  --bg:#06101e;--bg2:#0a1828;--bg3:#0d1f35;
+  --card:#0f2540;--card2:#112849;
+  --b:rgba(56,130,220,.18);--b2:rgba(56,130,220,.32);
+  --c1:#3B82F6;--c2:#60A5FA;--c3:#93C5FD;
+  --cyan:#22D3EE;--teal:#10B981;--amber:#F59E0B;
+  --red:#F87171;--purple:#A78BFA;
+  --txt:#e2eaf5;--txt2:#7a9cbd;--txt3:#3d5a7a;
+  --r:14px;--rs:8px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);font-family:'Segoe UI','Sarabun','Noto Sans Thai',sans-serif;color:var(--txt);overflow-x:hidden}
-/* scrollbar */
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:#1a3050;border-radius:4px}
 
-/* ── LAYOUT ── */
-.page{max-width:1280px;margin:0 auto;padding:20px 18px 50px}
+.page{max-width:1280px;margin:0 auto;padding:20px 18px 50px;position:relative;z-index:1}
+.page::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(0,160,255,.018) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(0,160,255,.018) 1px,transparent 1px);
+  background-size:54px 54px;animation:gbg 30s linear infinite}
+@keyframes gbg{to{background-position:54px 54px}}
 
-/* ── TOPBAR ── */
-.topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px}
-.topbar-left h1{font-size:clamp(20px,3vw,28px);font-weight:800;letter-spacing:-0.5px;color:#fff}
-.topbar-left p{color:var(--txt2);font-size:12px;margin-top:4px}
-.topbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.btn-back{display:inline-flex;align-items:center;gap:6px;padding:7px 16px;border-radius:20px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);color:var(--txt2);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;letter-spacing:.5px;text-decoration:none}
-.btn-back:hover{background:rgba(255,255,255,0.1);color:#fff;transform:translateX(-2px)}
-.btn-upload{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:20px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.35);color:var(--blue2);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s}
-.btn-upload:hover{background:rgba(59,130,246,0.22);border-color:var(--blue1);color:#fff;transform:translateY(-1px)}
-.tag-month{padding:5px 14px;border-radius:20px;background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.2);color:var(--cyan);font-size:12px;font-weight:700;letter-spacing:.5px}
+/* topbar */
+.topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px}
+.topbar h1{font-size:clamp(18px,3vw,26px);font-weight:800;letter-spacing:-.5px;color:#fff}
+.topbar p{color:var(--txt2);font-size:12px;margin-top:3px}
+.btn-back{display:inline-flex;align-items:center;gap:6px;padding:7px 16px;border-radius:20px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);
+  color:var(--txt2);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;
+  transition:all .2s;text-decoration:none}
+.btn-back:hover{background:rgba(255,255,255,.1);color:#fff;transform:translateX(-2px)}
+.btn-up{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:20px;
+  background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.35);
+  color:var(--c2);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s}
+.btn-up:hover{background:rgba(59,130,246,.22);color:#fff;transform:translateY(-1px)}
+.tag{padding:5px 14px;border-radius:20px;background:rgba(34,211,238,.08);
+  border:1px solid rgba(34,211,238,.2);color:var(--cyan);font-size:12px;font-weight:700}
 
-/* ── MONTH PILLS ── */
-.month-strip{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
-.mpill{padding:5px 14px;border-radius:20px;background:var(--card);border:1px solid var(--border);color:var(--txt2);font-size:12px;font-weight:700;cursor:pointer;transition:all .18s;letter-spacing:.4px}
-.mpill.active,.mpill:hover{background:rgba(59,130,246,0.18);border-color:var(--blue1);color:var(--blue2)}
+/* drop zone */
+.drop{border:2px dashed var(--b);border-radius:var(--r);padding:22px;text-align:center;
+  color:var(--txt2);font-size:13px;cursor:pointer;background:rgba(59,130,246,.03);
+  margin-bottom:20px;transition:all .2s}
+.drop:hover,.drop.drag{border-color:var(--c1);background:rgba(59,130,246,.08);color:var(--c2)}
+.drop svg{display:block;margin:0 auto 6px;opacity:.4}
 
-/* ── STAT CARDS ── */
-.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:22px}
-.scard{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;position:relative;overflow:hidden;transition:transform .25s,border-color .25s}
-.scard:hover{transform:translateY(-4px);border-color:var(--border2)}
-.scard::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(59,130,246,0.06) 0%,transparent 60%);pointer-events:none}
-.sc-label{font-size:11px;color:var(--txt3);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
-.sc-val{font-size:22px;font-weight:900;color:#fff}
-.sc-sub{font-size:11px;color:var(--txt2);margin-top:3px}
-.sc-accent{position:absolute;right:14px;top:14px;font-size:24px;opacity:.15}
+/* month pills */
+.mstrip{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.mpill{padding:5px 14px;border-radius:20px;background:var(--card);border:1px solid var(--b);
+  color:var(--txt2);font-size:12px;font-weight:700;cursor:pointer;transition:all .18s}
+.mpill.active,.mpill:hover{background:rgba(59,130,246,.18);border-color:var(--c1);color:var(--c2)}
 
-/* ── GRID 2/3 ── */
-.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin-bottom:16px}
-.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+/* stat cards */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+.sc{background:var(--card);border:1px solid var(--b);border-radius:var(--r);padding:15px 17px;
+  position:relative;overflow:hidden;transition:transform .25s,border-color .25s}
+.sc:hover{transform:translateY(-4px);border-color:var(--b2)}
+.sc::before{content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(59,130,246,.06) 0%,transparent 60%);pointer-events:none}
+.sc-l{font-size:11px;color:var(--txt3);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px}
+.sc-v{font-size:21px;font-weight:900;color:#fff}
+.sc-s{font-size:11px;color:var(--txt2);margin-top:2px}
 
-/* ── CARD ── */
-.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;transition:transform .25s,border-color .25s}
-.card:hover{transform:translateY(-4px);border-color:var(--border2)}
-.card-title{font-size:13px;font-weight:800;color:#fff;letter-spacing:.3px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+/* ticker */
+#ticker-wrap{width:100%;background:#030d1a;border-top:1px solid rgba(0,180,255,.1);
+  border-bottom:1px solid rgba(0,180,255,.1);height:54px;overflow:hidden;
+  position:relative;margin-bottom:20px}
+#ticker-wrap::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:4;
+  background:linear-gradient(90deg,#030d1a 0%,transparent 8%,transparent 92%,#030d1a 100%)}
+#ticker-track{display:flex;align-items:center;height:100%;white-space:nowrap;will-change:transform}
+.ti{display:inline-flex;align-items:center;gap:8px;padding:0 22px;height:100%;flex-shrink:0;
+  border-right:1px solid rgba(255,255,255,.04);font-family:'Courier New',monospace}
+.tl{font-size:9px;letter-spacing:3px;text-transform:uppercase;opacity:.35;font-weight:700;color:#fff}
+.tv{font-size:19px;font-weight:900;letter-spacing:1.5px;text-shadow:0 0 10px currentColor,0 0 22px currentColor}
+.ts2{color:rgba(255,255,255,.15);font-size:12px}
 
-/* ── LINE CHART WRAPPER ── */
-.chart-wrap{position:relative;width:100%;height:280px}
+/* chart+top5 */
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin-bottom:16px}
+.g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--b);border-radius:var(--r);padding:20px 22px;
+  transition:transform .25s,border-color .25s}
+.card:hover{transform:translateY(-3px);border-color:var(--b2)}
+.card-t{font-size:13px;font-weight:800;color:#fff;letter-spacing:.3px;margin-bottom:14px}
+.cw{position:relative;width:100%;height:260px}
 
-/* ── BAR ROWS ── */
-.bar-row{display:flex;align-items:center;gap:10px;padding:7px 8px;margin:1px -8px;border-radius:10px;transition:background .18s,transform .2s;cursor:default}
-.bar-row:hover{background:rgba(255,255,255,0.04);transform:translateX(5px)}
-.bar-track{background:#071120;border-radius:5px;height:7px;overflow:hidden;flex:1}
-.bar-fill{height:100%;border-radius:5px;transition:width 1.4s cubic-bezier(.22,1,.36,1)}
-.bar-fill::after{content:'';position:absolute;top:0;right:0;width:8px;height:100%;background:rgba(255,255,255,.5);filter:blur(3px);border-radius:5px}
-.bar-name{font-size:13px;font-weight:700;color:var(--txt2);min-width:36px;transition:color .18s}
-.bar-row:hover .bar-name{color:#fff}
-.bar-val{font-size:13px;font-weight:800;min-width:70px;text-align:right}
-.medal{width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+/* bar rows */
+.brow{display:flex;align-items:center;gap:10px;padding:6px 8px;margin:1px -8px;
+  border-radius:10px;transition:background .18s,transform .2s;cursor:default}
+.brow:hover{background:rgba(255,255,255,.04);transform:translateX(5px)}
+.brow:hover .bn{color:#fff}
+.bt{background:#071120;border-radius:5px;height:7px;overflow:hidden;flex:1}
+.bf{height:100%;border-radius:5px;transition:width 1.4s cubic-bezier(.22,1,.36,1)}
+.bn{font-size:13px;font-weight:700;color:var(--txt2);min-width:34px;transition:color .18s}
+.bv{font-size:13px;font-weight:800;min-width:68px;text-align:right}
+.med{width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
 
-/* ── TEAM CARD ── */
-.team-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:transform .28s,border-color .28s;animation:cardUp .5s ease both}
-@keyframes cardUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
-.team-card:hover{transform:translateY(-6px);border-color:var(--border2)}
-.tc-head{padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
-.tc-pills{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 20px;border-bottom:1px solid var(--border)}
-.tc-pill{background:rgba(255,255,255,0.03);border-radius:10px;padding:8px 10px;text-align:center}
-.tc-bars{padding:10px 20px 16px;overflow-y:auto;max-height:300px}
+/* team card */
+.tcard{background:var(--card);border:1px solid var(--b);border-radius:var(--r);overflow:hidden;
+  transition:transform .28s,border-color .28s;animation:cup .45s ease both}
+@keyframes cup{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.tcard:hover{transform:translateY(-5px);border-color:var(--b2)}
+.tch{padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
+.tcp{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 18px;border-bottom:1px solid var(--b)}
+.tpill{background:rgba(255,255,255,.03);border-radius:10px;padding:8px 10px;text-align:center}
+.tbars{padding:8px 18px 14px;overflow-y:auto;max-height:280px}
 
-/* ── STATUS CHIPS ── */
-.chip{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.4px}
-.chip-forecast{background:rgba(16,185,129,.15);color:#10B981;border:1px solid rgba(16,185,129,.3)}
-.chip-loss{background:rgba(248,113,113,.15);color:#F87171;border:1px solid rgba(248,113,113,.3)}
-.chip-holding{background:rgba(245,158,11,.15);color:#F59E0B;border:1px solid rgba(245,158,11,.3)}
-
-/* ── TABLE ── */
-.tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:22px}
+/* table */
+.tbl-wrap{overflow-x:auto;border-radius:var(--r);border:1px solid var(--b);margin-bottom:20px}
 table{width:100%;border-collapse:collapse;font-size:13px}
 thead{background:var(--card2)}
-th{padding:10px 14px;text-align:left;font-weight:700;color:var(--txt2);border-bottom:1px solid var(--border);white-space:nowrap;font-size:11px;letter-spacing:.7px;text-transform:uppercase}
-th.num{text-align:right}
-td{padding:9px 14px;border-bottom:1px solid rgba(56,130,220,0.08);color:var(--txt);vertical-align:middle}
-td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+th{padding:9px 12px;text-align:left;font-weight:700;color:var(--txt2);
+  border-bottom:1px solid var(--b);white-space:nowrap;font-size:11px;letter-spacing:.7px;text-transform:uppercase}
+th.r{text-align:right}
+td{padding:8px 12px;border-bottom:1px solid rgba(56,130,220,.07);color:var(--txt);vertical-align:middle}
+td.r{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:rgba(59,130,246,0.05)}
-.price-btn{background:none;border:none;color:var(--blue2);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;padding:0;text-decoration:underline;text-underline-offset:2px;transition:color .15s}
-.price-btn:hover{color:var(--cyan)}
-.badge-sale{display:inline-flex;align-items:center;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:800;letter-spacing:.5px}
-.bs-tw{background:rgba(59,130,246,.18);color:var(--blue2);border:1px solid rgba(59,130,246,.3)}
+tr:hover td{background:rgba(59,130,246,.04)}
+.pbtn{background:none;border:none;color:var(--c2);font-size:13px;font-weight:700;cursor:pointer;
+  font-family:inherit;padding:0;text-decoration:underline;text-underline-offset:2px;transition:color .15s}
+.pbtn:hover{color:var(--cyan)}
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:800;letter-spacing:.5px}
+.bs-tw{background:rgba(59,130,246,.18);color:var(--c2);border:1px solid rgba(59,130,246,.3)}
 .bs-nm{background:rgba(16,185,129,.15);color:#6EE7B7;border:1px solid rgba(16,185,129,.3)}
-.bs-xx{background:rgba(255,255,255,.07);color:var(--txt2);border:1px solid var(--border)}
+.bs-xx{background:rgba(255,255,255,.07);color:var(--txt2);border:1px solid var(--b)}
 
-/* ── STATUS BTNS ── */
-.st-wrap{display:flex;gap:4px}
-.st-btn{padding:3px 8px;border-radius:6px;border:1px solid var(--border);font-size:10px;font-weight:700;cursor:pointer;background:transparent;color:var(--txt2);font-family:inherit;transition:all .12s}
-.st-btn:hover{background:rgba(255,255,255,.06);color:#fff}
-.st-btn.forecast.active{background:rgba(16,185,129,.18);border-color:#10B981;color:#10B981}
-.st-btn.loss.active{background:rgba(248,113,113,.18);border-color:#F87171;color:#F87171}
-.st-btn.holding.active{background:rgba(245,158,11,.18);border-color:#F59E0B;color:#F59E0B}
-.note-in{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:12px;width:120px;color:var(--txt);font-family:inherit}
-.note-in:focus{outline:none;border-color:var(--blue1)}
+/* status btns */
+.stw{display:flex;gap:4px}
+.sb{padding:3px 8px;border-radius:6px;border:1px solid var(--b);font-size:10px;font-weight:700;
+  cursor:pointer;background:transparent;color:var(--txt2);font-family:inherit;transition:all .12s}
+.sb:hover{background:rgba(255,255,255,.06);color:#fff}
+.sb.forecast.on{background:rgba(16,185,129,.18);border-color:#10B981;color:#10B981}
+.sb.loss.on{background:rgba(248,113,113,.18);border-color:#F87171;color:#F87171}
+.sb.holding.on{background:rgba(245,158,11,.18);border-color:#F59E0B;color:#F59E0B}
+.note-in{background:rgba(255,255,255,.04);border:1px solid var(--b);border-radius:6px;
+  padding:3px 8px;font-size:12px;width:120px;color:var(--txt);font-family:inherit}
+.note-in:focus{outline:none;border-color:var(--c1)}
 .note-in::placeholder{color:var(--txt3)}
+.chip{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.4px}
+.cf{background:rgba(16,185,129,.15);color:#10B981;border:1px solid rgba(16,185,129,.3)}
+.cl{background:rgba(248,113,113,.15);color:#F87171;border:1px solid rgba(248,113,113,.3)}
+.ch{background:rgba(245,158,11,.15);color:#F59E0B;border:1px solid rgba(245,158,11,.3)}
 
-/* ── MODAL ── */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,8,20,.75);z-index:2000;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
-.modal-bg.open{display:flex}
-.modal-box{background:var(--bg2);border:1px solid var(--border2);border-radius:18px;width:640px;max-width:95vw;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 30px 80px rgba(0,0,0,.7)}
-.modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border)}
-.modal-head h3{font-size:15px;font-weight:800;color:#fff}
-.modal-close{background:none;border:none;cursor:pointer;color:var(--txt2);font-size:22px;display:flex;padding:4px;transition:color .15s}
-.modal-close:hover{color:#fff}
-.modal-body{overflow-y:auto;padding:18px 20px;flex:1}
-.msec{background:rgba(255,255,255,.025);border-radius:10px;padding:12px 14px;margin-bottom:12px;border:1px solid var(--border)}
-.mrow{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(56,130,220,0.08);font-size:13px}
-.mrow:last-child{border-bottom:none}
-.mrow .ml{color:var(--txt2)}
-.mrow .mv{color:#fff;font-weight:600}
-.mitem{padding:8px 0;border-bottom:1px solid rgba(56,130,220,0.08)}
-.mitem:last-child{border-bottom:none}
+/* modal */
+.mbg{display:none;position:fixed;inset:0;background:rgba(0,8,20,.75);z-index:2000;
+  align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.mbg.open{display:flex}
+.mbox{background:var(--bg2);border:1px solid var(--b2);border-radius:18px;width:640px;
+  max-width:95vw;max-height:82vh;overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:0 30px 80px rgba(0,0,0,.7)}
+.mhead{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;
+  border-bottom:1px solid var(--b)}
+.mhead h3{font-size:14px;font-weight:800;color:#fff}
+.mcls{background:none;border:none;cursor:pointer;color:var(--txt2);font-size:21px;display:flex;padding:4px;transition:color .15s}
+.mcls:hover{color:#fff}
+.mbody{overflow-y:auto;padding:16px 18px;flex:1}
+.ms{background:rgba(255,255,255,.025);border-radius:10px;padding:11px 13px;margin-bottom:10px;border:1px solid var(--b)}
+.mr{display:flex;justify-content:space-between;align-items:center;padding:3px 0;
+  border-bottom:1px solid rgba(56,130,220,.07);font-size:13px}
+.mr:last-child{border-bottom:none}
+.ml2{color:var(--txt2)}
+.mv{color:#fff;font-weight:600}
+.mit{padding:7px 0;border-bottom:1px solid rgba(56,130,220,.07)}
+.mit:last-child{border-bottom:none}
 
-/* ── TICKER ── */
-#ticker-wrap{width:100%;background:#030d1a;border-top:1px solid rgba(0,180,255,.1);border-bottom:1px solid rgba(0,180,255,.1);height:58px;overflow:hidden;position:relative;margin-bottom:20px}
-#ticker-wrap::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:4;background:linear-gradient(90deg,#030d1a 0%,transparent 8%,transparent 92%,#030d1a 100%)}
-#ticker-track{display:flex;align-items:center;height:100%;white-space:nowrap;will-change:transform}
-.tick-item{display:inline-flex;align-items:center;gap:8px;padding:0 24px;height:100%;flex-shrink:0;border-right:1px solid rgba(255,255,255,.04);font-family:'Courier New',monospace}
-.tl{font-size:9px;letter-spacing:3px;text-transform:uppercase;opacity:.35;font-weight:700;color:#fff}
-.tv{font-size:20px;font-weight:900;letter-spacing:1.5px;text-shadow:0 0 10px currentColor,0 0 24px currentColor}
-.ts{color:rgba(255,255,255,.15);font-size:13px}
-.c1{color:#60A5FA}.c2{color:#34D399}.c3{color:#FBBF24}.c4{color:#C084FC}.c5{color:#F9A8D4}
-.ca{color:#22D3EE}.cb{color:#60A5FA}.cc{color:#34D399}
+/* upload progress */
+.prog-bar{width:100%;height:3px;background:var(--b);border-radius:2px;overflow:hidden;margin-top:6px}
+.prog-fill{height:100%;background:var(--c1);border-radius:2px;transition:width .3s ease}
 
-/* ── UPLOAD ZONE ── */
-.upload-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:28px;text-align:center;color:var(--txt2);font-size:13px;cursor:pointer;transition:all .2s;background:rgba(59,130,246,.03);margin-bottom:22px}
-.upload-zone:hover,.upload-zone.drag{border-color:var(--blue1);background:rgba(59,130,246,.08);color:var(--blue2)}
-.upload-zone svg{display:block;margin:0 auto 8px;opacity:.4}
+/* section label */
+.sec{font-size:11px;font-weight:800;letter-spacing:1.5px;color:var(--txt3);text-transform:uppercase;
+  margin:22px 0 10px;display:flex;align-items:center;gap:10px}
+.sec::after{content:'';flex:1;height:1px;background:var(--b)}
 
-/* ── GRID BG ── */
-.page::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;background-image:linear-gradient(rgba(0,160,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(0,160,255,.018) 1px,transparent 1px);background-size:54px 54px;animation:gbg 30s linear infinite}
-@keyframes gbg{from{background-position:0 0}to{background-position:54px 54px}}
-
-/* ── FOOTER ── */
-.footer{text-align:center;color:var(--txt3);font-size:11px;margin-top:36px;letter-spacing:.6px}
-
-/* ── SECTION DIVIDER ── */
-.sec-label{font-size:11px;font-weight:800;letter-spacing:1.5px;color:var(--txt3);text-transform:uppercase;margin:24px 0 12px;display:flex;align-items:center;gap:10px}
-.sec-label::after{content:'';flex:1;height:1px;background:var(--border)}
-
-@media(max-width:600px){.stat-row{grid-template-columns:1fr 1fr}.grid2,.grid3{grid-template-columns:1fr}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@media(max-width:600px){.stats{grid-template-columns:1fr 1fr}.g2,.g3{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <div class="page">
 
-  <!-- TOPBAR -->
-  <div class="topbar">
-    <div class="topbar-left">
-      <h1>📊 Sales Dashboard</h1>
-      <p id="sub-date">Motor (MO) · ยอดรวมทุกทีม: <span id="grand-lbl" style="color:var(--cyan);font-weight:800">฿0</span></p>
-    </div>
-    <div class="topbar-right">
-      <span class="tag-month" id="cur-month-tag">All Months</span>
-      <label class="btn-upload">
-        <input type="file" id="pdfInput" accept=".pdf" multiple style="display:none">
-        ↑ อัพโหลด PDF (สูงสุด 20 ไฟล์)
-      </label>
-      <a href="javascript:void(0)" class="btn-back" onclick="goBack()">← กลับหน้าหลัก</a>
-    </div>
+<div class="topbar">
+  <div>
+    <h1>📊 Sales Dashboard</h1>
+    <p>Motor (MO) · ยอดรวมทุกทีม: <span id="grand-lbl" style="color:var(--cyan);font-weight:800">฿0</span></p>
   </div>
-
-  <!-- UPLOAD ZONE -->
-  <div class="upload-zone" id="dropZone" onclick="document.getElementById('pdfInput').click()">
-    <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 12V4m0 0L8 8m4-4l4 4"/></svg>
-    ลาก PDF มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์ (สูงสุด 20 ไฟล์)
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span class="tag" id="cur-tag">All Months</span>
+    <label class="btn-up">
+      <input type="file" id="pdfIn" accept=".pdf" multiple style="display:none">
+      ↑ อัพโหลด PDF (สูงสุด 20 ไฟล์)
+    </label>
+    <a href="/" class="btn-back">← กลับหน้าหลัก</a>
   </div>
+</div>
 
-  <!-- MONTH PILLS -->
-  <div class="month-strip" id="monthStrip"></div>
+<div class="drop" id="dz" onclick="document.getElementById('pdfIn').click()">
+  <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+    <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 12V4m0 0L8 8m4-4l4 4"/>
+  </svg>
+  <span id="dz-txt">ลาก PDF มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์ (สูงสุด 20 ไฟล์)</span>
+  <div class="prog-bar" id="prog-bar" style="display:none"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+</div>
 
-  <!-- STAT CARDS -->
-  <div class="stat-row" id="statRow"></div>
+<div class="mstrip" id="mstrip"></div>
+<div class="stats" id="stats"></div>
 
-  <!-- TICKER -->
-  <div id="ticker-wrap"><div id="ticker-track"></div></div>
+<div id="ticker-wrap"><div id="ticker-track"></div></div>
 
-  <!-- CHARTS + TOP5 -->
-  <div class="grid2">
-    <div class="card">
-      <div class="card-title">📈 เส้นกราฟเปรียบเทียบ Sale แต่ละคน</div>
-      <div class="chart-wrap"><canvas id="lineChart" role="img" aria-label="Line chart comparing sales per person"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="card-title">🏆 Top 5 Sellers</div>
-      <div id="top5List" style="display:flex;flex-direction:column;gap:4px"></div>
-    </div>
+<div class="g2">
+  <div class="card">
+    <div class="card-t">📈 เส้นกราฟเปรียบเทียบ Sale แต่ละคน</div>
+    <div class="cw"><canvas id="lineChart" role="img" aria-label="Line chart comparing sales per person"></canvas></div>
   </div>
-
-  <!-- SECTION: TEAM CARDS -->
-  <div class="sec-label">ยอดรายทีม</div>
-  <div class="grid3" id="teamCards"></div>
-
-  <!-- SECTION: QUOTATION TABLE -->
-  <div class="sec-label">รายการใบเสนอราคาทั้งหมด</div>
-  <div class="tbl-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Sale</th>
-          <th>Q/T Name</th>
-          <th>ลูกค้า</th>
-          <th>ชื่อเต็ม</th>
-          <th class="num">Total (฿)</th>
-          <th>สถานะ</th>
-          <th>หมายเหตุ</th>
-        </tr>
-      </thead>
-      <tbody id="qtTbody"></tbody>
-    </table>
+  <div class="card">
+    <div class="card-t">🏆 Top 5 Sellers</div>
+    <div id="top5"></div>
   </div>
+</div>
 
-  <div class="footer">SYNERGY ASIA SOLUTION · Sales Dashboard · อัพโหลด PDF เพื่ออัพเดตข้อมูลรายวัน</div>
+<div class="sec">ยอดรายทีม</div>
+<div class="g3" id="tcards"></div>
+
+<div class="sec">รายการใบเสนอราคาทั้งหมด</div>
+<div class="tbl-wrap">
+  <table>
+    <thead><tr>
+      <th>Sale</th><th>Q/T Name</th><th>ลูกค้า</th><th>ชื่อเต็ม</th>
+      <th class="r">Total (฿)</th><th>สถานะ</th><th>หมายเหตุ</th>
+    </tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<div style="text-align:center;color:var(--txt3);font-size:11px;margin-top:28px;letter-spacing:.6px">
+  SYNERGY ASIA SOLUTION · Sales Dashboard · ข้อมูลบันทึกใน Firebase + Cloudflare R2
+</div>
 </div>
 
 <!-- MODAL -->
-<div class="modal-bg" id="modalBg">
-  <div class="modal-box">
-    <div class="modal-head">
-      <h3 id="modalTitle">รายละเอียดใบเสนอราคา</h3>
-      <button class="modal-close" id="modalClose">✕</button>
+<div class="mbg" id="mbg">
+  <div class="mbox">
+    <div class="mhead">
+      <h3 id="mtitle">รายละเอียด</h3>
+      <button class="mcls" id="mcls">✕</button>
     </div>
-    <div class="modal-body" id="modalBody"></div>
+    <div class="mbody" id="mbody"></div>
   </div>
 </div>
 
 <script>
-/* ── DATA ── */
-const SALE_INFO = {
-  TW: { name:'Tippawan',   cls:'bs-tw', team:'Team 1', color:'#3B82F6' },
-  NM: { name:'Naphaphat',  cls:'bs-nm', team:'Team 2', color:'#10B981' },
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+/* ── CONSTANTS ── */
+const SALE_INFO={
+  TW:{name:'Tippawan', cls:'bs-tw', team:'Team 1', color:'#3B82F6'},
+  NM:{name:'Naphaphat',cls:'bs-nm', team:'Team 2', color:'#10B981'},
 };
-function getSaleInfo(short){
-  return SALE_INFO[short] || { name:short, cls:'bs-xx', team:'–', color:'#7a9cbd' };
+function si(short){return SALE_INFO[short]||{name:short,cls:'bs-xx',team:'–',color:'#7a9cbd'};}
+
+const fmt  =n=>Number(n).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtK =n=>n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':n.toLocaleString();
+
+/* ── STATE ── */
+let records=[], selMonth='all', lineChart=null;
+
+/* ── LOAD FROM API ── */
+async function loadRecords(){
+  try{
+    const r=await fetch('/api/sales/records');
+    const j=await r.json();
+    if(j.ok) records=j.records||[];
+  }catch(e){console.error('load failed',e);}
+  render();
 }
 
-let records = [
-  {
-    id:'QMO6905-0002', filename:'QMO6905-0002-TW-Magna__05-05-2026_.pdf',
-    saleShort:'TW', customer:'แมกน่าออโตโมทีฟ เทคโนโลยี (ประเทศไทย) จำกัด',
-    date:'2026-05-05', month:'2026-05',
-    exVat:13500, vat:945, total:14445,
-    items:[
-      {code:'5IK120RGU-CF',desc:'120W AC gear motor 220V 50HZ single phase',qty:2,unit:3200,total:6400},
-      {code:'5GU30K(B)',desc:'90mm gearbox ratio 1:30 shaft 15mm',qty:2,unit:2200,total:4400},
-      {code:'UX52-120',desc:'120W Digital speed Controller',qty:2,unit:1350,total:2700},
-    ],
-    delivery:'3-5 วัน', payment:'–', status:null, note:''
-  },
-  {
-    id:'QMO26-NM-023-R1', filename:'QMO26-NM-023-T_K_D_DYNAMIC_COMPANY_LIMITED__18-05-2026_.pdf',
-    saleShort:'NM', customer:'บริษัท ทีเค ดี ไดนามิค จำกัด',
-    date:'2026-05-18', month:'2026-05',
-    exVat:26220, vat:1835.40, total:28055.40,
-    items:[
-      {code:'ZHN750-30-S-G1-LD',desc:'0.75kW 4Pole 3Phase 380VAC 50Hz IP54 Ratio 1/30',qty:1,unit:11400,total:11400},
-      {code:'ZHN400-30-S-G1-LD',desc:'0.4kW 4Pole 3Phase 380VAC 50Hz IP54 Ratio 1/30',qty:1,unit:8800,total:8800},
-      {code:'ZHN200-30-S-G1-LD',desc:'200W 3Phase 220/380VAC 50Hz IP54 Ratio 1:30',qty:1,unit:7400,total:7400},
-    ],
-    delivery:'5-7 วัน', payment:'Cash', status:null, note:''
-  }
-];
-
-let selMonth = 'all';
-let lineChart = null;
-
-/* ── UTILS ── */
-const fmt  = n => Number(n).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
-const fmtK = n => n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':n.toLocaleString();
-
-function getMonths(){
-  return [...new Set(records.map(r=>r.month))].sort().reverse();
-}
-function filtered(){
-  return selMonth==='all' ? records : records.filter(r=>r.month===selMonth);
-}
-
-/* ── ANIMATE COUNT ── */
-function animCount(el, target, dur=1200){
-  const t0=performance.now(), from=parseFloat(el.dataset.val||0)||0;
-  el.dataset.val = target;
-  (function step(now){
-    const p=Math.min((now-t0)/dur,1), e=1-Math.pow(1-p,4);
-    el.textContent = '฿'+(from+(target-from)*e).toLocaleString('th-TH',{maximumFractionDigits:0});
-    if(p<1) requestAnimationFrame(step);
-  })(performance.now());
-}
+/* ── DERIVED ── */
+function filtered(){return selMonth==='all'?records:records.filter(r=>r.month===selMonth);}
+function getMonths(){return[...new Set(records.map(r=>r.month))].filter(Boolean).sort().reverse();}
 
 /* ── MONTH STRIP ── */
 function renderMonths(){
-  const months = getMonths();
-  const strip = document.getElementById('monthStrip');
-  let h = `<div class="mpill ${selMonth==='all'?'active':''}" onclick="selMonth='all';render()">ทั้งหมด</div>`;
+  const months=getMonths();
+  let h=`<div class="mpill ${selMonth==='all'?'active':''}" onclick="selMonth='all';render()">ทั้งหมด</div>`;
   months.forEach(m=>{
-    const [y,mo]=m.split('-');
-    const lbl = new Date(y,parseInt(mo)-1).toLocaleDateString('th-TH',{month:'short',year:'numeric'});
-    h += `<div class="mpill ${selMonth===m?'active':''}" onclick="selMonth='${m}';render()">${lbl}</div>`;
+    const[y,mo]=m.split('-');
+    const lbl=new Date(y,parseInt(mo)-1).toLocaleDateString('th-TH',{month:'short',year:'numeric'});
+    h+=`<div class="mpill ${selMonth===m?'active':''}" onclick="selMonth='${m}';render()">${lbl}</div>`;
   });
-  strip.innerHTML = h;
-  document.getElementById('cur-month-tag').textContent = selMonth==='all'?'All Months':selMonth;
+  document.getElementById('mstrip').innerHTML=h;
+  document.getElementById('cur-tag').textContent=selMonth==='all'?'All Months':selMonth;
 }
 
-/* ── STAT CARDS ── */
+/* ── STATS ── */
 function renderStats(){
   const data=filtered();
   const grand=data.reduce((s,r)=>s+r.total,0);
   const perSale={};
   data.forEach(r=>{
-    const si=getSaleInfo(r.saleShort);
-    if(!perSale[r.saleShort]) perSale[r.saleShort]={count:0,total:0,name:si.name,color:si.color};
+    const s=si(r.saleShort);
+    if(!perSale[r.saleShort]) perSale[r.saleShort]={count:0,total:0,name:s.name,color:s.color};
     perSale[r.saleShort].count++;
     perSale[r.saleShort].total+=r.total;
   });
   const fc=data.filter(r=>r.status==='forecast').length;
   const ls=data.filter(r=>r.status==='loss').length;
   const hd=data.filter(r=>r.status==='holding').length;
-
-  let h=`<div class="scard"><span class="sc-accent">📋</span><div class="sc-label">ใบเสนอราคา</div><div class="sc-val">${data.length}</div><div class="sc-sub">ฉบับ</div></div>`;
-  h+=`<div class="scard"><span class="sc-accent">💰</span><div class="sc-label">มูลค่ารวม</div><div class="sc-val" style="font-size:17px;color:var(--cyan)" id="grand-num">฿0</div><div class="sc-sub">รวม VAT</div></div>`;
+  let h=`<div class="sc"><div class="sc-l">ใบเสนอราคา</div><div class="sc-v">${data.length}</div><div class="sc-s">ฉบับ</div></div>`;
+  h+=`<div class="sc"><div class="sc-l">มูลค่ารวม</div><div class="sc-v" style="font-size:16px;color:var(--cyan)" id="grand-num">฿0</div><div class="sc-s">รวม VAT</div></div>`;
   Object.entries(perSale).forEach(([k,v])=>{
-    const si=getSaleInfo(k);
-    h+=`<div class="scard"><div class="sc-label">${v.name}</div><div class="sc-val" style="color:${si.color}">${v.count}</div><div class="sc-sub">฿${fmtK(v.total)}</div></div>`;
+    h+=`<div class="sc"><div class="sc-l">${v.name}</div><div class="sc-v" style="color:${v.color}">${v.count}</div><div class="sc-s">฿${fmtK(v.total)}</div></div>`;
   });
-  h+=`<div class="scard"><span class="sc-accent">📌</span><div class="sc-label">สถานะงาน</div>
-    <div style="display:flex;gap:8px;margin-top:4px">
-      <span class="chip chip-forecast">${fc} F</span>
-      <span class="chip chip-loss">${ls} L</span>
-      <span class="chip chip-holding">${hd} H</span>
-    </div><div class="sc-sub" style="margin-top:6px">Forecast/Loss/Holding</div></div>`;
-  document.getElementById('statRow').innerHTML = h;
-  // animate grand total
+  h+=`<div class="sc"><div class="sc-l">สถานะงาน</div><div style="display:flex;gap:6px;margin-top:4px">
+    <span class="chip cf">${fc} F</span><span class="chip cl">${ls} L</span><span class="chip ch">${hd} H</span>
+  </div><div class="sc-s" style="margin-top:5px">Forecast/Loss/Holding</div></div>`;
+  document.getElementById('stats').innerHTML=h;
   const el=document.getElementById('grand-num');
-  if(el) animCount(el, grand);
-  // update subtitle
-  document.getElementById('grand-lbl').textContent = '฿'+fmtK(grand);
+  if(el) animCount(el,grand);
+  document.getElementById('grand-lbl').textContent='฿'+fmtK(grand);
+}
+
+function animCount(el,target,dur=1100){
+  const t0=performance.now(),from=parseFloat(el.dataset.val||0)||0;
+  el.dataset.val=target;
+  (function step(now){
+    const p=Math.min((now-t0)/dur,1),e=1-Math.pow(1-p,4);
+    el.textContent='฿'+(from+(target-from)*e).toLocaleString('th-TH',{maximumFractionDigits:0});
+    if(p<1)requestAnimationFrame(step);
+  })(performance.now());
 }
 
 /* ── LINE CHART ── */
-function renderLineChart(){
-  const data = filtered();
-  // group by month then by sale
-  const allMonths = getMonths().reverse(); // oldest first
-  const salesKeys = [...new Set(records.map(r=>r.saleShort))];
-  const COLORS = ['#3B82F6','#10B981','#F59E0B','#A78BFA','#EC4899','#22D3EE'];
-
-  const datasets = salesKeys.map((k,i)=>{
-    const si = getSaleInfo(k);
-    const d = allMonths.map(m=>{
-      const sum = records.filter(r=>r.saleShort===k&&r.month===m).reduce((s,r)=>s+r.total,0);
-      return sum||null;
-    });
-    return {
-      label: si.name+' ('+k+')',
-      data: d,
-      borderColor: si.color||COLORS[i],
-      backgroundColor: (si.color||COLORS[i])+'22',
-      pointBackgroundColor: si.color||COLORS[i],
-      pointRadius: 5,
-      pointHoverRadius: 8,
-      borderWidth: 2.5,
-      tension: 0.4,
-      fill: false,
-      spanGaps: true,
+function renderChart(){
+  const months=getMonths().reverse();
+  const keys=[...new Set(records.map(r=>r.saleShort))];
+  const datasets=keys.map(k=>{
+    const s=si(k);
+    return{
+      label:s.name+'('+k+')',
+      data:months.map(m=>records.filter(r=>r.saleShort===k&&r.month===m).reduce((a,r)=>a+r.total,0)||null),
+      borderColor:s.color,backgroundColor:s.color+'22',
+      pointBackgroundColor:s.color,pointRadius:5,pointHoverRadius:8,
+      borderWidth:2.5,tension:.4,fill:false,spanGaps:true
     };
   });
-
-  const labels = allMonths.map(m=>{
-    const [y,mo]=m.split('-');
+  const labels=months.map(m=>{
+    const[y,mo]=m.split('-');
     return new Date(y,parseInt(mo)-1).toLocaleDateString('th-TH',{month:'short',year:'2-digit'});
   });
-
-  const ctx = document.getElementById('lineChart').getContext('2d');
-  if(lineChart){ lineChart.destroy(); }
-  lineChart = new Chart(ctx, {
-    type: 'line',
-    data: { labels, datasets },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      animation: { duration: 900, easing: 'easeOutQuart' },
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { display: true, labels: { color:'#7a9cbd', font:{size:12,weight:'bold'}, boxWidth:12, padding:16 } },
-        tooltip: {
-          backgroundColor:'#0a1828',
-          borderColor:'rgba(59,130,246,.35)',
-          borderWidth:1,
-          titleColor:'#e2eaf5',
-          bodyColor:'#7a9cbd',
-          callbacks: {
-            label: ctx => ' '+ctx.dataset.label+': ฿'+Math.round(ctx.parsed.y).toLocaleString()
-          }
-        }
+  if(lineChart) lineChart.destroy();
+  lineChart=new Chart(document.getElementById('lineChart').getContext('2d'),{
+    type:'line',data:{labels,datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      animation:{duration:800,easing:'easeOutQuart'},
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:true,labels:{color:'#7a9cbd',font:{size:12,weight:'bold'},boxWidth:12,padding:14}},
+        tooltip:{backgroundColor:'#0a1828',borderColor:'rgba(59,130,246,.35)',borderWidth:1,
+          titleColor:'#e2eaf5',bodyColor:'#7a9cbd',
+          callbacks:{label:c=>' '+c.dataset.label+': ฿'+Math.round(c.parsed.y).toLocaleString()}}
       },
-      scales: {
-        x: { ticks:{color:'#3d5a7a',font:{size:11}}, grid:{color:'rgba(56,130,220,0.08)'} },
-        y: { ticks:{color:'#3d5a7a',font:{size:11},callback:v=>'฿'+fmtK(v)}, grid:{color:'rgba(56,130,220,0.08)'} }
+      scales:{
+        x:{ticks:{color:'#3d5a7a',font:{size:11}},grid:{color:'rgba(56,130,220,.07)'}},
+        y:{ticks:{color:'#3d5a7a',font:{size:11},callback:v=>'฿'+fmtK(v)},grid:{color:'rgba(56,130,220,.07)'}}
       }
     }
   });
@@ -439,111 +378,106 @@ function renderLineChart(){
 
 /* ── TOP 5 ── */
 function renderTop5(){
-  const data = filtered();
-  const map={};
-  data.forEach(r=>{ map[r.saleShort]=(map[r.saleShort]||0)+r.total; });
+  const data=filtered(),map={};
+  data.forEach(r=>{map[r.saleShort]=(map[r.saleShort]||0)+r.total;});
   const sorted=Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const max=sorted[0]?.[1]||1;
   const medals=['🥇','🥈','🥉','4','5'];
-  document.getElementById('top5List').innerHTML=sorted.map(([k,v],i)=>{
-    const si=getSaleInfo(k);
-    return `<div class="bar-row">
-      <span class="medal">${i<3?medals[i]:`<span style="background:rgba(255,255,255,.06);border-radius:6px;padding:2px 5px;font-size:10px;color:var(--txt2);font-weight:800">${i+1}</span>`}</span>
+  document.getElementById('top5').innerHTML=sorted.map(([k,v],i)=>{
+    const s=si(k);
+    return`<div class="brow">
+      <span class="med">${i<3?medals[i]:`<span style="background:rgba(255,255,255,.06);border-radius:5px;padding:2px 5px;font-size:10px;color:var(--txt2);font-weight:800">${i+1}</span>`}</span>
       <div style="flex:1">
         <div style="display:flex;justify-content:space-between;margin-bottom:5px">
-          <span class="bar-name">${si.name} (${k})</span>
-          <span class="bar-val" style="color:${si.color}">฿${fmtK(v)}</span>
+          <span class="bn">${s.name}(${k})</span>
+          <span class="bv" style="color:${s.color}">฿${fmtK(v)}</span>
         </div>
-        <div class="bar-track" style="position:relative"><div class="bar-fill" style="width:${(v/max)*100}%;background:linear-gradient(90deg,${si.color}55,${si.color});position:relative"></div></div>
+        <div class="bt" style="position:relative"><div class="bf" style="width:${(v/max)*100}%;background:linear-gradient(90deg,${s.color}55,${s.color});position:relative"></div></div>
       </div>
     </div>`;
   }).join('');
 }
 
 /* ── TEAM CARDS ── */
-function renderTeamCards(){
-  const data = filtered();
-  const teams={};
+function renderTeams(){
+  const data=filtered(),teams={};
   data.forEach(r=>{
-    const si=getSaleInfo(r.saleShort);
-    const tk=si.team;
-    if(!teams[tk]) teams[tk]={name:tk,color:si.color,sales:{}};
-    if(!teams[tk].sales[r.saleShort]) teams[tk].sales[r.saleShort]={name:si.name,color:si.color,total:0,count:0};
-    teams[tk].sales[r.saleShort].total+=r.total;
-    teams[tk].sales[r.saleShort].count++;
+    const s=si(r.saleShort);
+    if(!teams[s.team]) teams[s.team]={name:s.team,color:s.color,sales:{}};
+    if(!teams[s.team].sales[r.saleShort]) teams[s.team].sales[r.saleShort]={name:s.name,color:s.color,total:0};
+    teams[s.team].sales[r.saleShort].total+=r.total;
   });
   const arr=Object.values(teams);
-  if(!arr.length){ document.getElementById('teamCards').innerHTML='<div style="color:var(--txt3);font-size:13px;padding:16px">ยังไม่มีข้อมูล</div>'; return; }
+  if(!arr.length){document.getElementById('tcards').innerHTML='<div style="color:var(--txt3);font-size:13px;padding:12px">ยังไม่มีข้อมูล</div>';return;}
   const medals=['🥇','🥈','🥉'];
-  document.getElementById('teamCards').innerHTML=arr.map((t,ti)=>{
+  document.getElementById('tcards').innerHTML=arr.map((t,ti)=>{
     const sorted=Object.values(t.sales).sort((a,b)=>b.total-a.total);
-    const max=sorted[0]?.total||1;
-    const total=sorted.reduce((s,x)=>s+x.total,0);
-    const bars=sorted.map((s,i)=>`
-      <div class="bar-row">
-        <span class="medal">${i<3?medals[i]:`<span style="background:rgba(255,255,255,.06);border-radius:5px;padding:2px 5px;font-size:10px;color:var(--txt2);font-weight:800">${i+1}</span>`}</span>
-        <div style="flex:1">
-          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
-            <span class="bar-name">${s.name}</span>
-            <span class="bar-val" style="color:${s.color}">฿${fmtK(s.total)}</span>
-          </div>
-          <div class="bar-track" style="position:relative"><div class="bar-fill" style="width:${Math.max(5,(s.total/max)*100)}%;background:linear-gradient(90deg,${s.color}55,${s.color});position:relative"></div></div>
+    const max=sorted[0]?.total||1,total=sorted.reduce((s,x)=>s+x.total,0);
+    const bars=sorted.map((s,i)=>`<div class="brow">
+      <span class="med">${i<3?medals[i]:`<span style="background:rgba(255,255,255,.06);border-radius:5px;padding:2px 5px;font-size:10px;color:var(--txt2);font-weight:800">${i+1}</span>`}</span>
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+          <span class="bn">${s.name}</span><span class="bv" style="color:${s.color}">฿${fmtK(s.total)}</span>
         </div>
-      </div>`).join('');
-    return `<div class="team-card" style="border-color:${t.color}28;box-shadow:0 8px 40px ${t.color}0e;animation-delay:${ti*.12}s">
-      <div class="tc-head" style="background:linear-gradient(135deg,${t.color}14 0%,transparent 100%);border-bottom:1px solid ${t.color}22">
+        <div class="bt" style="position:relative"><div class="bf" style="width:${Math.max(5,(s.total/max)*100)}%;background:linear-gradient(90deg,${s.color}55,${s.color});position:relative"></div></div>
+      </div>
+    </div>`).join('');
+    return`<div class="tcard" style="border-color:${t.color}28;animation-delay:${ti*.1}s">
+      <div class="tch" style="background:linear-gradient(135deg,${t.color}14 0%,transparent 100%);border-bottom:1px solid ${t.color}22">
         <div>
-          <div style="color:#fff;font-weight:900;font-size:17px;text-shadow:0 0 20px ${t.color}44">${t.name}</div>
+          <div style="color:#fff;font-weight:900;font-size:16px">${t.name}</div>
           <div style="color:var(--txt3);font-size:11px;margin-top:2px;letter-spacing:.8px">${selMonth==='all'?'ALL MONTHS':selMonth}</div>
         </div>
       </div>
-      <div class="tc-pills">
-        <div class="tc-pill"><div style="color:var(--txt3);font-size:10px;margin-bottom:3px;letter-spacing:1px">ยอดรวมทีม</div><div style="color:#fff;font-weight:900;font-size:15px">฿${fmtK(total)}</div></div>
-        <div class="tc-pill" style="border:1px solid ${t.color}22"><div style="color:var(--txt3);font-size:10px;margin-bottom:3px;letter-spacing:1px">🏆 Top Sale</div><div style="color:${t.color};font-weight:900;font-size:15px">${sorted[0]?.name||'–'}</div></div>
+      <div class="tcp">
+        <div class="tpill"><div style="color:var(--txt3);font-size:10px;margin-bottom:3px;letter-spacing:1px">ยอดรวมทีม</div><div style="color:#fff;font-weight:900;font-size:14px">฿${fmtK(total)}</div></div>
+        <div class="tpill" style="border:1px solid ${t.color}22"><div style="color:var(--txt3);font-size:10px;margin-bottom:3px;letter-spacing:1px">🏆 Top</div><div style="color:${t.color};font-weight:900;font-size:14px">${sorted[0]?.name||'–'}</div></div>
       </div>
-      <div class="tc-bars">${bars}</div>
+      <div class="tbars">${bars}</div>
     </div>`;
   }).join('');
 }
 
-/* ── QUOTATION TABLE ── */
+/* ── TABLE ── */
 function renderTable(){
   const data=[...filtered()].sort((a,b)=>b.total-a.total);
-  if(!data.length){ document.getElementById('qtTbody').innerHTML=`<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:24px;font-size:13px">อัพโหลด PDF เพื่อดูข้อมูล</td></tr>`; return; }
-  document.getElementById('qtTbody').innerHTML=data.map(r=>{
-    const si=getSaleInfo(r.saleShort);
-    const idx=records.indexOf(r);
-    return `<tr>
-      <td><span class="badge-sale ${si.cls}">${r.saleShort}</span></td>
+  if(!data.length){
+    document.getElementById('tbody').innerHTML=`<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:22px;font-size:13px">อัพโหลด PDF เพื่อดูข้อมูล</td></tr>`;
+    return;
+  }
+  document.getElementById('tbody').innerHTML=data.map(r=>{
+    const s=si(r.saleShort),idx=records.indexOf(r);
+    return`<tr>
+      <td><span class="badge ${s.cls}">${r.saleShort}</span></td>
       <td style="font-size:12px;color:var(--txt2);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.id}">${r.id}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px" title="${r.customer}">${r.customer}</td>
-      <td style="font-size:12px">${si.name}</td>
-      <td class="num"><button class="price-btn" onclick="openModal(${idx})">฿${fmt(r.total)}</button></td>
+      <td style="font-size:12px">${s.name}</td>
+      <td class="r"><button class="pbtn" onclick="openModal(${idx})">฿${fmt(r.total)}</button></td>
       <td>
-        <div class="st-wrap">
-          <button class="st-btn forecast ${r.status==='forecast'?'active':''}" onclick="setSt(${idx},'forecast')">Forecast</button>
-          <button class="st-btn loss ${r.status==='loss'?'active':''}" onclick="setSt(${idx},'loss')">Loss</button>
-          <button class="st-btn holding ${r.status==='holding'?'active':''}" onclick="setSt(${idx},'holding')">Holding</button>
+        <div class="stw">
+          <button class="sb forecast ${r.status==='forecast'?'on':''}" onclick="setSt(${idx},'forecast')">Forecast</button>
+          <button class="sb loss ${r.status==='loss'?'on':''}" onclick="setSt(${idx},'loss')">Loss</button>
+          <button class="sb holding ${r.status==='holding'?'on':''}" onclick="setSt(${idx},'holding')">Holding</button>
         </div>
       </td>
-      <td><input class="note-in" type="text" placeholder="หมายเหตุ..." value="${r.note||''}" onchange="records[${idx}].note=this.value"></td>
+      <td><input class="note-in" type="text" placeholder="หมายเหตุ..." value="${r.note||''}"
+        onchange="setNote(${idx},this.value)"></td>
     </tr>`;
   }).join('');
 }
 
 /* ── TICKER ── */
-let _raf=null, _pos=0;
+let _raf=null,_pos=0;
 function buildTicker(){
-  const data=filtered();
-  const map={};
-  data.forEach(r=>{ map[r.saleShort]=(map[r.saleShort]||0)+r.total; });
+  const data=filtered(),map={};
+  data.forEach(r=>{map[r.saleShort]=(map[r.saleShort]||0)+r.total;});
   const sorted=Object.entries(map).sort((a,b)=>b[1]-a[1]);
   const grand=data.reduce((s,r)=>s+r.total,0);
-  const cols=['c1','c2','c3','c4','c5'];
-  let h=`<div class="tick-item ca"><span class="tl">TOTAL</span><span class="ts">▶</span><span class="tv ca">฿${grand.toLocaleString()}</span></div>`;
+  const cols=['#60A5FA','#34D399','#FBBF24','#C084FC','#F9A8D4'];
+  let h=`<div class="ti" style="color:#22D3EE"><span class="tl">TOTAL</span><span class="ts2">▶</span><span class="tv" style="color:#22D3EE">฿${grand.toLocaleString()}</span></div>`;
   sorted.forEach(([k,v],i)=>{
-    const si=getSaleInfo(k);
-    h+=`<div class="tick-item ${cols[i]||'c1'}"><span class="tl">${si.name}</span><span class="ts">◆</span><span class="tv ${cols[i]||'c1'}">฿${v.toLocaleString()}</span></div>`;
+    const c=cols[i%cols.length];
+    h+=`<div class="ti" style="color:${c}"><span class="tl">${si(k).name}</span><span class="ts2">◆</span><span class="tv" style="color:${c}">฿${v.toLocaleString()}</span></div>`;
   });
   return h;
 }
@@ -553,112 +487,212 @@ function startTicker(){
   if(_raf) cancelAnimationFrame(_raf); _pos=0;
   requestAnimationFrame(()=>{
     const w=track.scrollWidth/3;
-    function tick(){ _pos-=0.65; if(_pos<=-w)_pos+=w; track.style.transform=`translateX(${_pos}px)`; _raf=requestAnimationFrame(tick); }
+    function tick(){_pos-=.65;if(_pos<=-w)_pos+=w;track.style.transform=`translateX(${_pos}px)`;_raf=requestAnimationFrame(tick);}
     _raf=requestAnimationFrame(tick);
   });
 }
 
-/* ── STATUS ── */
-function setSt(idx, st){
-  records[idx].status = records[idx].status===st ? null : st;
+/* ── STATUS + NOTE (save to Firebase via API) ── */
+function setSt(idx,st){
+  const r=records[idx];
+  const newSt=r.status===st?null:st;
+  r.status=newSt;
+  patchRecord(r.id,{status:newSt});
   render();
+}
+function setNote(idx,val){
+  const r=records[idx];
+  r.note=val;
+  patchRecord(r.id,{note:val});
+}
+async function patchRecord(id,body){
+  try{
+    await fetch(`/api/sales/record/${encodeURIComponent(id)}`,{
+      method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)
+    });
+  }catch(e){console.error('patch failed',e);}
 }
 
 /* ── MODAL ── */
 function openModal(idx){
   const r=records[idx];
-  document.getElementById('modalTitle').textContent = r.id+' — '+r.customer;
-  const si=getSaleInfo(r.saleShort);
-  const ST_LABEL = {forecast:'Forecast', loss:'Loss', holding:'Holding'};
-  const stChip = r.status ? `<span class="chip chip-${r.status}">${ST_LABEL[r.status]}</span>` : '–';
-  document.getElementById('modalBody').innerHTML=`
-    <div class="msec">
-      <div class="mrow"><span class="ml">ชื่อไฟล์</span><span class="mv" style="font-size:12px;max-width:300px;word-break:break-all">${r.filename}</span></div>
-      <div class="mrow"><span class="ml">Sale Person</span><span class="mv"><span class="badge-sale ${si.cls}">${r.saleShort}</span> ${si.name}</span></div>
-      <div class="mrow"><span class="ml">ลูกค้า</span><span class="mv">${r.customer}</span></div>
-      <div class="mrow"><span class="ml">วันที่</span><span class="mv">${r.date}</span></div>
-      <div class="mrow"><span class="ml">กำหนดส่ง</span><span class="mv">${r.delivery}</span></div>
-      <div class="mrow"><span class="ml">ชำระเงิน</span><span class="mv">${r.payment}</span></div>
-      <div class="mrow"><span class="ml">สถานะ</span><span class="mv">${stChip}</span></div>
-      ${r.note?`<div class="mrow"><span class="ml">หมายเหตุ</span><span class="mv">${r.note}</span></div>`:''}
+  const s=si(r.saleShort);
+  const ST={forecast:'Forecast',loss:'Loss',holding:'Holding'};
+  const chip=r.status?`<span class="chip c${r.status[0]}">${ST[r.status]}</span>`:'–';
+  document.getElementById('mtitle').textContent=r.id+' — '+r.customer;
+  document.getElementById('mbody').innerHTML=`
+    <div class="ms">
+      ${r.pdf_url?`<div class="mr"><span class="ml2">ดู PDF ต้นฉบับ</span><a href="${r.pdf_url}" target="_blank" style="color:var(--c2);font-size:12px;font-weight:700">เปิดไฟล์ ↗</a></div>`:''}
+      <div class="mr"><span class="ml2">Sale Person</span><span class="mv"><span class="badge ${s.cls}">${r.saleShort}</span> ${s.name}</span></div>
+      <div class="mr"><span class="ml2">ลูกค้า</span><span class="mv">${r.customer}</span></div>
+      <div class="mr"><span class="ml2">วันที่</span><span class="mv">${r.date}</span></div>
+      <div class="mr"><span class="ml2">กำหนดส่ง</span><span class="mv">${r.delivery}</span></div>
+      <div class="mr"><span class="ml2">ชำระเงิน</span><span class="mv">${r.payment}</span></div>
+      <div class="mr"><span class="ml2">สถานะ</span><span class="mv">${chip}</span></div>
+      ${r.note?`<div class="mr"><span class="ml2">หมายเหตุ</span><span class="mv">${r.note}</span></div>`:''}
     </div>
-    <div style="font-size:11px;font-weight:800;color:var(--txt3);letter-spacing:1px;margin-bottom:8px">รายการสินค้า</div>
-    <div class="msec">
-      ${r.items.map(it=>`<div class="mitem">
+    <div style="font-size:11px;font-weight:800;color:var(--txt3);letter-spacing:1px;margin-bottom:7px">รายการสินค้า</div>
+    <div class="ms">
+      ${(r.items||[]).length>0?r.items.map(it=>`<div class="mit">
         <div style="font-weight:700;font-size:13px">${it.code}</div>
         <div style="color:var(--txt2);font-size:12px;margin:2px 0">${it.desc}</div>
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-top:2px">
           <span style="color:var(--txt2)">${it.qty} × ฿${fmt(it.unit)}</span>
           <span style="color:#fff;font-weight:700">฿${fmt(it.total)}</span>
         </div>
-      </div>`).join('')}
+      </div>`).join(''):'<div style="color:var(--txt3);font-size:12px;padding:6px 0">(ไม่พบรายการ)</div>'}
     </div>
-    <div class="msec">
-      <div class="mrow"><span class="ml">รวมก่อน VAT</span><span class="mv">฿${fmt(r.exVat)}</span></div>
-      <div class="mrow"><span class="ml">VAT 7%</span><span class="mv">฿${fmt(r.vat)}</span></div>
-      <div class="mrow"><span class="ml" style="font-weight:800;color:#fff">ราคาสุทธิ</span><span class="mv" style="font-size:17px;color:var(--cyan)">฿${fmt(r.total)}</span></div>
+    <div class="ms">
+      <div class="mr"><span class="ml2">รวมก่อน VAT</span><span class="mv">฿${fmt(r.exVat)}</span></div>
+      <div class="mr"><span class="ml2">VAT 7%</span><span class="mv">฿${fmt(r.vat)}</span></div>
+      <div class="mr"><span class="ml2" style="font-weight:800;color:#fff">ราคาสุทธิ</span><span class="mv" style="font-size:16px;color:var(--cyan)">฿${fmt(r.total)}</span></div>
     </div>`;
-  document.getElementById('modalBg').classList.add('open');
+  document.getElementById('mbg').classList.add('open');
 }
-document.getElementById('modalClose').onclick = ()=>document.getElementById('modalBg').classList.remove('open');
-document.getElementById('modalBg').onclick = e=>{ if(e.target===document.getElementById('modalBg')) document.getElementById('modalBg').classList.remove('open'); };
+document.getElementById('mcls').onclick=()=>document.getElementById('mbg').classList.remove('open');
+document.getElementById('mbg').onclick=e=>{if(e.target===document.getElementById('mbg'))document.getElementById('mbg').classList.remove('open');};
 
-/* ── FILE UPLOAD ── */
-document.getElementById('pdfInput').addEventListener('change', function(e){
-  processFiles(Array.from(e.target.files).slice(0,20));
-  this.value='';
-});
-const dz=document.getElementById('dropZone');
-dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag')});
-dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
-dz.addEventListener('drop',e=>{
-  e.preventDefault(); dz.classList.remove('drag');
-  processFiles(Array.from(e.dataTransfer.files).filter(f=>f.name.endsWith('.pdf')).slice(0,20));
-});
-
-function processFiles(files){
-  files.forEach(file=>{
-    const name=file.name;
-    if(records.find(r=>r.filename===name)) return;
-    const parts=name.replace('.pdf','').split('-');
-    let short='XX';
-    if(name.includes('-TW-')) short='TW';
-    else if(name.includes('-NM-')) short='NM';
-    else { const m=name.match(/-([A-Z]{2,4})-/); if(m) short=m[1]; }
-    const dm=name.match(/(\d{2})-(\d{2})-(\d{4})/);
-    const dateStr=dm?`${dm[3]}-${dm[2]}-${dm[1]}`:'2026-01-01';
-    const id=parts.slice(0,parts.length>=3?2:1).join('-');
-    records.push({
-      id, filename:name, saleShort:short,
-      customer:'(อ่าน PDF อัตโนมัติ — ดูใบต้นฉบับ)',
-      date:dateStr, month:dateStr.slice(0,7),
-      exVat:0, vat:0, total:0,
-      items:[], delivery:'–', payment:'–',
-      status:null, note:''
+/* ── PDF EXTRACT TEXT ── */
+async function extractPdfText(file){
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  let full='';
+  for(let i=1;i<=pdf.numPages;i++){
+    const page=await pdf.getPage(i);
+    const tc=await page.getTextContent();
+    const lines={};
+    tc.items.forEach(item=>{
+      const y=Math.round(item.transform[5]);
+      if(!lines[y]) lines[y]=[];
+      lines[y].push(item.str);
     });
-  });
+    Object.keys(lines).sort((a,b)=>b-a).forEach(y=>{full+=lines[y].join(' ')+'\n';});
+  }
+  return full;
+}
+
+/* ── PDF PARSER ── */
+function parseQuotation(text,filename){
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+  const r={id:'',customer:'',date:'',saleShort:'XX',exVat:0,vat:0,total:0,items:[],delivery:'–',payment:'–'};
+
+  // Sale short from filename
+  if(filename.includes('-TW-')) r.saleShort='TW';
+  else if(filename.includes('-NM-')) r.saleShort='NM';
+  else if(filename.includes('-AP-')) r.saleShort='AP';
+  else{const m=filename.match(/-([A-Z]{2,4})-/);if(m)r.saleShort=m[1];}
+
+  // Quotation No
+  const qm=text.match(/(?:Quotation\s*N[Oo]\.?\s*:?\s*)(QM[\w\-]+)/i)||text.match(/(QM[O0-9][\w\-]+)/);
+  if(qm)r.id=(qm[1]||qm[0]).trim();
+  if(!r.id){const p=filename.replace('.pdf','').split('-');r.id=p.slice(0,Math.min(4,p.length)).join('-');}
+
+  // Date
+  const dm=text.match(/(\d{2})[\/](\d{2})[\/](\d{4})/)||filename.match(/(\d{2})-(\d{2})-(\d{4})/);
+  if(dm){let y=parseInt(dm[3]);if(y>2500)y-=543;r.date=`${y}-${dm[2].padStart(2,'0')}-${dm[1].padStart(2,'0')}`;}
+  else r.date='2026-01-01';
+
+  // Customer
+  for(const l of lines){
+    if((l.includes('บริษัท')||l.includes('Co.,Ltd')||l.includes('จำกัด'))&&l.length<100&&!l.includes('Synergy')&&!l.includes('SAS')){
+      r.customer=l.replace(/^To\s*:\s*/i,'').trim();break;
+    }
+  }
+  if(!r.customer){const m=text.match(/(?:To\s*:?\s*)\n?\s*(.{5,80}(?:จำกัด|Ltd\.?|Limited))/i);if(m)r.customer=m[1].trim();}
+  if(!r.customer)r.customer='(ไม่พบชื่อลูกค้า)';
+
+  // Totals
+  const tm=text.match(/(?:Total\s*Price|Grand\s*Total|ราคาสุทธิ)[^\d]*([\d,]+\.?\d*)/i);
+  if(tm)r.total=parseFloat(tm[1].replace(/,/g,''))||0;
+  const vm=text.match(/VAT\s*7%?[^\d]*([\d,]+\.?\d*)/i);
+  if(vm)r.vat=parseFloat(vm[1].replace(/,/g,''))||0;
+  const em=text.match(/(?:Exclude\s*VAT|รวมก่อน\s*VAT)[^\d]*([\d,]+\.?\d*)/i);
+  if(em)r.exVat=parseFloat(em[1].replace(/,/g,''))||0;
+  if(r.total>0&&r.vat>0&&r.exVat===0)r.exVat=Math.round((r.total-r.vat)*100)/100;
+
+  // Items
+  for(const l of lines){
+    const m=l.match(/^(\d+)\s+(\S[\w\-\/\(\)]+)\s+(.+?)\s+(\d+)\s+(?:EA|ชิ้น|Pcs?)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)$/i);
+    if(m)r.items.push({code:m[2].trim(),desc:m[3].trim(),qty:parseInt(m[4]),unit:parseFloat(m[5].replace(/,/g,'')),total:parseFloat(m[6].replace(/,/g,''))});
+  }
+
+  // Delivery / Payment
+  const dlm=text.match(/(?:\d+[-–]\d+\s*(?:วัน|days?))/i);if(dlm)r.delivery=dlm[0].trim();
+  const pm=text.match(/(?:Payment[^\n]*?)(Cash|Credit|โอน|เงินสด|\d+\s*days?)/i);if(pm)r.payment=pm[1].trim();
+
+  return r;
+}
+
+/* ── UPLOAD FILES → API ── */
+async function processFiles(files){
+  if(!files.length)return;
+  const dz=document.getElementById('dz');
+  const dzTxt=document.getElementById('dz-txt');
+  const pb=document.getElementById('prog-bar');
+  const pf=document.getElementById('prog-fill');
+  pb.style.display='block'; pf.style.width='0%';
+
+  for(let i=0;i<files.length;i++){
+    const file=files[i];
+    const name=file.name;
+    if(records.find(r=>r.filename===name)){continue;}
+
+    dzTxt.textContent=`กำลังอ่าน ${name} (${i+1}/${files.length})...`;
+    pf.style.width=`${Math.round((i/files.length)*50)}%`;
+
+    let parsed;
+    try{const text=await extractPdfText(file);parsed=parseQuotation(text,name);}
+    catch(e){
+      console.error('PDF read err',e);
+      const pts=name.replace('.pdf','').split('-');
+      let sh='XX';
+      if(name.includes('-TW-'))sh='TW';
+      else if(name.includes('-NM-'))sh='NM';
+      else{const m=name.match(/-([A-Z]{2,4})-/);if(m)sh=m[1];}
+      const dm=name.match(/(\d{2})-(\d{2})-(\d{4})/);
+      parsed={id:pts.slice(0,3).join('-'),saleShort:sh,customer:'(อ่านไม่ได้)',
+        date:dm?`${dm[3]}-${dm[2]}-${dm[1]}`:'2026-01-01',
+        exVat:0,vat:0,total:0,items:[],delivery:'–',payment:'–'};
+    }
+
+    dzTxt.textContent=`กำลังบันทึก ${name}...`;
+    pf.style.width=`${Math.round((i/files.length)*50+50)}%`;
+
+    try{
+      const fd=new FormData();
+      fd.append('file',file,name);
+      fd.append('meta',JSON.stringify(parsed));
+      const res=await fetch('/api/sales/upload',{method:'POST',body:fd});
+      const j=await res.json();
+      if(j.ok) records.push(j.record);
+      else console.error('upload err',j.error);
+    }catch(e){console.error('upload failed',e);}
+  }
+
+  pf.style.width='100%';
+  setTimeout(()=>{pb.style.display='none';dzTxt.textContent='ลาก PDF มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์ (สูงสุด 20 ไฟล์)';},600);
   render();
 }
 
-/* ── BACK ── */
-function goBack(){
-  if(window.parent && window.parent.closeMonthlySales) { window.parent.closeMonthlySales(); }
-  else if(window.history.length>1) { window.history.back(); }
-  else { window.close(); }
-}
+/* ── DRAG & DROP ── */
+document.getElementById('pdfIn').addEventListener('change',function(e){
+  processFiles(Array.from(e.target.files).slice(0,20));this.value='';
+});
+const dz=document.getElementById('dz');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag')});
+dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
+dz.addEventListener('drop',e=>{
+  e.preventDefault();dz.classList.remove('drag');
+  processFiles(Array.from(e.dataTransfer.files).filter(f=>f.name.endsWith('.pdf')).slice(0,20));
+});
 
 /* ── MASTER RENDER ── */
 function render(){
-  renderMonths();
-  renderStats();
-  renderLineChart();
-  renderTop5();
-  renderTeamCards();
-  renderTable();
-  startTicker();
+  renderMonths();renderStats();renderChart();renderTop5();renderTeams();renderTable();startTicker();
 }
 
-render();
+/* ── BOOT ── */
+loadRecords();
 </script>
 </body>
 </html>
