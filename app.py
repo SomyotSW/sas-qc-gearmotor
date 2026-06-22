@@ -1252,20 +1252,37 @@ def _parse_sas_pdf(file_storage):
     m = re.search(r'Quotation\s*NO\.?\s*:?\s*(QM[\w\-]+)', text, re.I)
     if m: r['id'] = m.group(1).strip()
 
-    # Sale/Warranty/Payment จาก header table
+    # Sale/Warranty/Payment — หาจาก header table เท่านั้น (ไม่ใช่ items table)
+    SALE_BLACKLIST = {'ITEM','CODE','DESCRIPTION','QTY','UNITPRICE','TOTAL','SALES',
+                      'WARRANTY','SHIPPING','METHOD','JOB','DELIVERY','DATE','PAYMENT','TERMS'}
+    KNOWN_SALES = {'TW','NM','AP','CA','BW','TL','NR','CK','SI','TWS','AW','PK'}
     for tbl in tables:
-        for row in tbl:
+        if not tbl or len(tbl) < 2: continue
+        # ต้องเป็น table ที่มี "SALES" ใน header row (Table 0)
+        header_row = [str(c or '').strip().upper() for c in tbl[0]]
+        if 'SALES' not in header_row: continue
+        # data row ถัดจาก header
+        for row in tbl[1:]:
             if not row: continue
             v0 = str(row[0] or '').strip()
-            if v0 and re.match(r'^[A-Z]{2,4}$', v0):
+            # ต้องเป็น sale short จริงๆ: 2-4 ตัวอักษร ไม่อยู่ใน blacklist
+            if v0 and re.match(r'^[A-Z]{2,4}$', v0) and v0 not in SALE_BLACKLIST:
                 r['saleShort'] = v0
-                if len(row) > 1 and row[1]: r['warranty'] = str(row[1]).strip()
-                # payment = last non-empty cell ที่ไม่ใช่ header คำ
+                if len(row) > 1 and row[1] and str(row[1]).strip() not in SALE_BLACKLIST:
+                    r['warranty'] = str(row[1]).strip()
+                # payment = last non-empty non-header cell
                 for cell in reversed(row):
                     cv = str(cell or '').strip()
-                    if cv and cv not in ('PAYMENT TERMS','-','') and len(cv) < 30:
+                    if cv and cv not in SALE_BLACKLIST and cv != '-' and len(cv) < 40:
                         r['payment'] = cv; break
                 break
+        if r['saleShort'] != 'XX': break
+    # Fallback: อ่านจากชื่อไฟล์
+    if r['saleShort'] == 'XX':
+        fname = getattr(file_storage, 'filename', '')
+        for sh in ['TW','NM','AP','CA','BW','TL','NR','CK','SI','TWS']:
+            if f'-{sh}-' in fname.upper():
+                r['saleShort'] = sh; break
 
     # Date
     m = re.search(r'Date\.\s*:?\s*(\d{1,2})[\/](\d{2})[\/](\d{4})', text)
@@ -1372,6 +1389,18 @@ def api_sales_upload():
                 parsed['date'] = f"{yr}-{dm.group(2)}-{dm.group(1)}"
             else: parsed['date'] = '2026-01-01'
 
+        # ── ป้องกันซ้ำ: เช็คทั้ง Quotation ID และ filename ──
+        safe_id = parsed['id'].replace('/','_').replace('.','_')
+        existing = sales_ref.child(safe_id).get()
+        if existing:
+            # มี Quotation ID นี้แล้ว — return ข้อมูลเดิม พร้อม flag duplicate
+            return jsonify({
+                'ok': True,
+                'duplicate': True,
+                'record': existing,
+                'message': f"ใบเสนอราคา {parsed['id']} มีในระบบแล้ว (อัพโหลดเมื่อ {existing.get('uploaded_at','?')})"
+            })
+
         # ── อัพโหลด PDF ขึ้น R2 ──
         file.seek(0)
         pdf_bytes = file.read()
@@ -1379,7 +1408,6 @@ def api_sales_upload():
         pdf_url = r2_upload_bytes(pdf_bytes, r2_key, 'application/pdf')
 
         # ── บันทึกลง Firebase ──
-        safe_id = parsed['id'].replace('/','_').replace('.','_')
         record = {
             'id':         parsed['id'],
             'filename':   filename,
@@ -1400,7 +1428,7 @@ def api_sales_upload():
             'uploaded_at': datetime.datetime.utcnow().isoformat(),
         }
         sales_ref.child(safe_id).set(record)
-        return jsonify({'ok': True, 'record': record})
+        return jsonify({'ok': True, 'duplicate': False, 'record': record})
     except Exception as e:
         import traceback
         return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
@@ -1424,6 +1452,16 @@ def api_sales_delete(record_id):
         safe_id = record_id.replace('/', '_').replace('.', '_')
         sales_ref.child(safe_id).delete()
         return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/sales/clear-all', methods=['POST'])
+def api_sales_clear_all():
+    """ล้างข้อมูลทั้งหมดใน Firebase (ใช้เมื่อต้องการ reset)"""
+    try:
+        sales_ref.delete()
+        return jsonify({'ok': True, 'message': 'Cleared all sales records'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

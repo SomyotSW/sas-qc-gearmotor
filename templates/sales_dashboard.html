@@ -33,6 +33,10 @@ html,body{height:100%;background:var(--bg);font-family:'Segoe UI','Sarabun','Not
 .topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px}
 .topbar h1{font-size:clamp(18px,3vw,26px);font-weight:800;letter-spacing:-.5px;color:#fff}
 .topbar p{color:var(--txt2);font-size:12px;margin-top:3px}
+.btn-clr{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;
+  background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);
+  color:#F87171;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s}
+.btn-clr:hover{background:rgba(248,113,113,.2);color:#fff}
 .btn-back{display:inline-flex;align-items:center;gap:6px;padding:7px 16px;border-radius:20px;
   background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);
   color:var(--txt2);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;
@@ -197,6 +201,7 @@ tr:hover td{background:rgba(59,130,246,.04)}
       <input type="file" id="pdfIn" accept=".pdf" multiple style="display:none">
       ↑ อัพโหลด PDF (สูงสุด 20 ไฟล์)
     </label>
+    <button class="btn-clr" onclick="clearAll()">🗑 ล้างข้อมูลทั้งหมด</button>
     <a href="/" class="btn-back">← กลับหน้าหลัก</a>
   </div>
 </div>
@@ -270,6 +275,17 @@ const fmtK =n=>n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':n.toL
 let records=[], selMonth='all', lineChart=null;
 
 /* ── LOAD FROM API ── */
+async function clearAll(){
+  if(!confirm('ลบข้อมูลทั้งหมดใน Firebase และโหลดใหม่?')) return;
+  try{
+    await fetch('/api/sales/clear-all',{method:'POST'});
+    records=[];
+    selMonth='all';
+    render();
+    alert('✅ ล้างข้อมูลแล้ว — อัพโหลด PDF ใหม่ได้เลย');
+  }catch(e){alert('Error: '+e.message);}
+}
+
 async function loadRecords(){
   try{
     const r=await fetch('/api/sales/records');
@@ -558,10 +574,10 @@ async function processFiles(files){
   const pf=document.getElementById('prog-fill');
   pb.style.display='block'; pf.style.width='0%';
 
+  let newCount=0, dupList=[], errList=[];
   for(let i=0;i<files.length;i++){
     const file=files[i];
     const name=file.name;
-    if(records.find(r=>r.filename===name)){continue;}
 
     dzTxt.textContent=`กำลังอ่าน ${name} (${i+1}/${files.length})...`;
     pf.style.width=`${Math.round((i/files.length)*50)}%`;
@@ -587,16 +603,36 @@ async function processFiles(files){
     try{
       const fd=new FormData();
       fd.append('file',file,name);
-      fd.append('meta',JSON.stringify(parsed));
+      fd.append('meta',JSON.stringify({}));
       const res=await fetch('/api/sales/upload',{method:'POST',body:fd});
       const j=await res.json();
-      if(j.ok) records.push(j.record);
-      else console.error('upload err',j.error);
-    }catch(e){console.error('upload failed',e);}
+      if(j.ok){
+        if(j.duplicate){
+          dupList.push(j.record.id||name);
+          // ใส่ record เดิมเข้า list ถ้ายังไม่มี (โหลดมาจาก Firebase แล้ว)
+          if(!records.find(r=>r.id===j.record.id)) records.push(j.record);
+        } else {
+          records.push(j.record);
+          newCount++;
+        }
+      } else {
+        errList.push(name+': '+(j.error||'unknown'));
+        console.error('upload err',j.error);
+      }
+    }catch(e){errList.push(name+': network error');console.error('upload failed',e);}
   }
 
   pf.style.width='100%';
-  setTimeout(()=>{pb.style.display='none';dzTxt.textContent='ลาก PDF มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์ (สูงสุด 20 ไฟล์)';},600);
+  setTimeout(()=>{
+    pb.style.display='none';
+    dzTxt.textContent='ลาก PDF มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์ (สูงสุด 20 ไฟล์)';
+  },600);
+  // สรุปผลการอัพโหลด
+  let summary = '';
+  if(newCount > 0)  summary += `✅ บันทึกใหม่ ${newCount} ไฟล์\n`;
+  if(dupList.length) summary += `⚠️ ซ้ำในระบบแล้ว ${dupList.length} ไฟล์:\n  ${dupList.join(', ')}\n`;
+  if(errList.length) summary += `❌ เกิดข้อผิดพลาด ${errList.length} ไฟล์:\n  ${errList.join('\n  ')}`;
+  if(summary) alert(summary.trim());
   render();
 }
 
