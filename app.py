@@ -1223,111 +1223,91 @@ def api_sales_records():
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
-# ── PDF Parser helpers ──
+# -- PDF Parser helpers --
 def _fix_num(s):
     if not s: return 0.0
     s = str(s).strip()
-    s = re.sub(r'(\d)\s+(\d)', r'\1\2', s)
-    s = re.sub(r'(\d)\s+,', r'\1,', s)
-    s = re.sub(r',\s+(\d)', r',\1', s)
-    s = s.replace(',','').strip()
+    import re as _re
+    s = _re.sub(r'(\d)\s+(\d)', r'\1\2', s)
+    s = _re.sub(r'(\d)\s+,',    r'\1,',   s)
+    s = _re.sub(r',\s+(\d)',    r',\1',   s)
+    s = s.replace(',', '').strip()
     try: return float(s)
     except: return 0.0
 
 def _parse_sas_pdf(file_storage):
-    """อ่านและ parse ใบเสนอราคา SAS จาก PDF — accuracy 99%"""
-    r = {'id':'','customer':'','date':'','saleShort':'XX',
-         'exVat':0,'vat':0,'total':0,'items':[],
-         'delivery':'-','payment':'-','warranty':'-'}
-    import io
+    """Universal parser: AP/NM (QTY/Total Price/VAT 7%) + RS (Q'TY/Total include vat/Vat 7%)"""
+    import io as _io
     pdf_bytes = file_storage.read()
     file_storage.seek(0)
-    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+    with pdfplumber.open(_io.BytesIO(pdf_bytes)) as pdf:
         page   = pdf.pages[0]
         text   = page.extract_text(x_tolerance=3, y_tolerance=3) or ''
         lines  = [l.strip() for l in text.split('\n') if l.strip()]
         tables = page.extract_tables() or []
-
-    # Quotation No
+    r = {'id':'','customer':'','date':'','saleShort':'XX',
+         'exVat':0.0,'vat':0.0,'total':0.0,
+         'items':[],'delivery':'-','payment':'-','warranty':'-'}
+    # Quotation ID
     m = re.search(r'Quotation\s*NO\.?\s*:?\s*(QM[\w\-]+)', text, re.I)
     if m: r['id'] = m.group(1).strip()
-
-    # Sale/Warranty/Payment — หาจาก header table เท่านั้น (ไม่ใช่ items table)
-    SALE_BLACKLIST = {'ITEM','CODE','DESCRIPTION','QTY','UNITPRICE','TOTAL','SALES',
-                      'WARRANTY','SHIPPING','METHOD','JOB','DELIVERY','DATE','PAYMENT','TERMS'}
-    KNOWN_SALES = {'TW','NM','AP','CA','BW','TL','NR','CK','SI','TWS','AW','PK'}
+    # Sale/Warranty/Delivery/Payment -- header table only
+    BLACKLIST = {'ITEM','CODE','DESCRIPTION','QTY',"Q'TY",'UNITPRICE','TOTAL',
+                 'SALES','WARRANTY','SHIPPING','METHOD','JOB','DELIVERY','DATE','PAYMENT','TERMS'}
     for tbl in tables:
         if not tbl or len(tbl) < 2: continue
-        # ต้องเป็น table ที่มี "SALES" ใน header row (Table 0)
-        header_row = [str(c or '').strip().upper() for c in tbl[0]]
-        if 'SALES' not in header_row: continue
-        # data row ถัดจาก header
+        h = [str(c or '').strip().upper().replace('\n',' ') for c in tbl[0]]
+        if 'SALES' not in h: continue
         for row in tbl[1:]:
             if not row: continue
             v0 = str(row[0] or '').strip()
-            # ต้องเป็น sale short จริงๆ: 2-4 ตัวอักษร ไม่อยู่ใน blacklist
-            if v0 and re.match(r'^[A-Z]{2,4}$', v0) and v0 not in SALE_BLACKLIST:
+            if v0 and re.match(r'^[A-Z]{2,4}$', v0) and v0 not in BLACKLIST:
                 r['saleShort'] = v0
-                if len(row) > 1 and row[1] and str(row[1]).strip() not in SALE_BLACKLIST:
-                    r['warranty'] = str(row[1]).strip()
-                # payment = last non-empty non-header cell
+                if len(row) > 1 and row[1]: r['warranty'] = str(row[1]).strip()
+                for cell in row:
+                    cv = str(cell or '').strip()
+                    if re.search(r'Within|days|weeks|วัน', cv, re.I): r['delivery']=cv; break
                 for cell in reversed(row):
                     cv = str(cell or '').strip()
-                    if cv and cv not in SALE_BLACKLIST and cv != '-' and len(cv) < 40:
-                        r['payment'] = cv; break
+                    if cv and cv not in BLACKLIST and cv != '-' and len(cv) < 40:
+                        r['payment']=cv; break
                 break
         if r['saleShort'] != 'XX': break
-    # Fallback: อ่านจากชื่อไฟล์
-    if r['saleShort'] == 'XX':
-        fname = getattr(file_storage, 'filename', '')
-        for sh in ['TW','NM','AP','CA','BW','TL','NR','CK','SI','TWS']:
-            if f'-{sh}-' in fname.upper():
-                r['saleShort'] = sh; break
-
     # Date
-    m = re.search(r'Date\.\s*:?\s*(\d{1,2})[\/](\d{2})[\/](\d{4})', text)
+    m = re.search(r'Date\.\s*:?\s*(\d{1,2})[\/](\d{1,2})[\/](\d{2,4})', text)
     if m:
-        d,mo,y = m.group(1),m.group(2),m.group(3)
+        d, mo, y = m.group(1), m.group(2).zfill(2), m.group(3)
         yr = int(y)
-        if yr > 2500: yr -= 543
-        r['date'] = f"{yr}-{mo.zfill(2)}-{d.zfill(2)}"
-
+        if len(y) == 2: yr = (2500 + yr) - 543
+        elif yr > 2500: yr -= 543
+        r['date'] = f"{yr}-{mo}-{d.zfill(2)}"
     # Customer
-    for i,line in enumerate(lines):
+    for i, line in enumerate(lines):
         if re.match(r'^To\s*:', line):
-            inline = re.sub(r'^To\s*:\s*','',line).strip()
-            if inline and len(inline) > 3:
+            inline = re.sub(r'^To\s*:\s*', '', line).strip()
+            if inline and len(inline) > 3 and not re.match(r'^(Email|Tel|Fax)', inline):
                 r['customer'] = inline; break
-            for j in range(i+1, min(i+5,len(lines))):
+            for j in range(i+1, min(i+6, len(lines))):
                 nl = lines[j].strip()
-                if nl and not re.match(r'^(Email|Tel|Fax|AP|NM|TW|CA|BW|SALES|\d)', nl, re.I):
+                if nl and not re.match(r'^(Email|Tel|Fax|AP|NM|TW|RS|CA|LINE|SALES|\d)', nl, re.I):
                     r['customer'] = nl; break
             break
-    if not r['customer']:
-        for line in lines:
-            if ('บริษัท' in line or 'จำกัด' in line or 'จากัด' in line) \
-               and 'Synergy' not in line and len(line) < 100:
-                r['customer'] = line; break
-
-    # Delivery
-    m = re.search(r'Within\s+([\d\-–]+\s*(?:days?|weeks?|วัน|สัปดาห์))', text, re.I)
-    if m: r['delivery'] = 'Within ' + m.group(1).strip()
-
-    # Totals
-    total_vals = []
+    # Totals -- both "Total Price" and "Total include vat"
+    grand_re = re.compile(r'Total\s+(?:include\s+vat|Price)\s+([\d\s,\.]+)', re.I)
+    tc = []
     for line in lines:
-        m = re.search(r'Total\s+Price\s+([\d\s,\.]+)', line)
+        m = grand_re.search(line)
         if m:
             v = _fix_num(m.group(1))
-            if v > 100: total_vals.append(v)
-    if total_vals: r['total'] = total_vals[-1]
-
+            if v > 100: tc.append(v)
+    if tc: r['total'] = tc[-1]
+    # VAT -- both "VAT 7%" and "Vat 7%"
     for line in lines:
-        m = re.search(r'VAT\s*7%\s+([\d\s,\.]+)', line)
+        m = re.search(r'[Vv][Aa][Tt]\s*7%\s+([\d\s,\.]+)', line)
         if m:
             v = _fix_num(m.group(1))
             if v > 0: r['vat'] = v; break
-
+    # exVat
     for line in lines:
         m = re.match(r'^\d+\s+Total(?:\s+Price)?\s+([\d\s,\.]+)$', line)
         if m:
@@ -1335,33 +1315,35 @@ def _parse_sas_pdf(file_storage):
             if v > 0: r['exVat'] = v; break
     if r['exVat'] == 0 and r['total'] > 0 and r['vat'] > 0:
         r['exVat'] = round(r['total'] - r['vat'], 2)
-
-    # Items จาก table
+    # Items -- both QTY and Q'TY
     for tbl in tables:
         if not tbl: continue
-        header = [str(c or '').strip().upper() for c in tbl[0]]
-        if 'ITEM' not in header or 'QTY' not in header: continue
-        ci = header.index('ITEM')
-        cc = header.index('CODE') if 'CODE' in header else -1
-        cd = header.index('DESCRIPTION') if 'DESCRIPTION' in header else -1
-        cq = header.index('QTY')
-        cu = header.index('UNITPRICE') if 'UNITPRICE' in header else -1
-        ct = header.index('TOTAL') if 'TOTAL' in header else -1
+        h = [str(c or '').strip().upper() for c in tbl[0]]
+        if not ('ITEM' in h and ('QTY' in h or "Q'TY" in h)): continue
+        ci = h.index('ITEM')
+        cc = h.index('CODE')        if 'CODE'        in h else -1
+        cd = h.index('DESCRIPTION') if 'DESCRIPTION' in h else -1
+        cq = h.index("Q'TY")        if "Q'TY"        in h else (h.index('QTY') if 'QTY' in h else -1)
+        cu = h.index('UNITPRICE')   if 'UNITPRICE'   in h else -1
+        ct = h.index('TOTAL')       if 'TOTAL'       in h else -1
         for row in tbl[1:]:
-            if not row or len(row) <= max(ci,cq): continue
+            if not row or len(row) <= ci: continue
             item_no = str(row[ci] or '').strip()
             if not item_no or not item_no.isdigit(): continue
             code  = str(row[cc] or '').strip() if cc >= 0 else ''
             desc  = str(row[cd] or '').strip() if cd >= 0 else ''
-            qty_s = str(row[cq] or '').strip()
-            unit  = _fix_num(str(row[cu] or '')) if cu >= 0 else 0
-            itot  = _fix_num(str(row[ct] or '')) if ct >= 0 else 0
+            qty_s = str(row[cq] or '').strip() if cq >= 0 else '1'
+            unit  = _fix_num(str(row[cu] or '')) if cu >= 0 else 0.0
+            itot  = _fix_num(str(row[ct] or '')) if ct >= 0 else 0.0
             if unit > 0 or itot > 0:
                 qty = int(qty_s) if qty_s.isdigit() else 1
-                full_desc = f"{code} — {desc}".strip(' — ') if code else desc
-                r['items'].append({'code':code or f'ITEM{item_no}','desc':full_desc[:120],'qty':qty,'unit':unit,'total':itot})
+                full_desc = f"{code} -- {desc}".strip(' -') if code else desc
+                r['items'].append({'code':code or f'ITEM{item_no}',
+                                   'desc':full_desc[:120],'qty':qty,
+                                   'unit':unit,'total':itot})
         break
     return r
+
 
 @app.route('/api/sales/upload', methods=['POST'])
 def api_sales_upload():
@@ -1375,19 +1357,51 @@ def api_sales_upload():
         # ── Parse PDF บน server ── (แม่นยำ 99%)
         parsed = _parse_sas_pdf(file)
 
-        # ── ตั้งค่าจาก filename ถ้า parser หาไม่เจอ ──
+        # ── Fallback อัจฉริยะจากชื่อไฟล์ ──
+        def _date_from_parts(d, mo, y_str):
+            yr = int(y_str)
+            if len(y_str) == 2: yr = (2500 + yr) - 543  # 69 → 2026
+            elif yr > 2500:     yr -= 543               # พ.ศ. 4 หลัก
+            return f"{yr}-{mo.zfill(2)}-{d.zfill(2)}"
+
+        def _customer_from_filename(fname):
+            base = re.sub(r'\.pdf$','',fname,flags=re.I)
+            qm = re.match(r'^(QM[\w]+-[\w]+-\d+(?:-R\d+)?)', base, re.I)
+            if not qm: return ''
+            after = base[len(qm.group(1)):].strip(' -_')
+            cust  = re.sub(r'\s*\(\d{1,2}-\d{2}-\d{2,4}\)\s*$','',after)
+            cust  = re.sub(r'__\d{2}-\d{2}-\d{4}_*$','',cust)
+            cust  = cust.replace('_',' ')
+            cust  = re.sub(r'\s+',' ',cust).strip(' -')
+            return cust
+
         if not parsed['id']:
-            parsed['id'] = filename.replace('.pdf','')
+            qm = re.match(r'^(QM[\w]+-[\w]+-\d+(?:-R\d+)?)', filename, re.I)
+            parsed['id'] = qm.group(1) if qm else re.sub(r'\.pdf$','',filename,flags=re.I)
+
         if parsed['saleShort'] == 'XX':
-            for sh in ['TW','NM','AP','CA','BW','TL','NR','CK','SI','TWS']:
-                if f'-{sh}-' in filename: parsed['saleShort'] = sh; break
+            fn_up = filename.upper()
+            for sh in ['TWS','TW','NM','AP','CA','BW','TL','NR','CK','SI','RS','AW','PK']:
+                if f'-{sh}-' in fn_up:
+                   parsed['saleShort'] = sh; break
+
         if not parsed['date']:
-            dm = re.search(r'(\d{2})-(\d{2})-(\d{4})', filename)
+            dm = re.search(r'\((\d{1,2})-(\d{2})-(\d{2,4})\)', filename)
             if dm:
-                yr = int(dm.group(3))
-                if yr > 2500: yr -= 543
-                parsed['date'] = f"{yr}-{dm.group(2)}-{dm.group(1)}"
-            else: parsed['date'] = '2026-01-01'
+                parsed['date'] = _date_from_parts(dm.group(1),dm.group(2),dm.group(3))
+            else:
+                dm2 = re.search(r'(\d{2})-(\d{2})-(\d{4})', filename)
+                if dm2:
+                   parsed['date'] = _date_from_parts(dm2.group(1),dm2.group(2),dm2.group(3))
+                else:
+                   parsed['date'] = datetime.datetime.utcnow().strftime('%Y-%m-%d')
+
+        fn_cust = _customer_from_filename(filename)
+        if fn_cust and (not parsed['customer'] or
+                       parsed['customer'] == '(ไม่พบชื่อลูกค้า)' or
+                       len(parsed['customer']) < 4):
+            parsed['customer'] = fn_cust
+
 
         # ── ป้องกันซ้ำ: เช็คทั้ง Quotation ID และ filename ──
         safe_id = parsed['id'].replace('/','_').replace('.','_')
