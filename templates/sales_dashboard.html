@@ -569,7 +569,8 @@ function openModal(idx){
   const r=records[idx];
   document.getElementById('modalTitle').textContent = r.id+' — '+r.customer;
   const si=getSaleInfo(r.saleShort);
-  const stChip = r.status ? `<span class="chip chip-${r.status}">${{forecast:'Forecast',loss:'Loss',holding:'Holding'}[r.status]}</span>` : '–';
+  const ST_LABEL = {forecast:'Forecast', loss:'Loss', holding:'Holding'};
+  const stChip = r.status ? `<span class="chip chip-${r.status}">${ST_LABEL[r.status]}</span>` : '–';
   document.getElementById('modalBody').innerHTML=`
     <div class="msec">
       <div class="mrow"><span class="ml">ชื่อไฟล์</span><span class="mv" style="font-size:12px;max-width:300px;word-break:break-all">${r.filename}</span></div>
