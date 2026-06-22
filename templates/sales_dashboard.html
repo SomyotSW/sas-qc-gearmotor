@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sales Dashboard · SAS</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <style>
 :root{
   --bg:#06101e;--bg2:#0a1828;--bg3:#0d1f35;
@@ -257,8 +256,6 @@ tr:hover td{background:rgba(59,130,246,.04)}
 </div>
 
 <script>
-pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
-
 /* ── CONSTANTS ── */
 const SALE_INFO={
   TW:{name:'Tippawan', cls:'bs-tw', team:'Team 1', color:'#3B82F6'},
@@ -552,78 +549,7 @@ function openModal(idx){
 document.getElementById('mcls').onclick=()=>document.getElementById('mbg').classList.remove('open');
 document.getElementById('mbg').onclick=e=>{if(e.target===document.getElementById('mbg'))document.getElementById('mbg').classList.remove('open');};
 
-/* ── PDF EXTRACT TEXT ── */
-async function extractPdfText(file){
-  const buf=await file.arrayBuffer();
-  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
-  let full='';
-  for(let i=1;i<=pdf.numPages;i++){
-    const page=await pdf.getPage(i);
-    const tc=await page.getTextContent();
-    const lines={};
-    tc.items.forEach(item=>{
-      const y=Math.round(item.transform[5]);
-      if(!lines[y]) lines[y]=[];
-      lines[y].push(item.str);
-    });
-    Object.keys(lines).sort((a,b)=>b-a).forEach(y=>{full+=lines[y].join(' ')+'\n';});
-  }
-  return full;
-}
-
-/* ── PDF PARSER ── */
-function parseQuotation(text,filename){
-  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
-  const r={id:'',customer:'',date:'',saleShort:'XX',exVat:0,vat:0,total:0,items:[],delivery:'–',payment:'–'};
-
-  // Sale short from filename
-  if(filename.includes('-TW-')) r.saleShort='TW';
-  else if(filename.includes('-NM-')) r.saleShort='NM';
-  else if(filename.includes('-AP-')) r.saleShort='AP';
-  else{const m=filename.match(/-([A-Z]{2,4})-/);if(m)r.saleShort=m[1];}
-
-  // Quotation No
-  const qm=text.match(/(?:Quotation\s*N[Oo]\.?\s*:?\s*)(QM[\w\-]+)/i)||text.match(/(QM[O0-9][\w\-]+)/);
-  if(qm)r.id=(qm[1]||qm[0]).trim();
-  if(!r.id){const p=filename.replace('.pdf','').split('-');r.id=p.slice(0,Math.min(4,p.length)).join('-');}
-
-  // Date
-  const dm=text.match(/(\d{2})[\/](\d{2})[\/](\d{4})/)||filename.match(/(\d{2})-(\d{2})-(\d{4})/);
-  if(dm){let y=parseInt(dm[3]);if(y>2500)y-=543;r.date=`${y}-${dm[2].padStart(2,'0')}-${dm[1].padStart(2,'0')}`;}
-  else r.date='2026-01-01';
-
-  // Customer
-  for(const l of lines){
-    if((l.includes('บริษัท')||l.includes('Co.,Ltd')||l.includes('จำกัด'))&&l.length<100&&!l.includes('Synergy')&&!l.includes('SAS')){
-      r.customer=l.replace(/^To\s*:\s*/i,'').trim();break;
-    }
-  }
-  if(!r.customer){const m=text.match(/(?:To\s*:?\s*)\n?\s*(.{5,80}(?:จำกัด|Ltd\.?|Limited))/i);if(m)r.customer=m[1].trim();}
-  if(!r.customer)r.customer='(ไม่พบชื่อลูกค้า)';
-
-  // Totals
-  const tm=text.match(/(?:Total\s*Price|Grand\s*Total|ราคาสุทธิ)[^\d]*([\d,]+\.?\d*)/i);
-  if(tm)r.total=parseFloat(tm[1].replace(/,/g,''))||0;
-  const vm=text.match(/VAT\s*7%?[^\d]*([\d,]+\.?\d*)/i);
-  if(vm)r.vat=parseFloat(vm[1].replace(/,/g,''))||0;
-  const em=text.match(/(?:Exclude\s*VAT|รวมก่อน\s*VAT)[^\d]*([\d,]+\.?\d*)/i);
-  if(em)r.exVat=parseFloat(em[1].replace(/,/g,''))||0;
-  if(r.total>0&&r.vat>0&&r.exVat===0)r.exVat=Math.round((r.total-r.vat)*100)/100;
-
-  // Items
-  for(const l of lines){
-    const m=l.match(/^(\d+)\s+(\S[\w\-\/\(\)]+)\s+(.+?)\s+(\d+)\s+(?:EA|ชิ้น|Pcs?)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)$/i);
-    if(m)r.items.push({code:m[2].trim(),desc:m[3].trim(),qty:parseInt(m[4]),unit:parseFloat(m[5].replace(/,/g,'')),total:parseFloat(m[6].replace(/,/g,''))});
-  }
-
-  // Delivery / Payment
-  const dlm=text.match(/(?:\d+[-–]\d+\s*(?:วัน|days?))/i);if(dlm)r.delivery=dlm[0].trim();
-  const pm=text.match(/(?:Payment[^\n]*?)(Cash|Credit|โอน|เงินสด|\d+\s*days?)/i);if(pm)r.payment=pm[1].trim();
-
-  return r;
-}
-
-/* ── UPLOAD FILES → API ── */
+/* ── UPLOAD FILES → API (parsing ทำบน server) ── */
 async function processFiles(files){
   if(!files.length)return;
   const dz=document.getElementById('dz');

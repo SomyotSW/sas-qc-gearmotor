@@ -10,3 +10,4 @@ openpyxl
 flask-cors
 python-dotenv
 boto3
+pdfplumber>=0.10.0
