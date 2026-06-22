@@ -1235,6 +1235,106 @@ def _fix_num(s):
     try: return float(s)
     except: return 0.0
 
+def _detect_format(tables, lines):
+    """ตรวจว่า PDF เป็น format ใด: TW (QMO6905) หรือ SAS (RS/AP/NM)"""
+    for tbl in tables:
+        if not tbl: continue
+        h = ' '.join(str(c or '') for c in tbl[0]).upper()
+        if 'SALE PERSON' in h: return 'TW'
+        if 'SALES' in h:       return 'SAS'
+    for line in lines:
+        if 'Sale Person' in line: return 'TW'
+    return 'SAS'
+
+def _parse_tw_format(tables, lines, text):
+    """Parse QMO6905 / TW format (Sale Person header, Grand Total, multiline items)"""
+    r = {'id':'','customer':'','date':'','saleShort':'XX',
+         'exVat':0.0,'vat':0.0,'total':0.0,'items':[],
+         'delivery':'-','payment':'-','warranty':'-','saleEngineer':''}
+
+    m = re.search(r'Quotation\s*No\.?\s*:?\s*([\w\-]+)', text, re.I)
+    if m: r['id'] = m.group(1).strip()
+
+    m = re.search(r'Date:\s*(\d{1,2})[\/](\d{1,2})[\/](\d{2,4})', text)
+    if m:
+        d, mo, y = m.group(1), m.group(2).zfill(2), m.group(3)
+        yr = int(y)
+        if len(y) == 2: yr = (2500+yr)-543
+        elif yr > 2500: yr -= 543
+        r['date'] = f"{yr}-{mo}-{d.zfill(2)}"
+
+    m = re.search(r'To:\s*(.+)', text)
+    if m:
+        cust = re.sub(r'\(cid:\d+\)', '', m.group(1)).strip()
+        if len(cust) > 2: r['customer'] = cust
+
+    for tbl in tables:
+        if not tbl: continue
+        h_up = ' '.join(str(c or '') for c in tbl[0]).upper()
+        if 'SALE PERSON' not in h_up: continue
+        if len(tbl) > 1:
+            row1 = tbl[1]
+            v0 = str(row1[0] or '').strip()
+            if v0: r['saleEngineer'] = v0
+            for cell in row1:
+                cv = str(cell or '').strip()
+                if re.search(r'\d+\s*days?', cv, re.I): r['delivery'] = cv; break
+        break
+
+    for line in lines:
+        m = re.search(r'Grand\s+Total\s+([\d\s,\.]+)', line)
+        if m:
+            v = _fix_num(m.group(1))
+            if v > 100: r['total'] = v
+    for line in lines:
+        m = re.search(r'[Vv]at\s*7%\s+([\d\s,\.]+)', line)
+        if m:
+            v = _fix_num(m.group(1))
+            if v > 0: r['vat'] = v; break
+    for line in lines:
+        m = re.match(r'^Total\s+([\d\s,\.]+)$', line)
+        if m:
+            v = _fix_num(m.group(1))
+            if v > 100: r['exVat'] = v
+    if r['exVat'] == 0 and r['total'] > 0 and r['vat'] > 0:
+        r['exVat'] = round(r['total'] - r['vat'], 2)
+
+    for tbl in tables:
+        if not tbl: continue
+        h_up = ' '.join(str(c or '') for c in tbl[0]).upper()
+        if 'SALE PERSON' not in h_up: continue
+        for row in tbl[3:]:
+            if not row: continue
+            item_cell = str(row[0] or '').strip()
+            item_nos  = [x.strip() for x in item_cell.split('\n') if x.strip().isdigit()]
+            if not item_nos: continue
+            codes = [x.strip() for x in str(row[3] or '').split('\n')
+                     if x.strip() and not x.startswith('**') and '(cid:' not in x]
+            qtys  = [x.strip() for x in str(row[6] or '').split('\n') if x.strip().isdigit()]
+            units = [x.strip() for x in str(row[8] or '').split('\n')
+                     if x.strip() and re.search(r'[\d,]', x)]
+            tots  = [x.strip() for x in str(row[9] or '').split('\n')
+                     if x.strip() and re.search(r'[\d,]', x)]
+            all_desc = [x.strip() for x in str(row[4] or '').split('\n')
+                        if x.strip() and not x.startswith('**') and '(cid:' not in x]
+            n = len(codes)
+            desc_groups = [[] for _ in range(n)]
+            cur = 0
+            for dl in all_desc:
+                if cur < n-1 and desc_groups[cur] and not re.match(r'^[a-z]', dl):
+                    cur += 1
+                desc_groups[cur].append(dl)
+            for idx in range(n):
+                code = codes[idx] if idx < len(codes) else ''
+                desc = ' '.join(desc_groups[idx]) if idx < len(desc_groups) else ''
+                qty  = int(qtys[idx]) if idx < len(qtys) else 1
+                unit = _fix_num(units[idx]) if idx < len(units) else 0.0
+                itot = _fix_num(tots[idx])  if idx < len(tots)  else 0.0
+                if unit > 0 or itot > 0:
+                    r['items'].append({'code':code,'desc':desc[:120],'qty':qty,'unit':unit,'total':itot})
+        break
+    return r
+
 def _parse_sas_pdf(file_storage):
     """Universal parser: AP/NM (QTY/Total Price/VAT 7%) + RS (Q'TY/Total include vat/Vat 7%)"""
     import io as _io
@@ -1245,6 +1345,11 @@ def _parse_sas_pdf(file_storage):
         text   = page.extract_text(x_tolerance=3, y_tolerance=3) or ''
         lines  = [l.strip() for l in text.split('\n') if l.strip()]
         tables = page.extract_tables() or []
+    # ── ตรวจ format แล้ว route ไปยัง parser ที่เหมาะสม ──
+    fmt = _detect_format(tables, lines)
+    if fmt == 'TW':
+        return _parse_tw_format(tables, lines, text)
+
     r = {'id':'','customer':'','date':'','saleShort':'XX',
          'exVat':0.0,'vat':0.0,'total':0.0,
          'items':[],'delivery':'-','payment':'-','warranty':'-'}
@@ -1383,20 +1488,26 @@ def api_sales_upload():
 
         def _customer_from_filename(fname):
             base = re.sub(r'\.pdf$','',fname,flags=re.I)
-            qm = re.match(r'^(QM[\w]+-[\w]+-\d+(?:-R\d+)?)', base, re.I)
+            # รองรับทั้ง QMO26-AP-011 และ QMO6905-0002 format
+            qm = (re.match(r'^(QM[\w]+-[\w]+-\d+(?:-R\d+)?)', base, re.I) or
+                  re.match(r'^(QM[\w]+-\d+)', base, re.I))
             if not qm: return ''
             after = base[len(qm.group(1)):].strip(' -_')
-            cust  = re.sub(r'\s*\(\d{1,2}-\d{2}-\d{2,4}\)\s*$','',after)
-            cust  = re.sub(r'__\d{2}-\d{2}-\d{4}_*$','',cust)
-            cust  = cust.replace('_',' ')
-            cust  = re.sub(r'\s+',' ',cust).strip(' -')
-            return cust
+            # ตัด sale short ออกถ้าขึ้นต้น เช่น "TW-Magna" → "Magna"
+            for sh in ['TWS','TW','NM','AP','CA','BW','TL','NR','CK','SI','RS','AW','PK']:
+                pat = re.compile(r'^' + sh + r'[-_\s]', re.I)
+                if pat.match(after):
+                    after = pat.sub('', after).strip(' -_'); break
+            cust = re.sub(r'\s*\(\d{1,2}-\d{2}-\d{2,4}\)\s*$','',after)
+            cust = re.sub(r'__\d{2}-\d{2}-\d{4}_*$','',cust)
+            cust = cust.replace('_',' ')
+            return re.sub(r'\s+',' ',cust).strip(' -')
 
         if not parsed['id']:
             qm = re.match(r'^(QM[\w]+-[\w]+-\d+(?:-R\d+)?)', filename, re.I)
             parsed['id'] = qm.group(1) if qm else re.sub(r'\.pdf$','',filename,flags=re.I)
 
-        if parsed['saleShort'] == 'XX':
+        # saleShort จากชื่อไฟล์เสมอ (TW ไม่มีใน PDF)
             fn_up = filename.upper()
             for sh in ['TWS','TW','NM','AP','CA','BW','TL','NR','CK','SI','RS','AW','PK']:
                 if f'-{sh}-' in fn_up:
