@@ -1281,16 +1281,33 @@ def _parse_sas_pdf(file_storage):
         if len(y) == 2: yr = (2500 + yr) - 543
         elif yr > 2500: yr -= 543
         r['date'] = f"{yr}-{mo}-{d.zfill(2)}"
-    # Customer
+    # Customer -- อ่านจาก PDF (แต่ชื่อไทยมักเพี้ยนเพราะ font encoding)
+    # ใช้เป็น fallback เท่านั้น, ชื่อจริงดึงจากชื่อไฟล์ใน upload handler
     for i, line in enumerate(lines):
         if re.match(r'^To\s*:', line):
             inline = re.sub(r'^To\s*:\s*', '', line).strip()
-            if inline and len(inline) > 3 and not re.match(r'^(Email|Tel|Fax)', inline):
+            if inline and len(inline) > 3 and not re.match(r'^(Email|Tel|Fax|Khun|คุณ)', inline, re.I):
                 r['customer'] = inline; break
             for j in range(i+1, min(i+6, len(lines))):
                 nl = lines[j].strip()
-                if nl and not re.match(r'^(Email|Tel|Fax|AP|NM|TW|RS|CA|LINE|SALES|\d)', nl, re.I):
+                if nl and not re.match(r'^(Email|Tel|Fax|AP|NM|TW|RS|CA|LINE|SALES|Khun|คุณ|\d)', nl, re.I):
                     r['customer'] = nl; break
+            break
+
+    # Sale Engineer -- ดึงจากบรรทัดใกล้ท้าย (หลัง "Sale Engineer" header)
+    r['saleEngineer'] = ''
+    for i, line in enumerate(lines):
+        if re.search(r'Sale\s+Engineer|Sales\s+Engineer|Sales\s+Supervisor', line, re.I):
+            # ชื่ออยู่บรรทัดถัดไป หรือบรรทัดเดียวกันกับ "Ms./Mr. Approve By"
+            for j in range(i+1, min(i+3, len(lines))):
+                nl = lines[j].strip()
+                if nl and re.match(r'^(Ms\.|Mr\.|Mrs\.|[A-Z][a-z])', nl):
+                    # ตัด Manager/Approve By ออก
+                    name = re.sub(r'\s*Mr\.Traiwit\s+Luengthong.*$', '', nl, flags=re.I).strip()
+                    name = re.sub(r'\s*(Sale|General)\s+Manager.*$', '', name, flags=re.I).strip()
+                    if name and len(name) > 3:
+                        r['saleEngineer'] = name
+                        break
             break
     # Totals -- both "Total Price" and "Total include vat"
     grand_re = re.compile(r'Total\s+(?:include\s+vat|Price)\s+([\d\s,\.]+)', re.I)
@@ -1396,11 +1413,10 @@ def api_sales_upload():
                 else:
                    parsed['date'] = datetime.datetime.utcnow().strftime('%Y-%m-%d')
 
+        # ชื่อลูกค้า: ชื่อไฟล์ชัวร์กว่า PDF (Thai font encoding เพี้ยน)
         fn_cust = _customer_from_filename(filename)
-        if fn_cust and (not parsed['customer'] or
-                       parsed['customer'] == '(ไม่พบชื่อลูกค้า)' or
-                       len(parsed['customer']) < 4):
-            parsed['customer'] = fn_cust
+        if fn_cust:
+            parsed['customer'] = fn_cust  # ใช้จากชื่อไฟล์เสมอ
 
 
         # ── ป้องกันซ้ำ: เช็คทั้ง Quotation ID และ filename ──
@@ -1437,6 +1453,7 @@ def api_sales_upload():
             'delivery':   parsed['delivery'],
             'payment':    parsed['payment'],
             'warranty':   parsed['warranty'],
+            'saleEngineer': parsed.get('saleEngineer', ''),
             'status':     None,
             'note':       '',
             'uploaded_at': datetime.datetime.utcnow().isoformat(),

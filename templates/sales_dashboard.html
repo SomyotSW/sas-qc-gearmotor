@@ -237,7 +237,7 @@ tr:hover td{background:rgba(59,130,246,.04)}
 <div class="tbl-wrap">
   <table>
     <thead><tr>
-      <th>Sale</th><th>Q/T Name</th><th>ลูกค้า</th><th>ชื่อเต็ม</th>
+      <th>Sale</th><th>Q/T Name</th><th>ลูกค้า (บริษัท)</th><th>Sale Engineer</th>
       <th class="r">Total (฿)</th><th>สถานะ</th><th>หมายเหตุ</th>
     </tr></thead>
     <tbody id="tbody"></tbody>
@@ -464,7 +464,7 @@ function renderTable(){
       <td><span class="badge ${s.cls}">${r.saleShort}</span></td>
       <td style="font-size:12px;color:var(--txt2);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.id}">${r.id}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px" title="${r.customer}">${r.customer}</td>
-      <td style="font-size:12px">${s.name}</td>
+      <td style="font-size:12px">${r.saleEngineer||s.name}</td>
       <td class="r"><button class="pbtn" onclick="openModal(${idx})">฿${fmt(r.total)}</button></td>
       <td>
         <div class="stw">
@@ -537,6 +537,7 @@ function openModal(idx){
     <div class="ms">
       ${r.pdf_url?`<div class="mr"><span class="ml2">ดู PDF ต้นฉบับ</span><a href="${r.pdf_url}" target="_blank" style="color:var(--c2);font-size:12px;font-weight:700">เปิดไฟล์ ↗</a></div>`:''}
       <div class="mr"><span class="ml2">Sale Person</span><span class="mv"><span class="badge ${s.cls}">${r.saleShort}</span> ${s.name}</span></div>
+      ${r.saleEngineer?`<div class="mr"><span class="ml2">Sale Engineer</span><span class="mv">${r.saleEngineer}</span></div>`:''}
       <div class="mr"><span class="ml2">ลูกค้า</span><span class="mv">${r.customer}</span></div>
       <div class="mr"><span class="ml2">วันที่</span><span class="mv">${r.date}</span></div>
       <div class="mr"><span class="ml2">กำหนดส่ง</span><span class="mv">${r.delivery}</span></div>
