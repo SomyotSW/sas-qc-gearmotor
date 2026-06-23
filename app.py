@@ -1298,6 +1298,8 @@ def _parse_tw_format(tables, lines, text):
             if v > 100: r['exVat'] = v
     if r['exVat'] == 0 and r['total'] > 0 and r['vat'] > 0:
         r['exVat'] = round(r['total'] - r['vat'], 2)
+    elif r['exVat'] == 0 and r['total'] > 0 and r['vat'] == 0:
+        r['exVat'] = r['total']  # Vat 0% → exVat = total
 
     for tbl in tables:
         if not tbl: continue
@@ -1371,8 +1373,11 @@ def _parse_sas_pdf(file_storage):
         for row in tbl[1:]:
             if not row: continue
             v0 = str(row[0] or '').strip()
-            if v0 and re.match(r'^[A-Z]{2,4}$', v0) and v0 not in BLACKLIST:
-                r['saleShort'] = v0
+            if v0 and v0 not in BLACKLIST:
+                if re.match(r'^[A-Z]{2,4}$', v0):
+                    r['saleShort'] = v0
+                else:
+                    r['saleEngineer'] = v0  # full name (PPY format)
                 if len(row) > 1 and row[1]: r['warranty'] = str(row[1]).strip()
                 for cell in row:
                     cv = str(cell or '').strip()
@@ -1383,14 +1388,29 @@ def _parse_sas_pdf(file_storage):
                         r['payment']=cv; break
                 break
         if r['saleShort'] != 'XX': break
-    # Date
-    m = re.search(r'Date\.\s*:?\s*(\d{1,2})[\/](\d{1,2})[\/](\d{2,4})', text)
-    if m:
-        d, mo, y = m.group(1), m.group(2).zfill(2), m.group(3)
-        yr = int(y)
-        if len(y) == 2: yr = (2500 + yr) - 543
-        elif yr > 2500: yr -= 543
-        r['date'] = f"{yr}-{mo}-{d.zfill(2)}"
+    # Date — รองรับทุก format
+    _MONTHS = {'jan':1,'feb':2,'mar':3,'apr':4,'may':5,'jun':6,
+               'jul':7,'aug':8,'sep':9,'oct':10,'nov':11,'dec':12}
+    def _parse_yr(y):
+        yr=int(y)
+        if len(y)==2: return (2500+yr)-543
+        return yr-543 if yr>2500 else yr
+    _date_found = False
+    # DD/MM/YYYY or D/M/YY
+    _m = re.search(r'Date\.?\s*:?\s*(\d{1,2})[\/](\d{1,2})[\/](\d{2,4})', text)
+    if _m:
+        r['date'] = f"{_parse_yr(_m.group(3))}-{_m.group(2).zfill(2)}-{_m.group(1).zfill(2)}"
+        _date_found = True
+    # "May 7, 2026" or "7 May 2026"
+    if not _date_found:
+        _m = re.search(r'Date\.?\s*:?\s*([A-Za-z]{3,9})\s+(\d{1,2}),?\s*(\d{4})', text)
+        if _m and _m.group(1).lower()[:3] in _MONTHS:
+            r['date'] = f"{_m.group(3)}-{str(_MONTHS[_m.group(1).lower()[:3]]).zfill(2)}-{_m.group(2).zfill(2)}"
+            _date_found = True
+    if not _date_found:
+        _m = re.search(r'(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})', text)
+        if _m and _m.group(2).lower()[:3] in _MONTHS:
+            r['date'] = f"{_m.group(3)}-{str(_MONTHS[_m.group(2).lower()[:3]]).zfill(2)}-{_m.group(1).zfill(2)}"
     # Customer -- อ่านจาก PDF (แต่ชื่อไทยมักเพี้ยนเพราะ font encoding)
     # ใช้เป็น fallback เท่านั้น, ชื่อจริงดึงจากชื่อไฟล์ใน upload handler
     for i, line in enumerate(lines):
@@ -1420,7 +1440,7 @@ def _parse_sas_pdf(file_storage):
                         break
             break
     # Totals -- both "Total Price" and "Total include vat"
-    grand_re = re.compile(r'Total\s+(?:include\s+vat|Price)\s+([\d\s,\.]+)', re.I)
+    grand_re = re.compile(r'Total\s+(?:include\s+vat|Price|with\s+vat)\s+([\d\s,\.]+)', re.I)
     tc = []
     for line in lines:
         m = grand_re.search(line)
@@ -1442,6 +1462,8 @@ def _parse_sas_pdf(file_storage):
             if v > 0: r['exVat'] = v; break
     if r['exVat'] == 0 and r['total'] > 0 and r['vat'] > 0:
         r['exVat'] = round(r['total'] - r['vat'], 2)
+    elif r['exVat'] == 0 and r['total'] > 0 and r['vat'] == 0:
+        r['exVat'] = r['total']  # Vat 0% → exVat = total
     # Items -- both QTY and Q'TY
     for tbl in tables:
         if not tbl: continue
@@ -1450,8 +1472,11 @@ def _parse_sas_pdf(file_storage):
         ci = h.index('ITEM')
         cc = h.index('CODE')        if 'CODE'        in h else -1
         cd = h.index('DESCRIPTION') if 'DESCRIPTION' in h else -1
-        cq = h.index("Q'TY")        if "Q'TY"        in h else (h.index('QTY') if 'QTY' in h else -1)
-        cu = h.index('UNITPRICE')   if 'UNITPRICE'   in h else -1
+        cq = (h.index("Q'TY") if "Q'TY" in h else
+              h.index('QTY')   if 'QTY'  in h else
+              h.index('QTY.')  if 'QTY.' in h else -1)
+        # "UNIT PRICE" หรือ "UNITPRICE" → ใช้ตัวแรกที่เจอ
+        cu = next((i for i,v in enumerate(h) if 'UNIT' in v and 'PRICE' in v), -1)
         ct = h.index('TOTAL')       if 'TOTAL'       in h else -1
         for row in tbl[1:]:
             if not row or len(row) <= ci: continue
@@ -1491,7 +1516,7 @@ def api_sales_upload():
             elif yr > 2500:     yr -= 543               # พ.ศ. 4 หลัก
             return f"{yr}-{mo.zfill(2)}-{d.zfill(2)}"
 
-        KNOWN_SALES_LIST = ['TWS','TW','NM','AP','CA','BW','TL','NR','CK','SI','RS','AW','PK','BS','PL']
+        KNOWN_SALES_LIST = ['TWS','TW','NM','AP','CA','BW','TL','NR','CK','SI','RS','AW','PK','BS','PL','PPY','KSR']
 
         def _parse_fname(fname):
             """Universal filename parser: returns (qid, sale_short, customer)"""
@@ -1605,7 +1630,7 @@ def api_sales_patch(record_id):
     try:
         body    = request.get_json(force=True) or {}
         safe_id = record_id.replace('/', '_').replace('.', '_')
-        allowed = {k: body[k] for k in ('status', 'note') if k in body}
+        allowed = {k: body[k] for k in ('status','note','status_updated_at','note_updated_at') if k in body}
         if not allowed:
             return jsonify({'ok': False, 'error': 'nothing to update'}), 400
         sales_ref.child(safe_id).update(allowed)

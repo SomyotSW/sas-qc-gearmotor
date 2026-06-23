@@ -276,7 +276,13 @@ let records=[], selMonth='all', lineChart=null;
 
 /* ── LOAD FROM API ── */
 async function clearAll(){
-  if(!confirm('ลบข้อมูลทั้งหมดใน Firebase และโหลดใหม่?')) return;
+  const pwd = prompt('🔐 กรุณาใส่รหัสผ่านเพื่อยืนยันการลบข้อมูลทั้งหมด:');
+  if(pwd === null) return;  // กด cancel
+  if(pwd !== '@synergy.as'){
+    alert('❌ รหัสผ่านไม่ถูกต้อง');
+    return;
+  }
+  if(!confirm('⚠️ ยืนยันการลบข้อมูล Sales ทั้งหมดออกจาก Firebase?')) return;
   try{
     await fetch('/api/sales/clear-all',{method:'POST'});
     records=[];
@@ -472,6 +478,7 @@ function renderTable(){
           <button class="sb loss ${r.status==='loss'?'on':''}" onclick="setSt(${idx},'loss')">Loss</button>
           <button class="sb holding ${r.status==='holding'?'on':''}" onclick="setSt(${idx},'holding')">Holding</button>
         </div>
+        ${r.status_updated_at?`<div style="font-size:10px;color:var(--txt3);margin-top:3px">📅 ${fmtUpdated(r.status_updated_at)}</div>`:''}
       </td>
       <td><input class="note-in" type="text" placeholder="หมายเหตุ..." value="${r.note||''}"
         onchange="setNote(${idx},this.value)"></td>
@@ -506,17 +513,26 @@ function startTicker(){
 }
 
 /* ── STATUS + NOTE (save to Firebase via API) ── */
+function nowISO(){ return new Date().toISOString(); }
+function fmtUpdated(iso){
+  if(!iso) return '';
+  const d=new Date(iso);
+  return d.toLocaleDateString('th-TH',{day:'2-digit',month:'short',year:'numeric'})+' '+
+         d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+}
 function setSt(idx,st){
   const r=records[idx];
   const newSt=r.status===st?null:st;
   r.status=newSt;
-  patchRecord(r.id,{status:newSt});
+  r.status_updated_at=newSt?nowISO():null;
+  patchRecord(r.id,{status:newSt, status_updated_at:r.status_updated_at});
   render();
 }
 function setNote(idx,val){
   const r=records[idx];
   r.note=val;
-  patchRecord(r.id,{note:val});
+  r.note_updated_at=val?nowISO():null;
+  patchRecord(r.id,{note:val, note_updated_at:r.note_updated_at});
 }
 async function patchRecord(id,body){
   try{
