@@ -1341,10 +1341,15 @@ def _parse_sas_pdf(file_storage):
     pdf_bytes = file_storage.read()
     file_storage.seek(0)
     with pdfplumber.open(_io.BytesIO(pdf_bytes)) as pdf:
-        page   = pdf.pages[0]
-        text   = page.extract_text(x_tolerance=3, y_tolerance=3) or ''
+        # อ่านทุกหน้า — totals มักอยู่หน้าสุดท้าย
+        all_text, all_tables = [], []
+        for pg in pdf.pages:
+            t = pg.extract_text(x_tolerance=3, y_tolerance=3) or ''
+            all_text.append(t)
+            all_tables.extend(pg.extract_tables() or [])
+        text   = '\n'.join(all_text)
         lines  = [l.strip() for l in text.split('\n') if l.strip()]
-        tables = page.extract_tables() or []
+        tables = all_tables
     # ── ตรวจ format แล้ว route ไปยัง parser ที่เหมาะสม ──
     fmt = _detect_format(tables, lines)
     if fmt == 'TW':
@@ -1486,33 +1491,53 @@ def api_sales_upload():
             elif yr > 2500:     yr -= 543               # พ.ศ. 4 หลัก
             return f"{yr}-{mo.zfill(2)}-{d.zfill(2)}"
 
-        def _customer_from_filename(fname):
+        KNOWN_SALES_LIST = ['TWS','TW','NM','AP','CA','BW','TL','NR','CK','SI','RS','AW','PK','BS','PL']
+
+        def _parse_fname(fname):
+            """Universal filename parser: returns (qid, sale_short, customer)"""
             base = re.sub(r'\.pdf$','',fname,flags=re.I)
-            # รองรับทั้ง QMO26-AP-011 และ QMO6905-0002 format
-            qm = (re.match(r'^(QM[\w]+-[\w]+-\d+(?:-R\d+)?)', base, re.I) or
-                  re.match(r'^(QM[\w]+-\d+)', base, re.I))
-            if not qm: return ''
-            after = base[len(qm.group(1)):].strip(' -_')
-            # ตัด sale short ออกถ้าขึ้นต้น เช่น "TW-Magna" → "Magna"
-            for sh in ['TWS','TW','NM','AP','CA','BW','TL','NR','CK','SI','RS','AW','PK']:
-                pat = re.compile(r'^' + sh + r'[-_\s]', re.I)
-                if pat.match(after):
-                    after = pat.sub('', after).strip(' -_'); break
-            cust = re.sub(r'\s*\(\d{1,2}-\d{2}-\d{2,4}\)\s*$','',after)
-            cust = re.sub(r'__\d{2}-\d{2}-\d{4}_*$','',cust)
-            cust = cust.replace('_',' ')
-            return re.sub(r'\s+',' ',cust).strip(' -')
+            base = re.sub(r'__\d{1,2}-\d{2}-\d{4}_*$','',base)
+            base = re.sub(r'\s*\(\d{1,2}-\d{2}-\d{2,4}\)\s*$','',base).strip()
+            parts = base.split('-')
+            sale_idx = -1
+            sale_sh  = ''
+            for i, p in enumerate(parts):
+                if p.strip().upper() in KNOWN_SALES_LIST:
+                    sale_idx = i; sale_sh = p.strip().upper(); break
+            if sale_idx == -1:
+                return base, 'XX', ''
+            pre   = parts[:sale_idx]
+            after = parts[sale_idx+1:]
+            # QMO6905 style: digit ก่อน sale → QID = pre เท่านั้น
+            old_style = sale_idx > 1 and re.match(r'^\d+$', parts[sale_idx-1])
+            if old_style:
+                qid = '-'.join(pre)
+                cust_parts = after
+            else:
+                serials, cust_start = [], 0
+                for i, p in enumerate(after):
+                    if re.match(r'^\d+$',p.strip()) or re.match(r'^R\d+$',p.strip(),re.I):
+                        serials.append(p.strip()); cust_start = i+1
+                    else: break
+                qid = '-'.join(pre+[sale_sh]+serials)
+                cust_parts = after[cust_start:]
+            cust = '-'.join(cust_parts).replace('_',' ')
+            cust = re.sub(r'\s+',' ',cust).strip(' -')
+            return qid, sale_sh, cust
+
+        def _customer_from_filename(fname):
+            _, _, cust = _parse_fname(fname)
+            return cust
 
         if not parsed['id']:
             qm = re.match(r'^(QM[\w]+-[\w]+-\d+(?:-R\d+)?)', filename, re.I)
             parsed['id'] = qm.group(1) if qm else re.sub(r'\.pdf$','',filename,flags=re.I)
 
-        # saleShort จากชื่อไฟล์เสมอ (TW ไม่มีใน PDF)
-            fn_up = filename.upper()
-            for sh in ['TWS','TW','NM','AP','CA','BW','TL','NR','CK','SI','RS','AW','PK']:
-                if f'-{sh}-' in fn_up:
-                   parsed['saleShort'] = sh; break
-
+        # ดึง QID, saleShort, customer จากชื่อไฟล์ (แม่นกว่า PDF เสมอ)
+        fn_qid, fn_sale, fn_cust = _parse_fname(filename)
+        if fn_sale != 'XX':   parsed['saleShort'] = fn_sale
+        if fn_cust:            parsed['customer']  = fn_cust
+        if not parsed['id'] and fn_qid: parsed['id'] = fn_qid
         if not parsed['date']:
             dm = re.search(r'\((\d{1,2})-(\d{2})-(\d{2,4})\)', filename)
             if dm:
