@@ -184,6 +184,36 @@ tr:hover td{background:rgba(59,130,246,.04)}
 .sec::after{content:'';flex:1;height:1px;background:var(--b)}
 
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+/* note revision pills */
+.note-wrap{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.note-input-wrap{display:flex;gap:4px;align-items:center}
+.note-save-btn{padding:3px 8px;border-radius:6px;border:1px solid rgba(59,130,246,.4);
+  background:rgba(59,130,246,.12);color:var(--c2);font-size:10px;font-weight:700;
+  cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+.note-save-btn:hover{background:rgba(59,130,246,.25);color:#fff}
+.rev-pill{padding:2px 6px;border-radius:5px;border:1px solid rgba(56,130,220,.3);
+  background:rgba(56,130,220,.08);color:var(--txt2);font-size:10px;font-weight:700;
+  cursor:pointer;transition:all .15s;white-space:nowrap}
+.rev-pill:hover{background:rgba(56,130,220,.2);color:#fff;border-color:var(--c1)}
+/* note history modal */
+.nhist-overlay{display:none;position:fixed;inset:0;background:rgba(0,8,20,.6);z-index:3000;
+  align-items:flex-end;justify-content:center;backdrop-filter:blur(2px)}
+.nhist-overlay.open{display:flex}
+.nhist-box{background:var(--bg2);border:1px solid var(--b2);border-radius:18px 18px 0 0;
+  width:480px;max-width:100vw;max-height:65vh;overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:0 -20px 60px rgba(0,0,0,.6);animation:slideUp .25s ease}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.nhist-head{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;
+  border-bottom:1px solid var(--b)}
+.nhist-head h4{font-size:13px;font-weight:800;color:#fff}
+.nhist-cls{background:none;border:none;cursor:pointer;color:var(--txt2);font-size:18px;padding:4px;transition:color .15s}
+.nhist-cls:hover{color:#fff}
+.nhist-body{overflow-y:auto;padding:12px 18px 20px}
+.nhist-item{padding:10px 12px;background:rgba(255,255,255,.025);border-radius:10px;
+  margin-bottom:8px;border:1px solid var(--b)}
+.nhist-rev{font-size:10px;font-weight:800;color:var(--c2);letter-spacing:.5px;margin-bottom:4px}
+.nhist-text{font-size:13px;color:#fff;line-height:1.5;word-break:break-word}
+.nhist-ts{font-size:10px;color:var(--txt3);margin-top:4px}
 @media(max-width:600px){.stats{grid-template-columns:1fr 1fr}.g2,.g3{grid-template-columns:1fr}}
 </style>
 </head>
@@ -249,7 +279,18 @@ tr:hover td{background:rgba(59,130,246,.04)}
 </div>
 </div>
 
-<!-- MODAL -->
+<!-- NOTE HISTORY BOTTOM SHEET -->
+<div class="nhist-overlay" id="nhistOverlay">
+  <div class="nhist-box">
+    <div class="nhist-head">
+      <h4 id="nhistTitle">บันทึกหมายเหตุ</h4>
+      <button class="nhist-cls" id="nhistCls">✕</button>
+    </div>
+    <div class="nhist-body" id="nhistBody"></div>
+  </div>
+</div>
+
+<!-- MAIN MODAL -->
 <div class="mbg" id="mbg">
   <div class="mbox">
     <div class="mhead">
@@ -480,8 +521,15 @@ function renderTable(){
         </div>
         ${r.status_updated_at?`<div style="font-size:10px;color:var(--txt3);margin-top:3px">📅 ${fmtUpdated(r.status_updated_at)}</div>`:''}
       </td>
-      <td><input class="note-in" type="text" placeholder="หมายเหตุ..." value="${r.note||''}"
-        onchange="setNote(${idx},this.value)"></td>
+      <td>
+        <div class="note-wrap">
+          ${(r.notes||[]).map(n=>`<span class="rev-pill" onclick="showNoteHist(${idx},'${n.rev}')" title="R${n.rev}: ${(n.text||'').replace(/'/g,'&apos;').substring(0,30)}">R${n.rev}</span>`).join('')}
+        </div>
+        <div class="note-input-wrap" style="margin-top:${(r.notes||[]).length?'5px':'0'}">
+          <input class="note-in" id="note-input-${idx}" type="text" placeholder="พิมหมายเหตุ...">
+          <button class="note-save-btn" onclick="saveNote(${idx})">💾 บันทึก</button>
+        </div>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -528,11 +576,49 @@ function setSt(idx,st){
   patchRecord(r.id,{status:newSt, status_updated_at:r.status_updated_at});
   render();
 }
-function setNote(idx,val){
-  const r=records[idx];
-  r.note=val;
-  r.note_updated_at=val?nowISO():null;
-  patchRecord(r.id,{note:val, note_updated_at:r.note_updated_at});
+async function saveNote(idx){
+  const r = records[idx];
+  const input = document.getElementById('note-input-'+idx);
+  if(!input) return;
+  const text = input.value.trim();
+  if(!text){ alert('กรุณาพิมหมายเหตุก่อนบันทึก'); return; }
+  // Optimistic update
+  if(!r.notes) r.notes = [];
+  const newRev = { rev: r.notes.length+1, text, ts: nowISO() };
+  r.notes.push(newRev);
+  input.value = '';
+  render();
+  // Save to Firebase
+  try{
+    const res = await fetch(`/api/sales/record/${encodeURIComponent(r.id)}`,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({add_note: text})
+    });
+    const j = await res.json();
+    if(j.ok && j.notes){
+      // sync with server's version
+      r.notes = j.notes;
+      render();
+    }
+  }catch(e){ console.error('save note failed',e); }
+}
+
+function showNoteHist(idx, targetRev){
+  const r = records[idx];
+  const notes = r.notes || [];
+  const overlay = document.getElementById('nhistOverlay');
+  const body    = document.getElementById('nhistBody');
+  document.getElementById('nhistTitle').textContent = r.id + ' — บันทึกหมายเหตุ';
+  // แสดง target rev ก่อน แล้วตามด้วยทั้งหมด
+  const sorted = [...notes].sort((a,b)=>b.rev-a.rev);
+  body.innerHTML = sorted.map(n=>`
+    <div class="nhist-item" ${String(n.rev)===String(targetRev)?'style="border-color:var(--c1);background:rgba(59,130,246,.08)"':''}>
+      <div class="nhist-rev">R${n.rev} ${String(n.rev)===String(targetRev)?'← ล่าสุด':''}</div>
+      <div class="nhist-text">${n.text||''}</div>
+      <div class="nhist-ts">📅 ${fmtUpdated(n.ts)}</div>
+    </div>`).join('');
+  overlay.classList.add('open');
 }
 async function patchRecord(id,body){
   try{
@@ -559,7 +645,14 @@ function openModal(idx){
       <div class="mr"><span class="ml2">กำหนดส่ง</span><span class="mv">${r.delivery}</span></div>
       <div class="mr"><span class="ml2">ชำระเงิน</span><span class="mv">${r.payment}</span></div>
       <div class="mr"><span class="ml2">สถานะ</span><span class="mv">${chip}</span></div>
-      ${r.note?`<div class="mr"><span class="ml2">หมายเหตุ</span><span class="mv">${r.note}</span></div>`:''}
+      ${(r.notes&&r.notes.length)?`<div class="mr" style="flex-direction:column;align-items:flex-start;gap:6px">
+        <span class="ml2" style="margin-bottom:4px">หมายเหตุ (${r.notes.length} รายการ)</span>
+        ${[...(r.notes||[])].reverse().map(n=>`<div style="background:rgba(59,130,246,.06);border:1px solid var(--b);border-radius:8px;padding:7px 10px;width:100%">
+          <div style="font-size:10px;font-weight:800;color:var(--c2);margin-bottom:3px">R${n.rev}</div>
+          <div style="font-size:13px;color:#fff">${n.text||''}</div>
+          <div style="font-size:10px;color:var(--txt3);margin-top:3px">📅 ${fmtUpdated(n.ts)}</div>
+        </div>`).join('')}
+      </div>`:''}
     </div>
     <div style="font-size:11px;font-weight:800;color:var(--txt3);letter-spacing:1px;margin-bottom:7px">รายการสินค้า</div>
     <div class="ms">
@@ -581,6 +674,8 @@ function openModal(idx){
 }
 document.getElementById('mcls').onclick=()=>document.getElementById('mbg').classList.remove('open');
 document.getElementById('mbg').onclick=e=>{if(e.target===document.getElementById('mbg'))document.getElementById('mbg').classList.remove('open');};
+document.getElementById('nhistCls').onclick=()=>document.getElementById('nhistOverlay').classList.remove('open');
+document.getElementById('nhistOverlay').onclick=e=>{if(e.target===document.getElementById('nhistOverlay'))document.getElementById('nhistOverlay').classList.remove('open');};
 
 /* ── UPLOAD FILES → API (parsing ทำบน server) ── */
 async function processFiles(files){

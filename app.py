@@ -1630,11 +1630,34 @@ def api_sales_patch(record_id):
     try:
         body    = request.get_json(force=True) or {}
         safe_id = record_id.replace('/', '_').replace('.', '_')
-        allowed = {k: body[k] for k in ('status','note','status_updated_at','note_updated_at') if k in body}
-        if not allowed:
+        ref     = sales_ref.child(safe_id)
+
+        update_fields = {}
+
+        # status update
+        if 'status' in body:
+            update_fields['status'] = body['status']
+            update_fields['status_updated_at'] = body.get('status_updated_at')
+
+        # note: append ลง notes[] array (history log)
+        if 'add_note' in body:
+            note_text = str(body['add_note']).strip()
+            if note_text:
+                existing = ref.get() or {}
+                notes = existing.get('notes') or []
+                if not isinstance(notes, list): notes = []
+                notes.append({
+                    'rev':  len(notes) + 1,
+                    'text': note_text,
+                    'ts':   datetime.datetime.utcnow().isoformat() + 'Z'
+                })
+                update_fields['notes'] = notes
+
+        if not update_fields:
             return jsonify({'ok': False, 'error': 'nothing to update'}), 400
-        sales_ref.child(safe_id).update(allowed)
-        return jsonify({'ok': True})
+
+        ref.update(update_fields)
+        return jsonify({'ok': True, 'notes': update_fields.get('notes')})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
