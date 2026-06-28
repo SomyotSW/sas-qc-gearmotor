@@ -869,6 +869,22 @@ def admin_motor_qc_mail_test():
     status = 200 if res.get('ok') else 500
     return jsonify(res), status
 
+
+def _motor_qc_checkpoints():
+    """หัวข้อ QC ที่ QC Inspector ต้องติ๊กก่อน Approve และจะถูกพิมพ์ X ลง PDF ล่าสุด"""
+    return [
+        ('1', 'ตรวจ Model / Nameplate / Serial / Power / Voltage / Ratio ให้ตรงกับเอกสารขาย'),
+        ('2', 'ตรวจสภาพภายนอก สี รอยกระแทก หน้าแปลน ขาแท่น เพลา Keyway และอุปกรณ์ประกอบ'),
+        ('3', 'ตรวจการประกอบ Motor + Gear: Bolt, Coupling, Adapter, Alignment และความแน่นของจุดยึด'),
+        ('4', 'ตรวจอัตราทดเกียร์ ทิศทางการหมุน และความผิดปกติของ Output Shaft'),
+        ('5', 'Run Test แบบ No-load: เสียงผิดปกติ การสั่น อุณหภูมิ และการรั่วซึมของน้ำมัน'),
+        ('6', 'วัดกระแสมอเตอร์และเทียบ Nameplate / ตรวจความสมดุล 3 เฟสเมื่อเกี่ยวข้อง'),
+        ('7', 'ตรวจ Terminal Box, Wiring, Grounding, Cable, Plug และ Controller/Drive เมื่อเกี่ยวข้อง'),
+        ('8', 'ตรวจชนิดน้ำมันเกียร์ ปริมาณน้ำมัน ระดับน้ำมัน และยืนยันว่าเติมแล้วสำหรับรุ่นที่ต้องเติม'),
+        ('9', 'ตรวจรูปถ่ายหลักฐาน: Nameplate, กระแส, เสียง/Run Test และภาพประกอบก่อนแพ็กสินค้า'),
+        ('10', 'ตรวจ Packing, Label, QR/Barcode, Warranty และเอกสารแนบก่อนส่งมอบ'),
+    ]
+
 def _motor_qc_role_config(role: str):
     role = str(role or '').strip().lower()
     configs = {
@@ -891,6 +907,7 @@ def _motor_qc_role_config(role: str):
             'popup_message': 'โปรดตรวจสอบความถูกต้องอีกครั้ง หากเสร็จสิ้น โปรดลงชื่อและกด Approve',
             'status': 'qc_approved',
             'button': 'Approve QC เรียบร้อย',
+            'requires_qc_checklist': True,
             'to': ['tanai@synergy-as.com', 'sas04@synergy-as.com'],
             'cc': ['Chottanin@synergy-as.com'],
             'subject_tpl': 'QC สินค้าเรียบร้อยแล้ว OR No. : {qr_no} : {company_name} โปรดทำการจัดส่งสินค้าตามรายการที่กำหนดได้เลย',
@@ -1131,8 +1148,26 @@ def motor_qc_department_approve(role, job_key):
                 cfg=cfg,
                 role=cfg['role'],
                 approved=False,
-                error='กรุณากรอกชื่อและวาดลายเซ็นก่อนกด Approve'
+                error='กรุณากรอกชื่อและวาดลายเซ็นก่อนกด Approve',
+                qc_checkpoints=_motor_qc_checkpoints()
             ), 400
+
+        qc_checklist_payload = {}
+        if cfg.get('requires_qc_checklist'):
+            required_checks = _motor_qc_checkpoints()
+            checked = set(str(x).strip() for x in request.form.getlist('qc_check[]'))
+            missing = [no for no, _ in required_checks if str(no) not in checked]
+            if missing:
+                return render_template(
+                    'motor_qc_approve.html',
+                    job=job,
+                    cfg=cfg,
+                    role=cfg['role'],
+                    approved=False,
+                    error='กรุณาติ๊กหัวข้อ QC ให้ครบทุกข้อก่อนกด Approve เพื่อให้ PDF ล่าสุดมีเครื่องหมาย X ครบทุกช่อง OK',
+                    qc_checkpoints=required_checks
+                ), 400
+            qc_checklist_payload = {str(no): True for no, _ in required_checks}
 
         now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
         now_str = now_th.strftime('%Y-%m-%d %H:%M:%S')
@@ -1145,6 +1180,8 @@ def motor_qc_department_approve(role, job_key):
             'role_label': cfg['label'],
             'method': 'QR Approval',
         }
+        if qc_checklist_payload:
+            approvals[cfg['role']]['qc_checklist'] = qc_checklist_payload
         job['approvals'] = approvals
         job['status'] = cfg['status']
         job['updated_at'] = now_str
@@ -1185,6 +1222,7 @@ def motor_qc_department_approve(role, job_key):
             pdf_url=pdf_url,
             mail_result=mail_result,
             mail_error=None if mail_result.get('ok') else mail_result.get('error'),
+            qc_checkpoints=_motor_qc_checkpoints(),
         )
 
     return render_template(
@@ -1193,6 +1231,7 @@ def motor_qc_department_approve(role, job_key):
         cfg=cfg,
         role=cfg['role'],
         approved=False,
+        qc_checkpoints=_motor_qc_checkpoints(),
     )
 
 

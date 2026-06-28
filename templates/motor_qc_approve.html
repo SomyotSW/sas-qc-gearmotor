@@ -15,6 +15,12 @@
     .sig-wrap{border:2px dashed #93c5fd;border-radius:16px;padding:12px;background:#f8fbff;}
     canvas{width:100%;height:220px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;touch-action:none;}
     .btn-approve{background:linear-gradient(180deg,#22c55e,#15803d);border:0;border-radius:14px;padding:14px 18px;font-weight:900;font-size:1.05rem;}
+    .qc-checklist{border:1px solid #bfdbfe;background:#f8fbff;border-radius:16px;padding:14px;margin-bottom:16px;}
+    .qc-check-row{display:flex;gap:10px;align-items:flex-start;border-bottom:1px solid #e2e8f0;padding:9px 0;}
+    .qc-check-row:last-child{border-bottom:0;}
+    .qc-check-row input{width:22px;height:22px;margin-top:2px;}
+    .qc-check-no{font-weight:900;color:#0b63ce;min-width:28px;}
+    .qc-check-text{font-weight:650;color:#1e293b;line-height:1.35;}
     .popup-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.66);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px;}
     .popup{background:#fff;border-radius:22px;max-width:560px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,.35);overflow:hidden;}
     .popup-head{background:#0b63ce;color:#fff;padding:18px 22px;font-weight:900;font-size:1.3rem;}
@@ -32,6 +38,7 @@
         <b>OR No.:</b> {{ job.get('qr_no','') }}<br>
         <b>บริษัท:</b> {{ job.get('company_name','') }}<br>
         <b>จำนวนรายการ:</b> {{ job.get('item_count','') }} รายการ
+        {% if cfg.get('requires_qc_checklist') %}<br><br><span class="text-danger fw-bold">ขั้นตอน QC ต้องติ๊ก Checklist ทุกข้อก่อน Approve</span>{% endif %}
       </div>
       <div class="popup-actions">
         <button class="btn btn-primary fw-bold" onclick="document.getElementById('startPopup').style.display='none'">เริ่มลงชื่อ</button>
@@ -80,6 +87,23 @@
             <label class="form-label fw-bold">ลงชื่อ / Name</label>
             <input type="text" name="approver_name" class="form-control form-control-lg" placeholder="พิมพ์ชื่อผู้ Approve" required>
           </div>
+          {% if cfg.get('requires_qc_checklist') %}
+          <div class="qc-checklist">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+              <div class="fw-bold text-primary">✅ QC Checklist หลังตรวจสินค้าเสร็จ</div>
+              <button type="button" class="btn btn-sm btn-outline-primary fw-bold" id="checkAllBtn">ติ๊กครบทุกข้อ</button>
+            </div>
+            <div class="small text-muted mb-2">ต้องทำเครื่องหมาย X ครบทุกข้อ ระบบจึงจะพิมพ์ X ลงช่อง OK ในไฟล์ PDF ล่าสุด</div>
+            {% for no, text in qc_checkpoints %}
+            <label class="qc-check-row">
+              <input type="checkbox" name="qc_check[]" value="{{ no }}" required>
+              <span class="qc-check-no">{{ no }}.</span>
+              <span class="qc-check-text">{{ text }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          {% endif %}
+
           <div class="sig-wrap mb-3">
             <label class="form-label fw-bold">วาดลายเซ็น</label>
             <canvas id="sigCanvas" width="900" height="300"></canvas>
@@ -129,7 +153,18 @@
     document.getElementById('clearSigBtn').addEventListener('click', clearCanvas);
     clearCanvas();
 
+    const checkAllBtn = document.getElementById('checkAllBtn');
+    if(checkAllBtn){
+      checkAllBtn.addEventListener('click', ()=>{
+        document.querySelectorAll('input[name="qc_check[]"]').forEach(cb => cb.checked = true);
+      });
+    }
+
     form.addEventListener('submit', (e)=>{
+      const qcChecks = [...document.querySelectorAll('input[name="qc_check[]"]')];
+      if(qcChecks.length && qcChecks.some(cb => !cb.checked)){
+        e.preventDefault(); alert('กรุณาติ๊ก QC Checklist ให้ครบทุกข้อก่อนกด Approve'); return;
+      }
       if(!hasInk){
         e.preventDefault(); alert('กรุณาวาดลายเซ็นก่อนกด Approve'); return;
       }
