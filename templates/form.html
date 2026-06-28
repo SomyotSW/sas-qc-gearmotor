@@ -9,74 +9,34 @@
     body {
       background: url('/static/BG.png') no-repeat center center fixed;
       background-size: cover;
-      /* ✅ เว้นที่บนสุดให้ปุ่ม Home + โลโก้ไม่ทับ content */
       padding-top: 70px;
     }
     .backdrop {
       background: rgba(255, 255, 255, 0.95);
       border-radius: 20px;
       padding: 30px;
-      max-width: 900px;
+      max-width: 1120px;
       margin: auto;
     }
-    .logo {
-      position: fixed;
-      top: 15px;
-      right: 20px;
-      width: 100px;
-      z-index: 10;
-    }
-    .btn-home {
-      position: fixed;
-      top: 15px;
-      left: 20px;
-      z-index: 10;
-      background: linear-gradient(180deg, #5aa7ff 0%, #2f79d8 100%);
-      color: #fff !important;
-      border: none;
-      border-radius: 10px;
-      padding: 8px 18px;
-      font-size: 1.1rem;
-      font-weight: 700;
-      box-shadow: 0 4px 12px rgba(0,70,160,0.25);
-      text-decoration: none;
-      transition: filter 0.15s;
-    }
-    .btn-home:hover {
-      filter: brightness(1.1);
-      text-decoration: none;
-    }
+    .logo { position: fixed; top: 15px; right: 20px; width: 100px; z-index: 10; }
+    .btn-home { position: fixed; top: 15px; left: 20px; z-index: 10; background: linear-gradient(180deg,#5aa7ff 0%,#2f79d8 100%); color:#fff!important; border:none; border-radius:10px; padding:8px 18px; font-size:1.1rem; font-weight:700; box-shadow:0 4px 12px rgba(0,70,160,0.25); text-decoration:none; transition:filter .15s; }
+    .btn-home:hover { filter: brightness(1.1); text-decoration:none; }
     label { font-weight: bold; }
-    .form-control, .form-select { margin-bottom: 15px; }
+    .form-control, .form-select { margin-bottom: 15px; border-radius: 12px; }
     .submit-btn { margin-top: 20px; }
-    .red { color: red; font-weight: bold; }
-    #overlay {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(255,255,255,0.6);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 9999;
-    }
-    #overlay .message { font-size: 1.5rem; font-weight: bold; }
-
-    @media (max-width: 576px) {
-      body {
-        background-attachment: scroll;
-        padding-top: 65px; /* ✅ เว้นที่ให้ปุ่มบนมือถือ */
-      }
-      .container { padding-left: 12px; padding-right: 12px; }
-      .backdrop { max-width: 100%; padding: 16px; border-radius: 16px; }
-      h2 { font-size: 1.2rem; margin-bottom: 12px !important; }
-      .logo { top: 12px; right: 12px; width: 70px; }
-      .btn-home { top: 12px; left: 12px; padding: 6px 14px; font-size: 0.95rem; }
-      label { font-size: 0.95rem; }
-      .form-control, .form-select { font-size: 16px; margin-bottom: 12px; }
-      .submit-btn .btn { width: 100%; font-size: 1.05rem; padding: 12px 14px; }
-      #overlay .message { font-size: 1.1rem; padding: 0 14px; text-align: center; }
-    }
+    .red { color:red; font-weight:bold; }
+    #overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,.6); display:none; align-items:center; justify-content:center; z-index:9999; }
+    #overlay .message { font-size:1.5rem; font-weight:bold; }
+    .job-alert{background:#eaf4ff;border-radius:16px;border:1px solid #bfdbfe;}
+    .item-qc-card{border:1px solid #dbeafe;background:#f8fbff;border-radius:18px;padding:18px;margin-bottom:16px;box-shadow:0 8px 22px rgba(15,23,42,.06);}
+    .item-qc-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px;}
+    .item-title{font-weight:900;color:#0b63ce;font-size:1.1rem;}
+    .item-model{font-weight:800;color:#0f172a;}
+    .soft-badge{display:inline-block;background:#eaf4ff;color:#0b63ce;border-radius:999px;padding:5px 10px;font-weight:800;font-size:.9rem;}
+    .mini-section{font-weight:900;color:#1e293b;border-left:5px solid #0b63ce;padding-left:10px;margin:12px 0 10px;}
+    .field-note{font-size:.88rem;color:#64748b;margin-top:-10px;margin-bottom:10px;}
+    .legacy-wrap{max-width:900px;margin:auto;}
+    @media(max-width:576px){ body{background-attachment:scroll;padding-top:65px;} .container{padding-left:12px;padding-right:12px;} .backdrop{max-width:100%;padding:16px;border-radius:16px;} h2{font-size:1.2rem;margin-bottom:12px!important;} .logo{top:12px;right:12px;width:70px;} .btn-home{top:12px;left:12px;padding:6px 14px;font-size:.95rem;} label{font-size:.95rem;} .form-control,.form-select{font-size:16px;margin-bottom:12px;} .submit-btn .btn{width:100%;font-size:1.05rem;padding:12px 14px;} #overlay .message{font-size:1.1rem;padding:0 14px;text-align:center;} }
   </style>
 </head>
 <body>
@@ -84,17 +44,23 @@
   <img src="/static/logo_sas.png" alt="SAS Logo" class="logo">
 
   <div class="container mb-5">
-    <div class="backdrop shadow">
+    <div class="backdrop shadow {% if not prefill_job %}legacy-wrap{% endif %}">
       <h2 class="text-center mb-4">แบบฟอร์มการตรวจเช็คสินค้า QC Report</h2>
       <form action="/submit" method="POST" enctype="multipart/form-data" onsubmit="return handleSubmit()">
         <input type="hidden" name="inspector" value="{{ employee_id }}">
 
         {% if prefill_job %}
-        <div class="alert alert-info border-0 shadow-sm" style="background:#eaf4ff;border-radius:16px;">
-          <input type="hidden" name="motor_qc_job_key" value="{{ prefill_job.get('job_key','') }}">
-          <input type="hidden" name="motor_qc_qr_no" value="{{ prefill_job.get('qr_no','') }}">
-          <input type="hidden" name="motor_qc_item_no" id="motor_qc_item_no" value="">
-          <input type="hidden" name="assembly_status" id="assembly_status" value="">
+        <input type="hidden" name="motor_qc_job_key" value="{{ prefill_job.get('job_key','') }}">
+        <input type="hidden" name="motor_qc_qr_no" value="{{ prefill_job.get('qr_no','') }}">
+        <input type="hidden" name="product_type" id="product_type" value="">
+        <textarea name="motor_nameplate" id="motor_nameplate" style="display:none;"></textarea>
+        <input type="hidden" name="gear_ratio" id="gear_ratio_legacy" value="">
+        <input type="hidden" name="motor_current" id="motor_current_legacy" value="">
+        <input type="hidden" name="gear_sound" id="gear_sound_legacy" value="">
+        <input type="hidden" name="warranty" id="warranty_legacy" value="">
+        <input type="hidden" name="assembly_status" id="assembly_status" value="">
+
+        <div class="alert job-alert shadow-sm">
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
             <div>
               <b>📄 ข้อมูลจากเอกสาร QC-Motor:</b>
@@ -102,13 +68,7 @@
             </div>
             <span class="badge bg-primary">Scan QR Prefill</span>
           </div>
-          <label class="form-label mb-1">เลือกรายการสินค้าที่กำลังตรวจ</label>
-          <select id="motor_qc_item_select" class="form-select mb-2" onchange="applyMotorQcItem()">
-            {% for item in prefill_job.get('items', []) %}
-            <option value="{{ loop.index0 }}">Item {{ item.get('no', loop.index) }} : {{ item.get('model','') }} ({{ item.get('assembly','') }})</option>
-            {% endfor %}
-          </select>
-          <div class="small text-muted">ระบบจะเติม OR No., บริษัท, ประเภทสินค้า และ Model ทุกรายการให้อัตโนมัติ หากต้องการระบุรายการที่กำลังตรวจ ให้เลือก Item ด้านบนก่อนส่งข้อมูล QC</div>
+          <div class="small text-muted">ระบบนี้รองรับหลายรายการใน 1 Order: แต่ละ Item สามารถมีประเภทสินค้า, Model, อัตราทด, กระแส, เสียง, น้ำมัน และรูปภาพของตัวเองได้</div>
         </div>
         {% endif %}
 
@@ -122,6 +82,142 @@
             <input type="text" name="company_name" class="form-control" placeholder="กรอกชื่อบริษัท">
           </div>
         </div>
+
+        {% if prefill_job %}
+          <div class="mini-section">รายการ QC แยกตาม Item</div>
+          {% for item in prefill_job.get('items', []) %}
+          {% set idx = loop.index %}
+          {% set ptype = item.get('product_type') or prefill_job.get('product_type','') %}
+          <div class="item-qc-card" data-item-card data-product-type="{{ ptype }}">
+            <div class="item-qc-head">
+              <div>
+                <div class="item-title">Item {{ item.get('no', idx) }} <span class="soft-badge">{{ ptype }}</span> <span class="soft-badge">{{ item.get('assembly','') }}</span></div>
+                <div class="item-model">Model: {{ item.get('model','') }}</div>
+              </div>
+              <div class="text-muted small">กรอกผลตรวจและแนบรูปเฉพาะรายการนี้</div>
+            </div>
+
+            <input type="hidden" name="qc_item_no[]" value="{{ item.get('no', idx) }}">
+            <input type="hidden" name="qc_item_product_type[]" value="{{ ptype }}">
+            <input type="hidden" name="qc_item_model[]" value="{{ item.get('model','') }}">
+            <input type="hidden" name="qc_item_assembly[]" value="{{ item.get('assembly','') }}">
+
+            <div class="row">
+              <div class="col-md-3">
+                <label>อัตราทดเกียร์</label>
+                <input type="text" name="qc_item_gear_ratio[]" class="form-control" placeholder="เช่น i=30">
+              </div>
+              <div class="col-md-3">
+                <label>ค่ากระแส (A)</label>
+                <input type="text" name="qc_item_motor_current[]" class="form-control" placeholder="เช่น 3.2">
+              </div>
+              <div class="col-md-3">
+                <label>เสียงเกียร์ (dB)</label>
+                <input type="text" name="qc_item_gear_sound[]" class="form-control" placeholder="เช่น 65">
+              </div>
+              <div class="col-md-3">
+                <label class="red">รับประกัน (เดือน)</label>
+                <input type="text" name="qc_item_warranty[]" class="form-control" placeholder="18 / 24 / 36">
+              </div>
+            </div>
+
+            <div class="row acdc-fields">
+              <div class="col-12">
+                <label>เลือกส่วนประกอบ</label><br>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="checkbox" id="part_motor_{{ idx }}" value="Motor" name="qc_item_acdc_parts_{{ idx }}[]" {% if item.get('assembly') == 'ประกอบ' %}checked{% endif %}>
+                  <label class="form-check-label" for="part_motor_{{ idx }}">Motor</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="checkbox" id="part_gear_{{ idx }}" value="Gear" name="qc_item_acdc_parts_{{ idx }}[]" {% if item.get('assembly') == 'ประกอบ' %}checked{% endif %}>
+                  <label class="form-check-label" for="part_gear_{{ idx }}">Gear</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="checkbox" id="part_controller_{{ idx }}" value="Controller" name="qc_item_acdc_parts_{{ idx }}[]">
+                  <label class="form-check-label" for="part_controller_{{ idx }}">Controller</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="row servo-fields">
+              <div class="col-md-6">
+                <label>Model Servo Motor</label>
+                <input type="text" name="qc_item_servo_motor_model[]" class="form-control">
+              </div>
+              <div class="col-md-6">
+                <label>Model Servo Drive</label>
+                <input type="text" name="qc_item_servo_drive_model[]" class="form-control">
+              </div>
+            </div>
+
+            <div class="row oil-fields">
+              <div class="col-md-4">
+                <label>ชนิดน้ำมันเกียร์</label>
+                <select name="qc_item_oil_type[]" class="form-select">
+                  <option value="">-- เลือกชนิดน้ำมันเกียร์ --</option>
+                  <option value="Shell Omala VG220">Shell Omala VG220</option>
+                  <option value="Shell Omala VG460">Shell Omala VG460</option>
+                  <option value="Shell Omala VG680">Shell Omala VG680</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label>จำนวนน้ำมันเกียร์ (ลิตร)</label>
+                <input type="text" name="qc_item_oil_liters[]" class="form-control">
+              </div>
+              <div class="col-md-4 pt-md-4">
+                <label>เติมน้ำมันเกียร์แล้ว</label>
+                <input type="checkbox" name="qc_item_oil_filled_{{ idx }}" class="form-check-input ms-2">
+              </div>
+            </div>
+
+            <div class="mini-section">รูปหลักฐาน Item {{ item.get('no', idx) }}</div>
+            <div class="row">
+              <div class="col-md-4">
+                <label>ภาพค่ากระแส</label>
+                <input type="file" name="qc_item_motor_current_img_{{ idx }}" accept="image/*" class="form-control">
+              </div>
+              <div class="col-md-4">
+                <label>ภาพเสียงเกียร์ / Run Test</label>
+                <input type="file" name="qc_item_gear_sound_img_{{ idx }}" accept="image/*" class="form-control">
+              </div>
+              <div class="col-md-4">
+                <label>ภาพประกอบหน้างาน</label>
+                <input type="file" name="qc_item_assembly_img_{{ idx }}" accept="image/*" class="form-control">
+              </div>
+            </div>
+            <div class="row rfks-fields">
+              <div class="col-md-6">
+                <label>Name plate : Motor</label>
+                <input type="file" name="qc_item_rfks_nameplate_motor_img_{{ idx }}" accept="image/*" class="form-control">
+              </div>
+              <div class="col-md-6">
+                <label>Name plate : Gear</label>
+                <input type="file" name="qc_item_rfks_nameplate_gear_img_{{ idx }}" accept="image/*" class="form-control">
+              </div>
+            </div>
+            <div class="row servo-fields">
+              <div class="col-md-4">
+                <label>ภาพ Servo Motor</label>
+                <input type="file" name="qc_item_servo_motor_img_{{ idx }}" accept="image/*" class="form-control">
+              </div>
+              <div class="col-md-4">
+                <label>ภาพ Servo Drive</label>
+                <input type="file" name="qc_item_servo_drive_img_{{ idx }}" accept="image/*" class="form-control">
+              </div>
+              <div class="col-md-4">
+                <label>ภาพ Cable Wire</label>
+                <input type="file" name="qc_item_cable_wire_img_{{ idx }}" accept="image/*" class="form-control">
+              </div>
+            </div>
+            <div class="row acdc-fields">
+              <div class="col-md-6">
+                <label>ภาพ Controller</label>
+                <input type="file" name="qc_item_controller_img_{{ idx }}" accept="image/*" class="form-control">
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
 
         <div class="row">
           <div class="col-md-6">
@@ -146,8 +242,7 @@
           </div>
           <div class="col-md-6">
             <label>ชื่อมอเตอร์ ( Model : )</label>
-            <textarea name="motor_nameplate" class="form-control" rows="4" placeholder="ระบบจะดึง Model ทุกรายการจากเอกสาร QC-Motor มาแสดงที่นี่"></textarea>
-            <div id="motor_model_count_hint" class="small text-muted mt-1" style="display:none;"></div>
+            <textarea name="motor_nameplate" class="form-control" rows="4" placeholder="กรอก Model สินค้า"></textarea>
           </div>
         </div>
 
@@ -155,75 +250,34 @@
 
         <div id="acdc_parts" style="display:none;">
           <label>เลือกส่วนประกอบ</label>
-          <div class="form-check form-check-inline">
-            <input class="form-check-input" type="checkbox" id="part_motor" value="Motor" name="acdc_parts">
-            <label class="form-check-label" for="part_motor">Motor</label>
-          </div>
-          <div class="form-check form-check-inline">
-            <input class="form-check-input" type="checkbox" id="part_gear" value="Gear" name="acdc_parts">
-            <label class="form-check-label" for="part_gear">Gear</label>
-          </div>
-          <div class="form-check form-check-inline">
-            <input class="form-check-input" type="checkbox" id="part_controller" value="Controller" name="acdc_parts" onchange="toggleControllerImage()">
-            <label class="form-check-label" for="part_controller">Controller</label>
-          </div>
+          <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="part_motor" value="Motor" name="acdc_parts"><label class="form-check-label" for="part_motor">Motor</label></div>
+          <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="part_gear" value="Gear" name="acdc_parts"><label class="form-check-label" for="part_gear">Gear</label></div>
+          <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="part_controller" value="Controller" name="acdc_parts" onchange="toggleControllerImage()"><label class="form-check-label" for="part_controller">Controller</label></div>
         </div>
 
-        <div id="controller_image" style="display:none;">
-          <label>แนบรูป Controller</label>
-          <input type="file" name="controller_img" accept="image/*" class="form-control">
-        </div>
+        <div id="controller_image" style="display:none;"><label>แนบรูป Controller</label><input type="file" name="controller_img" accept="image/*" class="form-control"></div>
 
         <div id="servo_section" style="display:none;">
           <div class="row">
-            <div class="col-md-6">
-              <label>Model Servo Motor</label>
-              <input type="text" name="servo_motor_model" class="form-control">
-            </div>
-            <div class="col-md-6">
-              <label>แนบรูป Servo Motor</label>
-              <input type="file" name="servo_motor_img" accept="image/*" class="form-control">
-            </div>
+            <div class="col-md-6"><label>Model Servo Motor</label><input type="text" name="servo_motor_model" class="form-control"></div>
+            <div class="col-md-6"><label>แนบรูป Servo Motor</label><input type="file" name="servo_motor_img" accept="image/*" class="form-control"></div>
           </div>
           <div class="row">
-            <div class="col-md-6">
-              <label>Model Servo Drive</label>
-              <input type="text" name="servo_drive_model" class="form-control">
-            </div>
-            <div class="col-md-6">
-              <label>แนบรูป Servo Drive</label>
-              <input type="file" name="servo_drive_img" accept="image/*" class="form-control">
-            </div>
+            <div class="col-md-6"><label>Model Servo Drive</label><input type="text" name="servo_drive_model" class="form-control"></div>
+            <div class="col-md-6"><label>แนบรูป Servo Drive</label><input type="file" name="servo_drive_img" accept="image/*" class="form-control"></div>
           </div>
-          <div>
-            <label>แนบรูปสาย Cable</label>
-            <input type="file" name="cable_wire_img" accept="image/*" class="form-control">
-          </div>
+          <div><label>แนบรูปสาย Cable</label><input type="file" name="cable_wire_img" accept="image/*" class="form-control"></div>
         </div>
 
         <div id="general_section">
           <div class="row">
-            <div class="col-md-6">
-              <label>อัตราทดเกียร์</label>
-              <input type="text" name="gear_ratio" class="form-control">
-            </div>
-            <div class="col-md-6">
-              <label>เสียงเกียร์ (dB)</label>
-              <input type="text" name="gear_sound" class="form-control">
-            </div>
+            <div class="col-md-6"><label>อัตราทดเกียร์</label><input type="text" name="gear_ratio" class="form-control"></div>
+            <div class="col-md-6"><label>เสียงเกียร์ (dB)</label><input type="text" name="gear_sound" class="form-control"></div>
           </div>
-
           <div class="row">
-            <div class="col-md-6">
-              <label>ค่ากระแส (A)</label>
-              <input type="text" name="motor_current" class="form-control">
-            </div>
-            <div class="col-md-6">
-              <label class="red">การรับประกันสินค้า (เดือน)</label>
-              <input type="text" name="warranty" class="form-control">
-            </div>
+            <div class="col-md-6"><label>ค่ากระแส (A)</label><input type="text" name="motor_current" class="form-control"></div>
+            <div class="col-md-6"><label class="red">การรับประกันสินค้า (เดือน)</label><input type="text" name="warranty" class="form-control"></div>
           </div>
-
           <div id="oil_section">
             <div class="row">
               <div class="col-md-6">
@@ -234,44 +288,24 @@
                   <option value="Shell Omala VG460">Shell Omala VG460</option>
                   <option value="Shell Omala VG680">Shell Omala VG680</option>
                 </select>
-                <label>จำนวนน้ำมันเกียร์ (ลิตร)</label>
-                <input type="text" name="oil_liters" class="form-control">
+                <label>จำนวนน้ำมันเกียร์ (ลิตร)</label><input type="text" name="oil_liters" class="form-control">
               </div>
-              <div class="col-md-6">
-                <label>เติมน้ำมันเกียร์แล้ว</label>
-                <input type="checkbox" name="oil_filled" class="form-check-input ms-2">
-              </div>
+              <div class="col-md-6"><label>เติมน้ำมันเกียร์แล้ว</label><input type="checkbox" name="oil_filled" class="form-check-input ms-2"></div>
             </div>
           </div>
-
           <div id="rfks_section" style="display:none;">
             <div class="row">
-              <div class="col-md-6">
-                <label>Name plate : Motor</label>
-                <input type="file" name="rfks_nameplate_motor_img" accept="image/*" class="form-control">
-              </div>
-              <div class="col-md-6">
-                <label>Name plate : Gear</label>
-                <input type="file" name="rfks_nameplate_gear_img" accept="image/*" class="form-control">
-              </div>
+              <div class="col-md-6"><label>Name plate : Motor</label><input type="file" name="rfks_nameplate_motor_img" accept="image/*" class="form-control"></div>
+              <div class="col-md-6"><label>Name plate : Gear</label><input type="file" name="rfks_nameplate_gear_img" accept="image/*" class="form-control"></div>
             </div>
           </div>
-
           <div class="row mt-3">
-            <div class="col-md-4">
-              <label>ภาพค่ากระแส</label>
-              <input type="file" name="motor_current_img" accept="image/*" class="form-control">
-            </div>
-            <div class="col-md-4">
-              <label>ภาพเสียงเกียร์</label>
-              <input type="file" name="gear_sound_img" accept="image/*" class="form-control">
-            </div>
-            <div class="col-md-4">
-              <label>ภาพประกอบหน้างาน</label>
-              <input type="file" name="assembly_img" accept="image/*" class="form-control">
-            </div>
+            <div class="col-md-4"><label>ภาพค่ากระแส</label><input type="file" name="motor_current_img" accept="image/*" class="form-control"></div>
+            <div class="col-md-4"><label>ภาพเสียงเกียร์</label><input type="file" name="gear_sound_img" accept="image/*" class="form-control"></div>
+            <div class="col-md-4"><label>ภาพประกอบหน้างาน</label><input type="file" name="assembly_img" accept="image/*" class="form-control"></div>
           </div>
         </div>
+        {% endif %}
 
         <div class="text-center submit-btn">
           <button type="submit" class="btn btn-primary btn-lg">✅ ส่งข้อมูล QC</button>
@@ -280,109 +314,96 @@
     </div>
   </div>
 
-  <div id="overlay">
-    <div class="message">⏳ รอสักครู่...กำลังสร้างไฟล์PDF</div>
-  </div>
+  <div id="overlay"><div class="message">⏳ รอสักครู่...กำลังสร้างไฟล์PDF</div></div>
 
   <script>
     const PREFILL_JOB = {{ prefill_job_json|safe }};
 
-    function handleSubmit() {
-      document.getElementById("overlay").style.display = "flex";
-      const audio = new Audio("/static/waiting.mp3");
-      audio.play();
+    function handleSubmit(){
+      document.getElementById('overlay').style.display = 'flex';
+      const audio = new Audio('/static/waiting.mp3');
+      audio.play().catch(()=>{});
       return true;
     }
 
-    function updateFormFields() {
-      const type = document.getElementById("product_type").value;
-      document.getElementById("acdc_parts").style.display = (type === "AC/DC Gear Motor" || type === "BLDC Gear Motor") ? "block" : "none";
-      document.getElementById("servo_section").style.display = (type === "Servo Motor and Servo Drive") ? "block" : "none";
-      document.getElementById("general_section").style.display = (type === "Servo Motor and Servo Drive") ? "none" : "block";
-      document.getElementById("rfks_section").style.display = (type === "RFKS Series") ? "block" : "none";
-      document.getElementById("controller_image").style.display = "none";
-      document.getElementById("oil_section").style.display =
-        (type === "RFKS Series" || type === "H/B Gear Box" || type === "SMR Gearbox") ? "block" : "none";
-      if (!(type === "RFKS Series" || type === "H/B Gear Box" || type === "SMR Gearbox")) {
-        document.getElementById("oil_type").value = "";
-      }
-      const warning = document.getElementById("warning_section");
-      if (type === "Servo Motor and Servo Drive") {
-        warning.style.display = "block";
-        warning.innerHTML = "**ไม่ประกอบสินค้า <br> **ไม่เติมน้ำมันเกียร์ <br> **การรับประกันสินค้า 18 เดือน";
-      } else {
-        warning.style.display = "none";
+    function updateFormFields(){
+      const typeEl = document.getElementById('product_type');
+      const type = typeEl ? typeEl.value : '';
+      const acdc = document.getElementById('acdc_parts');
+      const servo = document.getElementById('servo_section');
+      const general = document.getElementById('general_section');
+      const rfks = document.getElementById('rfks_section');
+      const ctrl = document.getElementById('controller_image');
+      const oil = document.getElementById('oil_section');
+      if(acdc) acdc.style.display = (type === 'AC/DC Gear Motor' || type === 'BLDC Gear Motor') ? 'block' : 'none';
+      if(servo) servo.style.display = (type === 'Servo Motor and Servo Drive') ? 'block' : 'none';
+      if(general) general.style.display = (type === 'Servo Motor and Servo Drive') ? 'none' : 'block';
+      if(rfks) rfks.style.display = (type === 'RFKS Series') ? 'block' : 'none';
+      if(ctrl) ctrl.style.display = 'none';
+      if(oil) oil.style.display = (type === 'RFKS Series' || type === 'H/B Gear Box' || type === 'SMR Gearbox') ? 'block' : 'none';
+      const warning = document.getElementById('warning_section');
+      if(warning){
+        if(type === 'Servo Motor and Servo Drive'){
+          warning.style.display='block';
+          warning.innerHTML='**ไม่ประกอบสินค้า <br> **ไม่เติมน้ำมันเกียร์ <br> **การรับประกันสินค้า 18 เดือน';
+        } else { warning.style.display='none'; }
       }
     }
 
-    function toggleControllerImage() {
-      const controller = document.getElementById("part_controller");
-      document.getElementById("controller_image").style.display = controller.checked ? "block" : "none";
+    function toggleControllerImage(){
+      const controller = document.getElementById('part_controller');
+      const target = document.getElementById('controller_image');
+      if(target) target.style.display = controller && controller.checked ? 'block' : 'none';
     }
 
-    function setFormValueByName(name, value) {
+    function setFormValueByName(name,value){
       const el = document.querySelector(`[name="${name}"]`);
-      if (el) el.value = value || "";
+      if(el) el.value = value || '';
     }
 
-    function getAllMotorModelsText() {
-      if (!PREFILL_JOB || !Array.isArray(PREFILL_JOB.items)) return "";
-      return PREFILL_JOB.items
-        .filter(item => (item.model || "").trim() !== "")
-        .map((item, idx) => {
-          const no = item.no || (idx + 1);
-          const model = item.model || "";
-          const assembly = item.assembly ? ` (${item.assembly})` : "";
-          return `Item ${no}: ${model}${assembly}`;
-        })
-        .join("\n");
+    function combinedText(items, mapper){
+      return (items || []).filter(Boolean).map((item, idx)=>mapper(item, idx)).filter(Boolean).join('\n');
     }
 
-    function applyAllMotorModels() {
-      const modelsText = getAllMotorModelsText();
-      if (modelsText) setFormValueByName("motor_nameplate", modelsText);
+    function initPrefill(){
+      if(!PREFILL_JOB) return;
+      const items = Array.isArray(PREFILL_JOB.items) ? PREFILL_JOB.items : [];
+      setFormValueByName('or_no', PREFILL_JOB.qr_no || '');
+      setFormValueByName('company_name', PREFILL_JOB.company_name || '');
 
-      const hint = document.getElementById("motor_model_count_hint");
-      if (hint && PREFILL_JOB && Array.isArray(PREFILL_JOB.items)) {
-        hint.style.display = "block";
-        hint.textContent = `ระบบดึง Model จากเอกสาร QC-Motor ทั้งหมด ${PREFILL_JOB.items.length} รายการ`;
-      }
+      const productTypes = [...new Set(items.map(i => i.product_type || PREFILL_JOB.product_type || '').filter(Boolean))];
+      const productTypeText = productTypes.length === 1 ? productTypes[0] : 'หลายประเภทสินค้า';
+      const ptypeEl = document.getElementById('product_type');
+      if(ptypeEl) ptypeEl.value = productTypeText;
+
+      const modelText = combinedText(items, (item, idx)=>{
+        const no = item.no || idx + 1;
+        const ptype = item.product_type || PREFILL_JOB.product_type || '';
+        const assembly = item.assembly ? ` / ${item.assembly}` : '';
+        return `Item ${no}: ${item.model || ''} (${ptype}${assembly})`;
+      });
+      const modelEl = document.getElementById('motor_nameplate');
+      if(modelEl) modelEl.value = modelText;
+
+      const assemblyEl = document.getElementById('assembly_status');
+      if(assemblyEl) assemblyEl.value = combinedText(items, (item, idx)=>`Item ${item.no || idx + 1}: ${item.assembly || ''}`);
+
+      document.querySelectorAll('[data-item-card]').forEach(card => {
+        const ptype = card.getAttribute('data-product-type') || '';
+        const isServo = ptype.includes('Servo');
+        const isAcdc = ptype === 'AC/DC Gear Motor' || ptype === 'BLDC Gear Motor';
+        const isOil = ptype === 'RFKS Series' || ptype === 'H/B Gear Box' || ptype === 'SMR Gearbox';
+        const isRfks = ptype === 'RFKS Series';
+        card.querySelectorAll('.servo-fields').forEach(el => el.style.display = isServo ? '' : 'none');
+        card.querySelectorAll('.acdc-fields').forEach(el => el.style.display = isAcdc ? '' : 'none');
+        card.querySelectorAll('.oil-fields').forEach(el => el.style.display = isOil ? '' : 'none');
+        card.querySelectorAll('.rfks-fields').forEach(el => el.style.display = isRfks ? '' : 'none');
+      });
     }
 
-    function applyMotorQcItem() {
-      if (!PREFILL_JOB || !Array.isArray(PREFILL_JOB.items) || PREFILL_JOB.items.length === 0) return;
-      const select = document.getElementById("motor_qc_item_select");
-      const idx = select ? Number(select.value || 0) : 0;
-      const item = PREFILL_JOB.items[idx] || PREFILL_JOB.items[0];
-
-      // ช่อง Model ต้องแสดงครบทุก Item จากเอกสาร ไม่ใช่แค่รายการที่เลือก
-      applyAllMotorModels();
-
-      const itemNo = document.getElementById("motor_qc_item_no");
-      const assemblyStatus = document.getElementById("assembly_status");
-      if (itemNo) itemNo.value = item.no || (idx + 1);
-      if (assemblyStatus) assemblyStatus.value = item.assembly || "";
-
-      // ถ้าเป็น AC/DC หรือ BLDC และเอกสารระบุว่าประกอบ ให้ติ๊ก Motor + Gear ให้เบื้องต้น
-      const productType = document.getElementById("product_type")?.value || "";
-      if ((productType === "AC/DC Gear Motor" || productType === "BLDC Gear Motor") && item.assembly === "ประกอบ") {
-        const motor = document.getElementById("part_motor");
-        const gear = document.getElementById("part_gear");
-        if (motor) motor.checked = true;
-        if (gear) gear.checked = true;
-      }
-    }
-
-    window.addEventListener("DOMContentLoaded", () => {
-      if (PREFILL_JOB) {
-        setFormValueByName("or_no", PREFILL_JOB.qr_no || "");
-        setFormValueByName("company_name", PREFILL_JOB.company_name || "");
-        setFormValueByName("product_type", PREFILL_JOB.product_type || "");
-        updateFormFields();
-        applyMotorQcItem();
-      } else {
-        updateFormFields();
-      }
+    window.addEventListener('DOMContentLoaded',()=>{
+      if(PREFILL_JOB) initPrefill();
+      else updateFormFields();
     });
   </script>
 </body>

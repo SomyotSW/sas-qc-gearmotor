@@ -8,6 +8,7 @@ from reportlab.lib.colors import Color, HexColor, white, black
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
 import os
+import re
 import requests
 from PIL import Image, ExifTags
 from datetime import datetime, date, timedelta
@@ -28,8 +29,39 @@ BLACK       = HexColor("#1E293B")
 # FONT REGISTRATION
 # ──────────────────────────────────────────────
 BASE_DIR   = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-font_path  = os.path.join(BASE_DIR, "static", "fonts", "THSarabunNew.ttf")
-pdfmetrics.registerFont(TTFont("THSarabunNew", font_path))
+
+# ฟอนต์หลักยังใช้ชื่อ THSarabunNew เหมือนเดิม แต่เพิ่ม fallback กัน local/render import พัง
+_font_candidates = [
+    os.path.join(BASE_DIR, "static", "fonts", "THSarabunNew.ttf"),
+    os.path.join(BASE_DIR, "static", "THSarabunNew.ttf"),
+    os.path.join(BASE_DIR, "THSarabunNew.ttf"),
+    "/usr/share/fonts/truetype/thai/THSarabunNew.ttf",
+    "/usr/share/fonts/opentype/tlwg/Garuda.otf",
+    "/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+]
+_font_registered = False
+for font_path in _font_candidates:
+    if os.path.exists(font_path):
+        try:
+            pdfmetrics.registerFont(TTFont("THSarabunNew", font_path))
+            _font_registered = True
+            break
+        except Exception:
+            pass
+if not _font_registered:
+    pdfmetrics.registerFont(TTFont("THSarabunNew", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
+
+
+
+def _font_for_text(text):
+    """ใช้ Helvetica กับข้อความ Latin/ตัวเลขล้วน กันฟอนต์ไทยบางชุดไม่แสดง ASCII"""
+    t = str(text or '')
+    has_thai = re.search(r'[ก-๙]', t) is not None
+    has_latin = re.search(r'[A-Za-z0-9]', t) is not None
+    if has_latin and not has_thai:
+        return 'Helvetica'
+    return 'THSarabunNew'
 
 sas_logo_path  = os.path.join(BASE_DIR, "static", "logo_sas.png")
 qc_passed_path = os.path.join(BASE_DIR, "static", "qc_passed.png")
@@ -148,9 +180,9 @@ def draw_header_bar(c, width, height):
 
     # ชื่อบริษัท (ขาว)
     c.setFillColor(WHITE)
-    c.setFont("THSarabunNew", 20)
+    c.setFont("Helvetica-Bold", 15)
     c.drawString(1.8 * cm, height - 1.35 * cm, "SYNERGY ASIA SOLUTION CO., LTD.")
-    c.setFont("THSarabunNew", 13)
+    c.setFont("Helvetica", 9)
     c.drawString(1.8 * cm, height - 2.0 * cm, "www.synergy-as.com  |  www.motorsas.com")
 
     # โลโก้ขวา
@@ -194,13 +226,15 @@ def draw_field_row(c, y, width, margin, label, value, shade=False, warn=False):
         c.setFillColor(ACCENT)
         c.rect(margin, y - row_h + 4, width - 2 * margin, row_h, fill=1, stroke=0)
 
+    label_text = str(label or '')
     c.setFillColor(HexColor("#475569"))
-    c.setFont("THSarabunNew", 14)
-    c.drawString(margin + 0.3 * cm, y - row_h + 14, label)
+    c.setFont(_font_for_text(label_text), 14)
+    c.drawString(margin + 0.3 * cm, y - row_h + 14, label_text)
 
+    value_text = str(value) if value else "-"
     c.setFillColor(RED_WARN if warn else BLACK)
-    c.setFont("THSarabunNew", 15)
-    c.drawString(margin + 6.5 * cm, y - row_h + 14, str(value) if value else "-")
+    c.setFont(_font_for_text(value_text), 15)
+    c.drawString(margin + 6.5 * cm, y - row_h + 14, value_text)
 
     # เส้นแบ่งบาง
     c.setStrokeColor(GRAY_LINE)
@@ -223,7 +257,7 @@ def draw_footer(c, width, page_num=None):
     c.rect(0, 0, width, footer_h, fill=1, stroke=0)
 
     c.setFillColor(WHITE)
-    c.setFont("THSarabunNew", 13)
+    c.setFont("Helvetica", 9)
     c.drawString(1.5 * cm, 0.45 * cm, "SAS Service: 099-8527166")
     c.drawCentredString(width / 2, 0.45 * cm, "SAS QC Gear Motor Report")
     if page_num:
@@ -345,117 +379,327 @@ def _infer_image_label(url, fallback="ภาพประกอบ"):
     return fallback
 
 
+
+# ──────────────────────────────────────────────
+# MULTI ITEM PDF HELPERS
+# ──────────────────────────────────────────────
+def _safe_str(v, default='-'):
+    if v is None:
+        return default
+    t = str(v).strip()
+    return t if t else default
+
+
+def _item_get(item, key, default=''):
+    return _safe_str((item or {}).get(key), default)
+
+
+def _draw_cell_text(c, text, x, y_top, w, h, font_size=9, leading=9.5, max_lines=2, color=BLACK, center=False):
+    text = '' if text is None else str(text)
+    text = text.replace('\r', ' ').replace('\n', ' ')
+    # canvas ไม่มี word wrap ภาษาไทยดีพอ จึง wrap แบบประมาณจำนวนตัวอักษรต่อความกว้าง
+    approx_chars = max(6, int(w / (font_size * 0.42)))
+    words = text.split(' ')
+    lines = []
+    cur = ''
+    for word in words:
+        if not word:
+            continue
+        cand = (cur + ' ' + word).strip()
+        if len(cand) <= approx_chars:
+            cur = cand
+        else:
+            if cur:
+                lines.append(cur)
+            while len(word) > approx_chars:
+                lines.append(word[:approx_chars])
+                word = word[approx_chars:]
+            cur = word
+    if cur:
+        lines.append(cur)
+    if not lines:
+        lines = ['']
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        if lines[-1]:
+            lines[-1] = lines[-1][:max(0, approx_chars-2)] + '..'
+    c.setFillColor(color)
+    c.setFont(_font_for_text(text), font_size)
+    total_h = len(lines) * leading
+    yy = y_top - (h - total_h) / 2 - leading + 2
+    for line in lines:
+        if center:
+            c.drawCentredString(x + w / 2, yy, line)
+        else:
+            c.drawString(x + 3, yy, line)
+        yy -= leading
+
+
+def _draw_table_header(c, y, margin, cols, headers):
+    row_h = 0.72 * cm
+    x = margin
+    c.setFillColor(NAVY_LIGHT)
+    c.roundRect(margin, y - row_h, sum(cols), row_h, 2, fill=1, stroke=0)
+    for i, (cw, htxt) in enumerate(zip(cols, headers)):
+        _draw_cell_text(c, htxt, x, y, cw, row_h, font_size=10, leading=10, max_lines=1, color=WHITE, center=True)
+        x += cw
+    return y - row_h
+
+
+def _draw_qc_items_table(c, y, width, height, margin, qc_items, start_page_num):
+    """วาดตารางสรุป QC หลายรายการ รองรับสูงสุด 30 รายการและขึ้นหน้าใหม่อัตโนมัติ"""
+    page_num = start_page_num
+    footer_space = 2.2 * cm
+    cols = [1.0*cm, 3.2*cm, 4.3*cm, 1.5*cm, 1.35*cm, 1.35*cm, 1.35*cm, 2.05*cm, 1.3*cm]
+    headers = ['Item', 'ประเภท', 'Model', 'สถานะ', 'Ratio', 'Amp', 'dB', 'Oil', 'Warr.']
+    y = _draw_table_header(c, y, margin, cols, headers)
+    row_h = 0.88 * cm
+
+    for item in qc_items[:30]:
+        if y - row_h < footer_space:
+            draw_footer(c, width, page_num=page_num)
+            c.showPage()
+            page_num += 1
+            draw_header_bar(c, width, height)
+            content_top = height - 2.8 * cm - 0.5 * cm
+            c.setFillColor(NAVY)
+            c.setFont('THSarabunNew', 20)
+            c.drawCentredString(width / 2, content_top, 'รายงานการตรวจเช็คสินค้า QC Report (ต่อ)')
+            c.setStrokeColor(GOLD)
+            c.setLineWidth(1.5)
+            c.line(margin, content_top - 6, width - margin, content_top - 6)
+            c.setLineWidth(0.5)
+            y = content_top - 26
+            y = draw_section_bar(c, y, width, 'ผลการตรวจสอบแยกตามรายการสินค้า (ต่อ)', margin)
+            y -= 4
+            y = _draw_table_header(c, y, margin, cols, headers)
+
+        x = margin
+        c.setFillColor(ACCENT if int(item.get('no') or 0) % 2 == 0 else WHITE)
+        c.rect(margin, y - row_h, sum(cols), row_h, fill=1, stroke=0)
+        c.setStrokeColor(GRAY_LINE)
+        c.setLineWidth(0.3)
+        c.rect(margin, y - row_h, sum(cols), row_h, fill=0, stroke=1)
+        values = [
+            _item_get(item, 'no'),
+            _item_get(item, 'product_type'),
+            _item_get(item, 'model'),
+            _item_get(item, 'assembly'),
+            _item_get(item, 'gear_ratio', '-'),
+            _item_get(item, 'motor_current', '-'),
+            _item_get(item, 'gear_sound', '-'),
+            (_item_get(item, 'oil_type', '-') if item.get('oil_type') else '-') + ((' / ' + _item_get(item, 'oil_liters', '')) if item.get('oil_liters') else ''),
+            _item_get(item, 'warranty', '-'),
+        ]
+        for i, (cw, val) in enumerate(zip(cols, values)):
+            center = i in (0, 3, 4, 5, 6, 8)
+            _draw_cell_text(c, val, x, y, cw, row_h, font_size=8.5, leading=8.5, max_lines=2, center=center)
+            if i > 0:
+                c.line(x, y, x, y - row_h)
+            x += cw
+        y -= row_h
+
+    c.setLineWidth(0.5)
+    return y, page_num
+
+
+def _collect_item_image_entries(data):
+    """คืน [(url, label)] จาก qc_items และรูป legacy"""
+    entries = []
+    qc_items = data.get('qc_items') or []
+    if isinstance(qc_items, list) and qc_items:
+        item_order = [
+            ('rfks_nameplate_motor_img', 'Name plate : Motor'),
+            ('rfks_nameplate_gear_img', 'Name plate : Gear'),
+            ('motor_current_img', 'ภาพค่ากระแส'),
+            ('gear_sound_img', 'ภาพเสียงเกียร์ / Run Test'),
+            ('assembly_img', 'ภาพประกอบหน้างาน'),
+            ('controller_img', 'ภาพ Controller'),
+            ('servo_motor_img', 'ภาพ Servo Motor'),
+            ('servo_drive_img', 'ภาพ Servo Drive'),
+            ('cable_wire_img', 'ภาพ Cable Wire'),
+        ]
+        for item in qc_items:
+            images = item.get('images') or {}
+            no = item.get('no') or ''
+            model = str(item.get('model') or '').strip()
+            model_part = f' - {model[:42]}' if model else ''
+            for key, label in item_order:
+                url = images.get(key)
+                if url:
+                    entries.append((url, f'Item {no}{model_part} | {label}'))
+        return entries
+
+    images_dict = data.get('images', {}) or {}
+    ordered_keys = [
+        ('rfks_nameplate_motor_img', 'Name plate : Motor'),
+        ('rfks_nameplate_gear_img', 'Name plate : Gear'),
+        ('motor_current_img', 'ภาพค่ากระแส'),
+        ('gear_sound_img', 'ภาพเสียงเกียร์'),
+        ('assembly_img', 'ภาพประกอบหน้างาน'),
+        ('controller_img', 'ภาพ Controller'),
+        ('servo_motor_img', 'ภาพ Servo Motor'),
+        ('servo_drive_img', 'ภาพ Servo Drive'),
+        ('cable_wire_img', 'ภาพ Cable Wire'),
+    ]
+    for k, label in ordered_keys:
+        url = images_dict.get(k)
+        if url:
+            entries.append((url, label))
+    return entries
+
+
 # ──────────────────────────────────────────────
 # MAIN PDF BUILDER
 # ──────────────────────────────────────────────
 def create_qc_pdf(data, image_urls=None, image_labels=None):
-    image_urls   = image_urls   or []
-    image_labels = image_labels or []
+    data = data or {}
+    qc_items = data.get('qc_items') or []
+
+    # ถ้า caller ไม่ส่ง image_urls มา ให้ดึงจาก qc_items/images ให้อัตโนมัติ
+    if image_urls is None:
+        entries = _collect_item_image_entries(data)
+        image_urls = [u for u, _ in entries]
+        image_labels = [l for _, l in entries]
+    else:
+        image_urls = image_urls or []
+        image_labels = image_labels or []
 
     buffer = io.BytesIO()
-    c      = canvas.Canvas(buffer, pagesize=A4)
+    c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
     margin = 1.8 * cm
     HEADER_H = 2.8 * cm
     FOOTER_H = 1.4 * cm
     content_top = height - HEADER_H - 0.5 * cm
 
-    ptype    = data.get("product_type", "").lower()
-    is_servo = "servo" in ptype
-    is_acdc  = "ac/dc" in ptype or "bldc" in ptype
+    ptype = data.get('product_type', '').lower()
+    is_servo = 'servo' in ptype
+    is_acdc = 'ac/dc' in ptype or 'bldc' in ptype
+    page_num = 1
 
     # ════════════════════════════════════════
-    # PAGE 1 — QC Data
+    # PAGE 1+ — QC Data
     # ════════════════════════════════════════
     draw_header_bar(c, width, height)
-
-    # ── ชื่อเอกสาร
     c.setFillColor(NAVY)
-    c.setFont("THSarabunNew", 22)
-    c.drawCentredString(width / 2, content_top, "รายงานการตรวจเช็คสินค้า  QC Report")
-
-    # เส้นใต้ชื่อ
+    c.setFont('THSarabunNew', 22)
+    c.drawCentredString(width / 2, content_top, 'รายงานการตรวจเช็คสินค้า  QC Report')
     c.setStrokeColor(GOLD)
     c.setLineWidth(1.5)
     c.line(margin, content_top - 6, width - margin, content_top - 6)
     c.setLineWidth(0.5)
-
     y = content_top - 18
 
-    # ── SECTION: ข้อมูลเอกสาร ──────────────
-    y = draw_section_bar(c, y, width, "ข้อมูลเอกสาร", margin)
+    # SECTION: ข้อมูลเอกสาร
+    y = draw_section_bar(c, y, width, 'ข้อมูลเอกสาร', margin)
     y -= 4
-
-    raw_date = data.get("date", "-") or "-"
-    d        = _parse_th_date(raw_date)
+    raw_date = data.get('date', '-') or '-'
+    d = _parse_th_date(raw_date)
     date_str = _format_th_date(d) if d else str(raw_date)
 
-    rows_info = [
-        ("Serial Number",  data.get("serial", "-")),
-        ("วันที่ตรวจสอบ", date_str),
-        ("OR No.",         data.get("or_no", "-") or "-"),
-        ("ชื่อบริษัท",     data.get("company_name", "-") or "-"),
-        ("ประเภทสินค้า",   data.get("product_type", "-")),
-        ("Model",          data.get("motor_nameplate", "-")),
-    ]
+    if qc_items:
+        rows_info = [
+            ('Serial Number', data.get('serial', '-')),
+            ('วันที่ตรวจสอบ', date_str),
+            ('OR No.', data.get('or_no', '-') or data.get('motor_qc_qr_no', '-') or '-'),
+            ('ชื่อบริษัท', data.get('company_name', '-') or '-'),
+            ('จำนวนรายการ', str(len(qc_items))),
+            ('ประเภทสินค้า', data.get('product_type', 'หลายประเภทสินค้า')),
+        ]
+    else:
+        rows_info = [
+            ('Serial Number', data.get('serial', '-')),
+            ('วันที่ตรวจสอบ', date_str),
+            ('OR No.', data.get('or_no', '-') or '-'),
+            ('ชื่อบริษัท', data.get('company_name', '-') or '-'),
+            ('ประเภทสินค้า', data.get('product_type', '-')),
+            ('Model', data.get('motor_nameplate', '-')),
+        ]
     for i, (lbl, val) in enumerate(rows_info):
         y = draw_field_row(c, y, width, margin, lbl, val, shade=(i % 2 == 0))
+    y -= 10
+
+    if qc_items:
+        y = draw_section_bar(c, y, width, 'ผลการตรวจสอบแยกตามรายการสินค้า', margin)
+        y -= 4
+        y, page_num = _draw_qc_items_table(c, y, width, height, margin, qc_items, page_num)
+        y -= 10
+
+        if y < 6.0 * cm:
+            draw_footer(c, width, page_num=page_num)
+            c.showPage()
+            page_num += 1
+            draw_header_bar(c, width, height)
+            c.setFillColor(NAVY)
+            c.setFont('THSarabunNew', 20)
+            c.drawCentredString(width / 2, content_top, 'รายงานการตรวจเช็คสินค้า QC Report (ต่อ)')
+            c.setStrokeColor(GOLD)
+            c.setLineWidth(1.5)
+            c.line(margin, content_top - 6, width - margin, content_top - 6)
+            c.setLineWidth(0.5)
+            y = content_top - 26
+
+        y = draw_section_bar(c, y, width, 'หมายเหตุ', margin)
+        y -= 4
+        y = draw_field_row(c, y, width, margin, 'รูปหลักฐาน', 'แนบแยกตาม Item ในหน้าภาพประกอบการตรวจสอบ', shade=False)
+    else:
+        # SECTION: ผลการตรวจสอบ แบบเดิม
+        y = draw_section_bar(c, y, width, 'ผลการตรวจสอบ', margin)
+        y -= 4
+        if is_servo:
+            for warn_txt in ['** ไม่ประกอบสินค้า', '** ไม่เติมน้ำมันเกียร์']:
+                y = draw_field_row(c, y, width, margin, '', warn_txt, shade=False, warn=True)
+        check_rows = []
+        if data.get('motor_current'):
+            check_rows.append(('ค่ากระแสมอเตอร์', f"{data['motor_current']} A"))
+        if data.get('gear_ratio'):
+            check_rows.append(('อัตราทดเกียร์', data['gear_ratio']))
+        if data.get('gear_sound'):
+            check_rows.append(('เสียงเกียร์', f"{data['gear_sound']} dB"))
+        if not (is_servo or is_acdc):
+            check_rows.append(('ชนิดของน้ำมันเกียร์', data.get('oil_type') or '-'))
+            check_rows.append(('จำนวนน้ำมันเกียร์ (ลิตร)', data.get('oil_liters') or '-'))
+            check_rows.append(('สถานะการเติมน้ำมัน', data.get('oil_filled') or '-'))
+        elif is_acdc:
+            check_rows.append(('หมายเหตุ', '* ไม่ต้องเติมน้ำมันเกียร์'))
+        for i, (lbl, val) in enumerate(check_rows):
+            y = draw_field_row(c, y, width, margin, lbl, val, shade=(i % 2 == 0))
+        y -= 10
+
+        # SECTION: การรับประกัน แบบเดิม
+        y = draw_section_bar(c, y, width, 'การรับประกัน', margin)
+        y -= 4
+        warranty_val = f"{data.get('warranty', '-')} เดือน"
+        y = draw_field_row(c, y, width, margin, 'ระยะเวลารับประกัน', warranty_val, shade=False, warn=True)
+        end_date = _compute_warranty_end_date(data)
+        if end_date:
+            y = draw_field_row(c, y, width, margin, 'สิ้นสุดการรับประกัน', _format_th_date(end_date), shade=True, warn=True)
+        if is_servo:
+            y = draw_field_row(c, y, width, margin, 'หมายเหตุ', '** การรับประกันสินค้า 18 เดือน', shade=False, warn=True)
 
     y -= 10
 
-    # ── SECTION: ผลการตรวจสอบ ──────────────
-    y = draw_section_bar(c, y, width, "ผลการตรวจสอบ", margin)
+    # SECTION: ผู้ตรวจสอบ
+    if y < 5.5 * cm:
+        draw_footer(c, width, page_num=page_num)
+        c.showPage()
+        page_num += 1
+        draw_header_bar(c, width, height)
+        c.setFillColor(NAVY)
+        c.setFont('THSarabunNew', 20)
+        c.drawCentredString(width / 2, content_top, 'รายงานการตรวจเช็คสินค้า QC Report (ต่อ)')
+        c.setStrokeColor(GOLD)
+        c.setLineWidth(1.5)
+        c.line(margin, content_top - 6, width - margin, content_top - 6)
+        c.setLineWidth(0.5)
+        y = content_top - 26
+
+    y = draw_section_bar(c, y, width, 'ผู้ตรวจสอบ', margin)
     y -= 4
-
-    if is_servo:
-        for warn_txt in ["** ไม่ประกอบสินค้า", "** ไม่เติมน้ำมันเกียร์"]:
-            y = draw_field_row(c, y, width, margin, "", warn_txt, shade=False, warn=True)
-
-    check_rows = []
-    if data.get("motor_current"):
-        check_rows.append(("ค่ากระแสมอเตอร์", f"{data['motor_current']} A"))
-    if data.get("gear_ratio"):
-        check_rows.append(("อัตราทดเกียร์", data["gear_ratio"]))
-    if data.get("gear_sound"):
-        check_rows.append(("เสียงเกียร์", f"{data['gear_sound']} dB"))
-
-    if not (is_servo or is_acdc):
-        check_rows.append(("ชนิดของน้ำมันเกียร์", data.get("oil_type") or "-"))
-        check_rows.append(("จำนวนน้ำมันเกียร์ (ลิตร)", data.get("oil_liters") or "-"))
-        check_rows.append(("สถานะการเติมน้ำมัน", data.get("oil_filled") or "-"))
-    elif is_acdc:
-        check_rows.append(("หมายเหตุ", "* ไม่ต้องเติมน้ำมันเกียร์"))
-
-    for i, (lbl, val) in enumerate(check_rows):
-        y = draw_field_row(c, y, width, margin, lbl, val, shade=(i % 2 == 0))
-
-    y -= 10
-
-    # ── SECTION: การรับประกัน ───────────────
-    y = draw_section_bar(c, y, width, "การรับประกัน", margin)
-    y -= 4
-
-    warranty_val = f"{data.get('warranty', '-')} เดือน"
-    y = draw_field_row(c, y, width, margin, "ระยะเวลารับประกัน", warranty_val, shade=False, warn=True)
-
-    end_date = _compute_warranty_end_date(data)
-    if end_date:
-        y = draw_field_row(c, y, width, margin, "สิ้นสุดการรับประกัน",
-                           _format_th_date(end_date), shade=True, warn=True)
-
-    if is_servo:
-        y = draw_field_row(c, y, width, margin, "หมายเหตุ",
-                           "** การรับประกันสินค้า 18 เดือน", shade=False, warn=True)
-
-    y -= 10
-
-    # ── SECTION: ผู้ตรวจสอบ ────────────────
-    y = draw_section_bar(c, y, width, "ผู้ตรวจสอบ", margin)
-    y -= 4
-
-    inspector_value = data.get("inspector", "-") or "-"
-    inspector_name  = INSPECTOR_MAP.get(inspector_value, inspector_value)
-    y = draw_field_row(c, y, width, margin, "ผู้ตรวจสอบ", inspector_name, shade=False)
+    inspector_value = data.get('inspector', '-') or '-'
+    inspector_name = INSPECTOR_MAP.get(inspector_value, inspector_value)
+    y = draw_field_row(c, y, width, margin, 'ผู้ตรวจสอบ', inspector_name, shade=False)
 
     # กล่องลายเซ็น
     y -= 20
@@ -465,30 +709,26 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
     c.setLineWidth(0.5)
     c.rect(sig_x, y - sig_h, sig_w, sig_h, fill=0, stroke=1)
 
-    # วาดลายเซ็นจริง (ถ้ามี) — ลองหลาย path เพื่อรองรับทั้ง local และ Render
     sig_filename = SIGNATURE_MAP.get(inspector_value)
     sig_drawn = False
     if sig_filename:
-        # รายการ path ที่เป็นไปได้ทั้งหมด
         candidate_paths = [
-            os.path.join(BASE_DIR, "static", "Sign", sig_filename),
-            os.path.join(os.path.dirname(__file__), "..", "static", "Sign", sig_filename),
-            os.path.join("/opt/render/project/src", "static", "Sign", sig_filename),
-            os.path.join(os.getcwd(), "static", "Sign", sig_filename),
+            os.path.join(BASE_DIR, 'static', 'Sign', sig_filename),
+            os.path.join(os.path.dirname(__file__), '..', 'static', 'Sign', sig_filename),
+            os.path.join('/opt/render/project/src', 'static', 'Sign', sig_filename),
+            os.path.join(os.getcwd(), 'static', 'Sign', sig_filename),
         ]
         sig_path = None
-        for p in candidate_paths:
-            p = os.path.normpath(p)
-            print(f"[SIG] checking: {p} -> exists={os.path.exists(p)}", flush=True)
-            if os.path.exists(p):
-                sig_path = p
+        for pth in candidate_paths:
+            pth = os.path.normpath(pth)
+            if os.path.exists(pth):
+                sig_path = pth
                 break
-
         if sig_path:
             try:
-                sig_img = Image.open(sig_path).convert("RGBA")
+                sig_img = Image.open(sig_path).convert('RGBA')
                 sig_buf = io.BytesIO()
-                sig_img.save(sig_buf, format="PNG")
+                sig_img.save(sig_buf, format='PNG')
                 sig_buf.seek(0)
                 pad = 0.15 * cm
                 draw_w = sig_w - pad * 2
@@ -498,56 +738,49 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
                 rw, rh = iw * ratio, ih * ratio
                 rx = sig_x + (sig_w - rw) / 2
                 ry = y - sig_h + (sig_h - rh) / 2
-                c.drawImage(ImageReader(sig_buf), rx, ry, width=rw, height=rh, mask="auto")
+                c.drawImage(ImageReader(sig_buf), rx, ry, width=rw, height=rh, mask='auto')
                 sig_drawn = True
-                print(f"[SIG] ✅ drawn from {sig_path}", flush=True)
             except Exception as e:
-                print(f"[SIG] ❌ draw error: {e}", flush=True)
-        else:
-            print(f"[SIG] ❌ ไม่พบไฟล์ลายเซ็น {sig_filename} ในทุก path", flush=True)
-
+                print(f'[SIG] draw error: {e}', flush=True)
     if not sig_drawn:
-        c.setFillColor(HexColor("#94A3B8"))
-        c.setFont("THSarabunNew", 12)
-        c.drawCentredString(sig_x + sig_w / 2, y - sig_h + 8, "ลายเซ็นผู้ตรวจสอบ")
+        c.setFillColor(HexColor('#94A3B8'))
+        c.setFont('THSarabunNew', 12)
+        c.drawCentredString(sig_x + sig_w / 2, y - sig_h + 8, 'ลายเซ็นผู้ตรวจสอบ')
 
-    draw_footer(c, width, page_num=1)
+    draw_footer(c, width, page_num=page_num)
     c.showPage()
+    image_start_page = page_num + 1
 
     # ════════════════════════════════════════
-    # PAGE 2+ — Images
+    # PAGE Images
     # ════════════════════════════════════════
     if image_urls:
-        # โหลดรูปทั้งหมดแบบ parallel
         fetched = [None] * len(image_urls)
         with ThreadPoolExecutor(max_workers=5) as ex:
-            future_map = {ex.submit(_fetch_image_bytes, u): idx
-                          for idx, u in enumerate(image_urls)}
-        for fut in as_completed(future_map):
-            idx = future_map[fut]
-            try:
-                fetched[idx] = fut.result()
-            except Exception as e:
-                print("Fetch image failed:", image_urls[idx], e, flush=True)
+            future_map = {ex.submit(_fetch_image_bytes, u): idx for idx, u in enumerate(image_urls)}
+            for fut in as_completed(future_map):
+                idx = future_map[fut]
+                try:
+                    fetched[idx] = fut.result()
+                except Exception as e:
+                    print('Fetch image failed:', image_urls[idx], e, flush=True)
 
+        page_num = image_start_page
         draw_header_bar(c, width, height)
         c.setFillColor(NAVY)
-        c.setFont("THSarabunNew", 20)
-        c.drawCentredString(width / 2, content_top, "ภาพประกอบการตรวจสอบ")
+        c.setFont('THSarabunNew', 20)
+        c.drawCentredString(width / 2, content_top, 'ภาพประกอบการตรวจสอบ')
         c.setStrokeColor(GOLD)
         c.setLineWidth(1.5)
         c.line(margin, content_top - 6, width - margin, content_top - 6)
         c.setLineWidth(0.5)
 
-        y_top    = content_top - 22
+        y_top = content_top - 22
         center_x = width / 2
-        max_w    = min(15.5 * cm, width - 2 * margin)
-        page_num = 2
+        max_w = min(15.5 * cm, width - 2 * margin)
 
         for i, url in enumerate(image_urls):
-            label = (image_labels[i] if i < len(image_labels) and image_labels[i]
-                     else _infer_image_label(url, fallback=f"ภาพที่ {i+1}"))
-
+            label = (image_labels[i] if i < len(image_labels) and image_labels[i] else _infer_image_label(url, fallback=f'ภาพที่ {i+1}'))
             needed_h = max_w * 0.85 + 1.2 * cm
             if y_top - needed_h < FOOTER_H + 0.5 * cm:
                 draw_footer(c, width, page_num=page_num)
@@ -555,8 +788,8 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
                 page_num += 1
                 draw_header_bar(c, width, height)
                 c.setFillColor(NAVY)
-                c.setFont("THSarabunNew", 20)
-                c.drawCentredString(width / 2, content_top, "ภาพประกอบการตรวจสอบ (ต่อ)")
+                c.setFont('THSarabunNew', 20)
+                c.drawCentredString(width / 2, content_top, 'ภาพประกอบการตรวจสอบ (ต่อ)')
                 c.setStrokeColor(GOLD)
                 c.setLineWidth(1.5)
                 c.line(margin, content_top - 6, width - margin, content_top - 6)
@@ -567,14 +800,16 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
             if fetched[i]:
                 y_top = draw_image_bytes(c, fetched[i], center_x, y_top, max_w)
             else:
-                c.setFillColor(HexColor("#94A3B8"))
-                c.setFont("THSarabunNew", 14)
-                c.drawCentredString(center_x, y_top - 0.8 * cm, "ไม่พบรูปภาพ")
+                c.setFillColor(HexColor('#94A3B8'))
+                c.setFont('THSarabunNew', 14)
+                c.drawCentredString(center_x, y_top - 0.8 * cm, 'ไม่พบรูปภาพ')
                 y_top -= 1.5 * cm
-
             y_top -= 12
 
         draw_footer(c, width, page_num=page_num)
+    else:
+        # ไม่มีรูป ไม่ต้องทิ้งหน้าขาวที่ c.showPage() สร้างไว้ก็ได้ แต่ reportlab จะไม่บันทึกหน้าว่างถ้าไม่มี drawing หลัง showPage
+        pass
 
     c.save()
     buffer.seek(0)

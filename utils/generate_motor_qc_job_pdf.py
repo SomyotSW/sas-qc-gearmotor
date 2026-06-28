@@ -70,9 +70,25 @@ def _qr_image(qr_image_stream, width=27*mm, height=27*mm):
 
 
 def _logo_image(logo_path):
+    """วาง Logo SAS แบบรักษาสัดส่วน ไม่บีบแบน และให้สูงขึ้นกว่า V2"""
     if logo_path and os.path.exists(logo_path):
         try:
-            return Image(logo_path, width=30*mm, height=12*mm)
+            img = Image(logo_path)
+            iw = float(getattr(img, 'imageWidth', 1) or 1)
+            ih = float(getattr(img, 'imageHeight', 1) or 1)
+            target_w = 40 * mm
+            target_h = target_w * (ih / iw)
+            max_h = 22 * mm
+            if target_h > max_h:
+                target_h = max_h
+                target_w = target_h * (iw / ih)
+            min_h = 15 * mm
+            if target_h < min_h:
+                target_h = min_h
+                target_w = target_h * (iw / ih)
+            img.drawWidth = target_w
+            img.drawHeight = target_h
+            return img
         except Exception:
             return ''
     return ''
@@ -87,7 +103,7 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
     """
     job structure:
     {
-      qr_no, company_name, product_type, item_count, items:[{no, model, assembly}],
+      qr_no, company_name, product_type, item_count, items:[{no, product_type, model, assembly}],
       form_url, created_at
     }
     """
@@ -128,7 +144,7 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
     ]
     header_tbl = Table(
         [[_logo_image(logo_path), header_left, _qr_image(qr_image_stream)]],
-        colWidths=[34*mm, 110*mm, 31*mm],
+        colWidths=[43*mm, 101*mm, 31*mm],
     )
     header_tbl.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -140,9 +156,9 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
     story.append(Spacer(1, 3*mm))
 
     info = [
-        [_p('QR No.', cell_c), _p(job.get('qr_no', '-'), cell), _p('วันที่ออกเอกสาร', cell_c), _p(job.get('created_at', '-'), cell)],
-        [_p('บริษัท', cell_c), _p(job.get('company_name', '-'), cell), _p('ประเภทสินค้า', cell_c), _p(job.get('product_type', '-'), cell)],
-        [_p('จำนวนรายการ', cell_c), _p(str(job.get('item_count') or len(job.get('items', []))), cell), _p('ผู้จัดทำ', cell_c), _p(job.get('created_by', 'Admin Motor SAS04'), cell)],
+        [_p('OR No.', cell_c), _p(job.get('qr_no', '-'), cell), _p('วันที่ออกเอกสาร', cell_c), _p(job.get('created_at', '-'), cell)],
+        [_p('บริษัท', cell_c), _p(job.get('company_name', '-'), cell), _p('จำนวนรายการ', cell_c), _p(str(job.get('item_count') or len(job.get('items', []))), cell)],
+        [_p('ประเภทสินค้า', cell_c), _p(job.get('product_type', 'หลายประเภทสินค้า'), cell), _p('ผู้จัดทำ', cell_c), _p(job.get('created_by', 'Admin Motor'), cell)],
     ]
     info_tbl = Table(info, colWidths=[28*mm, 72*mm, 28*mm, 47*mm])
     info_tbl.setStyle(TableStyle([
@@ -172,16 +188,17 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
     story.append(Spacer(1, 3*mm))
 
     story.append(_section_bar('1) รายการสินค้า / Product Items', section))
-    item_rows = [[_p('Item', head), _p('Model สินค้า', head), _p('สถานะงาน', head), _p('QC Result', head), _p('หมายเหตุ', head)]]
+    item_rows = [[_p('Item', head), _p('ประเภทสินค้า', head), _p('Model สินค้า', head), _p('สถานะงาน', head), _p('QC Result', head), _p('หมายเหตุ', head)]]
     for item in (job.get('items') or [])[:30]:
         item_rows.append([
             _p(str(item.get('no', '')), cell_c),
+            _p(item.get('product_type') or job.get('product_type', ''), cell),
             _p(item.get('model', ''), cell),
             _p(item.get('assembly', ''), cell_c),
             _p('Pass / NG', cell_c),
             _p('', cell),
         ])
-    item_tbl = Table(item_rows, colWidths=[14*mm, 82*mm, 25*mm, 28*mm, 26*mm], repeatRows=1)
+    item_tbl = Table(item_rows, colWidths=[12*mm, 37*mm, 69*mm, 21*mm, 20*mm, 16*mm], repeatRows=1)
     item_tbl.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0b63ce')),
         ('GRID', (0, 0), (-1, -1), 0.35, colors.HexColor('#cbd5e1')),
@@ -232,7 +249,7 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
     ]))
     story.append(sign_tbl)
     story.append(Spacer(1, 3*mm))
-    story.append(_p('หมายเหตุ: QR Code บนหัวเอกสารจะเปิดหน้า QC Form และเติมข้อมูล QR No., บริษัท, ประเภทสินค้า และ Model ให้อัตโนมัติ จากนั้น QC เลือก Item ที่ต้องตรวจแล้วกรอกผลทดสอบจริง', note))
+    story.append(_p('หมายเหตุ: QR Code บนหัวเอกสารจะเปิดหน้า QC Form และเติมข้อมูล QR No., บริษัท และรายการสินค้าให้อัตโนมัติ โดย QC สามารถกรอกผลตรวจแยกตาม Item เช่น ประเภทสินค้า, Model, อัตราทด, กระแส, เสียง, น้ำมัน และรูปภาพของแต่ละรายการ', note))
 
     doc.build(story)
     stream.seek(0)

@@ -563,6 +563,71 @@ def _next_motor_qc_no():
         return prefix + "001"
 
 
+def _product_type_summary(items):
+    types = []
+    for item in items or []:
+        t = str((item or {}).get('product_type') or '').strip()
+        if t and t not in types:
+            types.append(t)
+    if not types:
+        return ''
+    if len(types) == 1:
+        return types[0]
+    return 'หลายประเภทสินค้า'
+
+
+def _collect_qc_report_images(report_data):
+    """รวมรูปสำหรับสร้าง PDF รองรับทั้ง legacy images และ qc_items.images"""
+    report_data = report_data or {}
+    image_urls = []
+    image_labels = []
+
+    item_order = [
+        ('rfks_nameplate_motor_img', 'Name plate : Motor'),
+        ('rfks_nameplate_gear_img', 'Name plate : Gear'),
+        ('motor_current_img', 'ภาพค่ากระแส'),
+        ('gear_sound_img', 'ภาพเสียงเกียร์ / Run Test'),
+        ('assembly_img', 'ภาพประกอบหน้างาน'),
+        ('controller_img', 'ภาพ Controller'),
+        ('servo_motor_img', 'ภาพ Servo Motor'),
+        ('servo_drive_img', 'ภาพ Servo Drive'),
+        ('cable_wire_img', 'ภาพ Cable Wire'),
+    ]
+
+    qc_items = report_data.get('qc_items') or []
+    if isinstance(qc_items, list) and qc_items:
+        for item in qc_items:
+            images = item.get('images') or {}
+            no = item.get('no', '')
+            model = str(item.get('model') or '').strip()
+            model_part = f" - {model[:42]}" if model else ''
+            for key, label in item_order:
+                url = images.get(key)
+                if url:
+                    image_urls.append(url)
+                    image_labels.append(f"Item {no}{model_part} | {label}")
+        return image_urls, image_labels
+
+    images_dict = report_data.get('images', {}) or {}
+    legacy_order = [
+        ('rfks_nameplate_motor_img', 'Name plate : Motor'),
+        ('rfks_nameplate_gear_img', 'Name plate : Gear'),
+        ('motor_current_img', 'ภาพค่ากระแส'),
+        ('gear_sound_img', 'ภาพเสียงเกียร์'),
+        ('assembly_img', 'ภาพประกอบหน้างาน'),
+        ('controller_img', 'ภาพ Controller'),
+        ('servo_motor_img', 'ภาพ Servo Motor'),
+        ('servo_drive_img', 'ภาพ Servo Drive'),
+        ('cable_wire_img', 'ภาพ Cable Wire'),
+    ]
+    for key, label in legacy_order:
+        url = images_dict.get(key)
+        if url:
+            image_urls.append(url)
+            image_labels.append(label)
+    return image_urls, image_labels
+
+
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -674,41 +739,47 @@ def admin_motor_qc_generate():
     try:
         qr_no = (request.form.get('qr_no') or _next_motor_qc_no()).strip().upper()
         company_name = (request.form.get('company_name') or '').strip()
-        product_type = (request.form.get('product_type') or '').strip()
 
+        product_types = request.form.getlist('item_product_type[]')
         models = request.form.getlist('item_model[]')
         assemblies = request.form.getlist('item_assembly[]')
+
         items = []
-        for i, model in enumerate(models[:30]):
-            model = str(model or '').strip()
-            if not model:
+        row_count = min(max(len(models), len(product_types), len(assemblies)), 30)
+        for i in range(row_count):
+            model = str(models[i] if i < len(models) else '').strip()
+            product_type = str(product_types[i] if i < len(product_types) else '').strip()
+            if not model and not product_type:
                 continue
             assembly = assemblies[i] if i < len(assemblies) else 'ไม่ประกอบ'
             assembly = 'ประกอบ' if str(assembly).strip() == 'ประกอบ' else 'ไม่ประกอบ'
             items.append({
                 'no': len(items) + 1,
+                'product_type': product_type,
                 'model': model,
                 'assembly': assembly,
             })
 
-        if not qr_no or not company_name or not product_type or not items:
+        if (not qr_no) or (not company_name) or (not items) or any(not x.get('product_type') or not x.get('model') for x in items):
             return render_template(
                 'admin_motor_qc.html',
                 product_types=PRODUCT_TYPES,
                 default_qr_no=qr_no or _next_motor_qc_no(),
-                error='กรุณากรอก QR No., บริษัท, ประเภทสินค้า และรายการสินค้าอย่างน้อย 1 รายการ',
+                error='กรุณากรอก QR No., บริษัท, ประเภทสินค้า และ Model ให้ครบอย่างน้อย 1 รายการ',
                 old=request.form
             ), 400
 
         job_key = _safe_firebase_key(qr_no)
         now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
         form_url = url_for('form', motor_qc_job=job_key, _external=True)
+        product_type_summary = _product_type_summary(items)
 
         job = {
             'job_key': job_key,
             'qr_no': qr_no,
             'company_name': company_name,
-            'product_type': product_type,
+            'product_type': product_type_summary,
+            'product_types': sorted(list({x.get('product_type') for x in items if x.get('product_type')})),
             'items': items,
             'form_url': form_url,
             'item_count': len(items),
@@ -720,7 +791,7 @@ def admin_motor_qc_generate():
         # ✅ บันทึกข้อมูลไว้ก่อน เพื่อให้ QR Scan แล้วดึงข้อมูลกลับเข้า form ได้ทันที
         motor_qc_jobs_ref.child(job_key).set(job)
 
-        # ✅ QR ในหัวเอกสารเปิด form พร้อม prefill ข้อมูล
+        # ✅ QR ในหัวเอกสารเปิด form พร้อม prefill ข้อมูลหลาย Item
         qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=2)
         qr.add_data(form_url)
         qr.make(fit=True)
@@ -733,10 +804,11 @@ def admin_motor_qc_generate():
         if not os.path.exists(logo_path):
             logo_path = None
 
+        barcode_items = '|'.join([f"{it['no']}:{it.get('product_type','')}:{it.get('model','')}:{it.get('assembly','')}" for it in items])
         pdf_stream = create_motor_qc_job_pdf(
             job,
             qr_image_stream=qr_stream,
-            barcode_value=f"{qr_no}|{job_key}",
+            barcode_value=f"{qr_no}|{job_key}|{barcode_items}"[:180],
             logo_path=logo_path,
         )
         pdf_stream.seek(0)
@@ -821,176 +893,210 @@ def submit():
     try:
         if not (request.content_type or '').startswith('multipart/form-data'):
             return "Invalid Content-Type", 400
-        
-        or_no = request.form.get('or_no')
-        company_name = request.form.get('company_name')
-        product_type = request.form.get('product_type')
-        motor_nameplate = request.form.get('motor_nameplate')
-        motor_current = request.form.get('motor_current')
-        gear_ratio = request.form.get('gear_ratio')
-        gear_sound = request.form.get('gear_sound')
-        warranty = request.form.get('warranty')
-        inspector = session.get('inspector_name') or request.form.get('inspector')
-        oil_type = request.form.get('oil_type')
-        oil_liters = request.form.get('oil_liters')
-        oil_filled = 'เติมแล้ว' if request.form.get('oil_filled') else 'ยังไม่เติม'
-        acdc_parts = request.form.getlist('acdc_parts')
-        servo_motor_model = request.form.get('servo_motor_model')
-        servo_drive_model = request.form.get('servo_drive_model')
-
-        # ✅ ข้อมูลจากเอกสาร QC-Motor ที่ Admin Motor Generate ไว้
-        motor_qc_job_key = request.form.get('motor_qc_job_key')
-        motor_qc_qr_no = request.form.get('motor_qc_qr_no')
-        motor_qc_item_no = request.form.get('motor_qc_item_no')
-        assembly_status = request.form.get('assembly_status')
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         serial = f"SAS{timestamp}"
 
         def upload_image(file, field_name):
-            """
-            ✅ อัปโหลดรูปขึ้น R2 แทน Firebase Storage
-            คืน public URL เหมือนเดิมทุกอย่าง
-            """
+            """อัปโหลดรูปขึ้น R2 คืน public URL"""
             if file and file.filename:
                 filename = secure_filename(file.filename)
                 key = f"qc_images/{serial}_{field_name}_{filename}"
-                # อ่าน stream เป็น bytes เพื่อ upload
                 file_bytes = file.stream.read()
                 return r2_upload_bytes(file_bytes, key, file.content_type or "image/jpeg")
             return None
 
-        motor_current_img = request.files.get('motor_current_img')
-        gear_sound_img = request.files.get('gear_sound_img')
-        assembly_img = request.files.get('assembly_img')
-        controller_img = request.files.get('controller_img')
-        servo_motor_img = request.files.get('servo_motor_img')
-        servo_drive_img = request.files.get('servo_drive_img')
-        cable_wire_img = request.files.get('cable_wire_img')
+        inspector = session.get('inspector_name') or request.form.get('inspector')
 
-        # ✅ RFKS: รับไฟล์แนบ Name plate เพิ่ม 2 ช่อง
-        rfks_nameplate_motor_img = request.files.get('rfks_nameplate_motor_img')
-        rfks_nameplate_gear_img = request.files.get('rfks_nameplate_gear_img')
+        # ✅ ข้อมูลจากเอกสาร QC-Motor ที่ Admin Motor Generate ไว้
+        motor_qc_job_key = request.form.get('motor_qc_job_key')
+        motor_qc_qr_no = request.form.get('motor_qc_qr_no')
+        assembly_status = request.form.get('assembly_status')
 
-        images = {
-            "motor_current_img": upload_image(motor_current_img, "motor_current"),
-            "gear_sound_img": upload_image(gear_sound_img, "gear_sound"),
-            "assembly_img": upload_image(assembly_img, "assembly"),
-            "controller_img": upload_image(controller_img, "controller"),
-            "servo_motor_img": upload_image(servo_motor_img, "servo_motor"),
-            "servo_drive_img": upload_image(servo_drive_img, "servo_drive"),
-            "cable_wire_img": upload_image(cable_wire_img, "cable_wire"),
+        # ============================================================
+        # ✅ New mode: QC หลายรายการใน 1 Order
+        # ============================================================
+        qc_item_nos = request.form.getlist('qc_item_no[]')
+        qc_items = []
 
-            # ✅ RFKS: อัปโหลดรูป Name plate : Motor / Gear
-            "rfks_nameplate_motor_img": upload_image(rfks_nameplate_motor_img, "rfks_nameplate_motor"),
-            "rfks_nameplate_gear_img": upload_image(rfks_nameplate_gear_img, "rfks_nameplate_gear"),
+        if qc_item_nos:
+            product_types = request.form.getlist('qc_item_product_type[]')
+            models = request.form.getlist('qc_item_model[]')
+            assemblies = request.form.getlist('qc_item_assembly[]')
+            gear_ratios = request.form.getlist('qc_item_gear_ratio[]')
+            motor_currents = request.form.getlist('qc_item_motor_current[]')
+            gear_sounds = request.form.getlist('qc_item_gear_sound[]')
+            warranties = request.form.getlist('qc_item_warranty[]')
+            oil_types = request.form.getlist('qc_item_oil_type[]')
+            oil_liters_list = request.form.getlist('qc_item_oil_liters[]')
+            servo_motor_models = request.form.getlist('qc_item_servo_motor_model[]')
+            servo_drive_models = request.form.getlist('qc_item_servo_drive_model[]')
+
+            file_keys = {
+                'motor_current_img': 'ภาพค่ากระแส',
+                'gear_sound_img': 'ภาพเสียงเกียร์',
+                'assembly_img': 'ภาพประกอบหน้างาน',
+                'rfks_nameplate_motor_img': 'Name plate : Motor',
+                'rfks_nameplate_gear_img': 'Name plate : Gear',
+                'controller_img': 'ภาพ Controller',
+                'servo_motor_img': 'ภาพ Servo Motor',
+                'servo_drive_img': 'ภาพ Servo Drive',
+                'cable_wire_img': 'ภาพ Cable Wire',
+            }
+
+            for idx, raw_no in enumerate(qc_item_nos[:30], start=1):
+                no = str(raw_no or idx).strip() or str(idx)
+                product_type_i = product_types[idx-1] if idx-1 < len(product_types) else ''
+                model_i = models[idx-1] if idx-1 < len(models) else ''
+                assembly_i = assemblies[idx-1] if idx-1 < len(assemblies) else ''
+                item_images = {}
+                for file_key in file_keys.keys():
+                    # ชื่อ field ฝั่ง form เช่น qc_item_motor_current_img_1
+                    field_name = f"qc_item_{file_key}_{idx}"
+                    item_images[file_key] = upload_image(
+                        request.files.get(field_name),
+                        f"item{no}_{file_key}"
+                    )
+
+                item = {
+                    'no': no,
+                    'product_type': product_type_i,
+                    'model': model_i,
+                    'assembly': assembly_i,
+                    'gear_ratio': gear_ratios[idx-1] if idx-1 < len(gear_ratios) else '',
+                    'motor_current': motor_currents[idx-1] if idx-1 < len(motor_currents) else '',
+                    'gear_sound': gear_sounds[idx-1] if idx-1 < len(gear_sounds) else '',
+                    'warranty': warranties[idx-1] if idx-1 < len(warranties) else '',
+                    'oil_type': oil_types[idx-1] if idx-1 < len(oil_types) else '',
+                    'oil_liters': oil_liters_list[idx-1] if idx-1 < len(oil_liters_list) else '',
+                    'oil_filled': 'เติมแล้ว' if request.form.get(f'qc_item_oil_filled_{idx}') else 'ยังไม่เติม',
+                    'acdc_parts': request.form.getlist(f'qc_item_acdc_parts_{idx}[]'),
+                    'servo_motor_model': servo_motor_models[idx-1] if idx-1 < len(servo_motor_models) else '',
+                    'servo_drive_model': servo_drive_models[idx-1] if idx-1 < len(servo_drive_models) else '',
+                    'images': item_images,
+                }
+                qc_items.append(item)
+
+            product_type = _product_type_summary(qc_items)
+            motor_nameplate = "\n".join([
+                f"Item {it.get('no')}: {it.get('model','')} ({it.get('product_type','')} / {it.get('assembly','')})"
+                for it in qc_items
+            ])
+            motor_current = "\n".join([f"Item {it.get('no')}: {it.get('motor_current','')} A" for it in qc_items if it.get('motor_current')])
+            gear_ratio = "\n".join([f"Item {it.get('no')}: {it.get('gear_ratio','')}" for it in qc_items if it.get('gear_ratio')])
+            gear_sound = "\n".join([f"Item {it.get('no')}: {it.get('gear_sound','')} dB" for it in qc_items if it.get('gear_sound')])
+            warranty = "\n".join([f"Item {it.get('no')}: {it.get('warranty','')} เดือน" for it in qc_items if it.get('warranty')])
+            oil_type = ''
+            oil_liters = ''
+            oil_filled = ''
+            acdc_parts = []
+            servo_motor_model = ''
+            servo_drive_model = ''
+            images = {}
+            motor_qc_item_no = ''
+
+        else:
+            # ============================================================
+            # Legacy mode: ฟอร์มเดิม 1 รายการ
+            # ============================================================
+            product_type = request.form.get('product_type')
+            motor_nameplate = request.form.get('motor_nameplate')
+            motor_current = request.form.get('motor_current')
+            gear_ratio = request.form.get('gear_ratio')
+            gear_sound = request.form.get('gear_sound')
+            warranty = request.form.get('warranty')
+            oil_type = request.form.get('oil_type')
+            oil_liters = request.form.get('oil_liters')
+            oil_filled = 'เติมแล้ว' if request.form.get('oil_filled') else 'ยังไม่เติม'
+            acdc_parts = request.form.getlist('acdc_parts')
+            servo_motor_model = request.form.get('servo_motor_model')
+            servo_drive_model = request.form.get('servo_drive_model')
+            motor_qc_item_no = request.form.get('motor_qc_item_no')
+
+            images = {
+                'motor_current_img': upload_image(request.files.get('motor_current_img'), 'motor_current'),
+                'gear_sound_img': upload_image(request.files.get('gear_sound_img'), 'gear_sound'),
+                'assembly_img': upload_image(request.files.get('assembly_img'), 'assembly'),
+                'controller_img': upload_image(request.files.get('controller_img'), 'controller'),
+                'servo_motor_img': upload_image(request.files.get('servo_motor_img'), 'servo_motor'),
+                'servo_drive_img': upload_image(request.files.get('servo_drive_img'), 'servo_drive'),
+                'cable_wire_img': upload_image(request.files.get('cable_wire_img'), 'cable_wire'),
+                'rfks_nameplate_motor_img': upload_image(request.files.get('rfks_nameplate_motor_img'), 'rfks_nameplate_motor'),
+                'rfks_nameplate_gear_img': upload_image(request.files.get('rfks_nameplate_gear_img'), 'rfks_nameplate_gear'),
+            }
+
+        or_no = request.form.get('or_no')
+        company_name = request.form.get('company_name')
+
+        payload = {
+            'serial': serial,
+            'or_no': or_no,
+            'company_name': company_name,
+            'product_type': product_type,
+            'motor_nameplate': motor_nameplate,
+            'motor_current': motor_current,
+            'gear_ratio': gear_ratio,
+            'gear_sound': gear_sound,
+            'warranty': warranty,
+            'inspector': inspector,
+            'oil_type': oil_type,
+            'oil_liters': oil_liters,
+            'oil_filled': oil_filled,
+            'acdc_parts': acdc_parts,
+            'servo_motor_model': servo_motor_model,
+            'servo_drive_model': servo_drive_model,
+            'motor_qc_job_key': motor_qc_job_key,
+            'motor_qc_qr_no': motor_qc_qr_no,
+            'motor_qc_item_no': motor_qc_item_no,
+            'assembly_status': assembly_status,
+            'images': images,
+            'qc_items': qc_items,
+            'date': datetime.datetime.now().strftime('%Y-%m-%d')
         }
 
-        ref.child(serial).set({
-            "serial": serial,
-            "or_no": or_no,
-            "company_name": company_name,  
-            "product_type": product_type,
-            "motor_nameplate": motor_nameplate,
-            "motor_current": motor_current,
-            "gear_ratio": gear_ratio,
-            "gear_sound": gear_sound,
-            "warranty": warranty,
-            "inspector": inspector,
-            "oil_type": oil_type,
-            "oil_liters": oil_liters,
-            "oil_filled": oil_filled,
-            "acdc_parts": acdc_parts,
-            "servo_motor_model": servo_motor_model,
-            "servo_drive_model": servo_drive_model,
-            "motor_qc_job_key": motor_qc_job_key,
-            "motor_qc_qr_no": motor_qc_qr_no,
-            "motor_qc_item_no": motor_qc_item_no,
-            "assembly_status": assembly_status,
-            "images": images,
-            "date": datetime.datetime.now().strftime("%Y-%m-%d")
-        })
+        ref.child(serial).set(payload)
 
         # ✅ อัปเดตสถานะรายการใน QC-Motor Job ว่าถูก Scan/Submit แล้ว
         if motor_qc_job_key:
             try:
                 job_key_safe = _safe_firebase_key(motor_qc_job_key)
+                now_th = (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime('%Y-%m-%d %H:%M:%S')
                 motor_qc_jobs_ref.child(job_key_safe).child('last_qc_serial').set(serial)
-                motor_qc_jobs_ref.child(job_key_safe).child('last_qc_submit_at').set(
-                    (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime('%Y-%m-%d %H:%M:%S')
-                )
+                motor_qc_jobs_ref.child(job_key_safe).child('last_qc_submit_at').set(now_th)
+                if qc_items:
+                    status_obj = {str(it.get('no')): {
+                        'qc_serial': serial,
+                        'submitted_at': now_th,
+                        'product_type': it.get('product_type'),
+                        'model': it.get('model'),
+                    } for it in qc_items}
+                    motor_qc_jobs_ref.child(job_key_safe).child('qc_items_status').update(status_obj)
             except Exception as _e:
                 print(f"⚠️ update motor_qc_jobs failed: {_e}", flush=True)
 
         def background_finalize():
             try:
                 data = ref.child(serial).get()
+                image_urls, image_labels = _collect_qc_report_images(data)
 
-                # ✅ RFKS: จัดลำดับรูป + ชื่อรูปให้ตรงหัวข้อ
-                images_dict = data.get("images", {}) or {}
-
-                image_urls = []
-                image_labels = []
-
-                # 1) RFKS nameplate (เฉพาะเมื่อมีรูปจริง)
-                if images_dict.get("rfks_nameplate_motor_img"):
-                    image_urls.append(images_dict.get("rfks_nameplate_motor_img"))
-                    image_labels.append("Name plate : Motor")
-
-                if images_dict.get("rfks_nameplate_gear_img"):
-                    image_urls.append(images_dict.get("rfks_nameplate_gear_img"))
-                    image_labels.append("Name plate : Gear")
-
-                # 2) ภาพเดิมทั้งหมด
-                ordered_keys = [
-                    ("motor_current_img", "ภาพค่ากระแส"),
-                    ("gear_sound_img", "ภาพเสียงเกียร์"),
-                    ("assembly_img", "ภาพประกอบหน้างาน"),
-                    ("controller_img", "ภาพ Controller"),
-                    ("servo_motor_img", "ภาพ Servo Motor"),
-                    ("servo_drive_img", "ภาพ Servo Drive"),
-                    ("cable_wire_img", "ภาพ Cable Wire"),
-                ]
-
-                for k, label in ordered_keys:
-                    url = images_dict.get(k)
-                    if url:
-                        image_urls.append(url)
-                        image_labels.append(label)
-
-                # ✅ สร้าง PDF
-                pdf_stream = create_qc_pdf(
-                    data,
-                    image_urls=image_urls,
-                    image_labels=image_labels
-                )
+                # ✅ สร้าง PDF รองรับ qc_items หลายรายการ
+                pdf_stream = create_qc_pdf(data, image_urls=image_urls, image_labels=image_labels)
                 pdf_stream.seek(0)
 
                 # ✅ อัปโหลด PDF ขึ้น R2
                 pdf_key = f"qc_reports/{serial}.pdf"
-                pdf_url = r2_upload_bytes(
-                    pdf_stream.read(),
-                    pdf_key,
-                    "application/pdf"
-                )
+                pdf_url = r2_upload_bytes(pdf_stream.read(), pdf_key, "application/pdf")
 
                 # ✅ สร้าง QR จาก public URL จริง
                 qr_stream = generate_qr_code(serial, pdf_url)
                 qr_key = f"qr_codes/{serial}.png"
-                qr_url = r2_upload_bytes(
-                    qr_stream.read(),
-                    qr_key,
-                    "image/png"
-                )
+                qr_url = r2_upload_bytes(qr_stream.read(), qr_key, "image/png")
 
-                # ✅ บันทึกลิงก์ลง Firebase Realtime Database (เหมือนเดิม)
                 ref.child(serial).update({
-                    "qc_pdf_url": pdf_url,
-                    "qr_png_url": qr_url
+                    'qc_pdf_url': pdf_url,
+                    'qr_png_url': qr_url
                 })
-
                 print(f"✅ PDF + QR สำหรับ {serial} สร้างเสร็จ", flush=True)
-
             except Exception as e:
                 print(f"❌ Error in background finalize: {e}", flush=True)
 
@@ -1017,33 +1123,7 @@ def download_pdf(serial_number):
     if not report_data:
         return "ไม่พบรายงาน", 404
 
-    # ✅ RFKS: ให้ download สร้าง PDF ด้วย label/order เดียวกับ background
-    images_dict = report_data.get("images", {}) or {}
-    image_urls = []
-    image_labels = []
-
-    if images_dict.get("rfks_nameplate_motor_img"):
-        image_urls.append(images_dict.get("rfks_nameplate_motor_img"))
-        image_labels.append("Name plate : Motor")
-    if images_dict.get("rfks_nameplate_gear_img"):
-        image_urls.append(images_dict.get("rfks_nameplate_gear_img"))
-        image_labels.append("Name plate : Gear")
-
-    ordered_keys = [
-        ("motor_current_img", "ภาพค่ากระแส"),
-        ("gear_sound_img", "ภาพเสียงเกียร์"),
-        ("assembly_img", "ภาพประกอบหน้างาน"),
-        ("controller_img", "ภาพ Controller"),
-        ("servo_motor_img", "ภาพ Servo Motor"),
-        ("servo_drive_img", "ภาพ Servo Drive"),
-        ("cable_wire_img", "ภาพ Cable Wire"),
-    ]
-    for k, label in ordered_keys:
-        url = images_dict.get(k)
-        if url:
-            image_urls.append(url)
-            image_labels.append(label)
-
+    image_urls, image_labels = _collect_qc_report_images(report_data)
     pdf_stream = create_qc_pdf(report_data, image_urls=image_urls, image_labels=image_labels)
     pdf_stream.seek(0)
     return send_file(pdf_stream,
@@ -1080,33 +1160,7 @@ def autodownload(serial_number):
     if not report_data:
         return "ไม่พบรายงาน", 404
 
-    # ✅ RFKS: ให้ autodownload สร้าง PDF ด้วย label/order เดียวกับ background
-    images_dict = report_data.get("images", {}) or {}
-    image_urls = []
-    image_labels = []
-
-    if images_dict.get("rfks_nameplate_motor_img"):
-        image_urls.append(images_dict.get("rfks_nameplate_motor_img"))
-        image_labels.append("Name plate : Motor")
-    if images_dict.get("rfks_nameplate_gear_img"):
-        image_urls.append(images_dict.get("rfks_nameplate_gear_img"))
-        image_labels.append("Name plate : Gear")
-
-    ordered_keys = [
-        ("motor_current_img", "ภาพค่ากระแส"),
-        ("gear_sound_img", "ภาพเสียงเกียร์"),
-        ("assembly_img", "ภาพประกอบหน้างาน"),
-        ("controller_img", "ภาพ Controller"),
-        ("servo_motor_img", "ภาพ Servo Motor"),
-        ("servo_drive_img", "ภาพ Servo Drive"),
-        ("cable_wire_img", "ภาพ Cable Wire"),
-    ]
-    for k, label in ordered_keys:
-        url = images_dict.get(k)
-        if url:
-            image_urls.append(url)
-            image_labels.append(label)
-
+    image_urls, image_labels = _collect_qc_report_images(report_data)
     pdf_stream = create_qc_pdf(report_data, image_urls=image_urls, image_labels=image_labels)
     pdf_stream.seek(0)
     return send_file(pdf_stream,
