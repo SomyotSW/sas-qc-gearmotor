@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ cfg.title }} | {{ job.get('qr_no','') }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body{min-height:100vh;background:linear-gradient(135deg,#eff6ff,#ffffff);font-family:'Segoe UI',sans-serif;padding:22px;}
+    .card-shell{max-width:860px;margin:20px auto;background:#fff;border-radius:22px;box-shadow:0 24px 60px rgba(15,23,42,.16);overflow:hidden;}
+    .hero{background:linear-gradient(135deg,#0b63ce,#1e3a8a);color:#fff;padding:24px 28px;}
+    .hero h1{font-size:1.65rem;font-weight:900;margin:0;}
+    .content{padding:24px 28px;}
+    .info-box{background:#eaf4ff;border:1px solid #bfdbfe;border-radius:16px;padding:14px;}
+    .sig-wrap{border:2px dashed #93c5fd;border-radius:16px;padding:12px;background:#f8fbff;}
+    canvas{width:100%;height:220px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;touch-action:none;}
+    .btn-approve{background:linear-gradient(180deg,#22c55e,#15803d);border:0;border-radius:14px;padding:14px 18px;font-weight:900;font-size:1.05rem;}
+    .popup-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.66);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px;}
+    .popup{background:#fff;border-radius:22px;max-width:560px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,.35);overflow:hidden;}
+    .popup-head{background:#0b63ce;color:#fff;padding:18px 22px;font-weight:900;font-size:1.3rem;}
+    .popup-body{padding:22px;font-size:1.05rem;}
+    .popup-actions{padding:0 22px 22px;display:flex;justify-content:flex-end;}
+  </style>
+</head>
+<body>
+  {% if not approved %}
+  <div class="popup-backdrop" id="startPopup">
+    <div class="popup">
+      <div class="popup-head">🔎 ตรวจสอบก่อน Approve</div>
+      <div class="popup-body">
+        {{ cfg.popup_message }}<br><br>
+        <b>OR No.:</b> {{ job.get('qr_no','') }}<br>
+        <b>บริษัท:</b> {{ job.get('company_name','') }}<br>
+        <b>จำนวนรายการ:</b> {{ job.get('item_count','') }} รายการ
+      </div>
+      <div class="popup-actions">
+        <button class="btn btn-primary fw-bold" onclick="document.getElementById('startPopup').style.display='none'">เริ่มลงชื่อ</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card-shell">
+    <div class="hero">
+      <h1>{{ cfg.title }}</h1>
+      <div class="mt-1">OR No. {{ job.get('qr_no','') }} | {{ job.get('company_name','') }}</div>
+    </div>
+    <div class="content">
+      {% if approved %}
+        <div class="alert alert-success fw-bold">✅ Approve เรียบร้อยแล้ว ระบบส่งอีเมลพร้อมแนบไฟล์ PDF แล้ว</div>
+        {% if pdf_url %}<a class="btn btn-primary fw-bold" href="{{ pdf_url }}" target="_blank">เปิดไฟล์ PDF ล่าสุด</a>{% endif %}
+      {% else %}
+        {% if error %}<div class="alert alert-danger fw-bold">{{ error }}</div>{% endif %}
+        <div class="info-box mb-3">
+          <b>โปรดตรวจสอบรายการสินค้า:</b>
+          <div class="table-responsive mt-2">
+            <table class="table table-sm table-bordered bg-white mb-0">
+              <thead class="table-primary"><tr><th>Item</th><th>ประเภทสินค้า</th><th>Model</th><th>สถานะ</th></tr></thead>
+              <tbody>
+              {% for item in job.get('items', []) %}
+                <tr>
+                  <td>{{ item.get('no','') }}</td>
+                  <td>{{ item.get('product_type','') }}</td>
+                  <td>{{ item.get('model','') }}</td>
+                  <td>{{ item.get('assembly','') }}</td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <form method="post" id="approveForm">
+          <div class="mb-3">
+            <label class="form-label fw-bold">ลงชื่อ / Name</label>
+            <input type="text" name="approver_name" class="form-control form-control-lg" placeholder="พิมพ์ชื่อผู้ Approve" required>
+          </div>
+          <div class="sig-wrap mb-3">
+            <label class="form-label fw-bold">วาดลายเซ็น</label>
+            <canvas id="sigCanvas" width="900" height="300"></canvas>
+            <input type="hidden" name="signature_data" id="signatureData">
+            <div class="d-flex gap-2 mt-2 flex-wrap">
+              <button type="button" class="btn btn-outline-secondary fw-bold" id="clearSigBtn">วาดใหม่ / Clear</button>
+              <span class="text-muted align-self-center">วาดใหม่ได้ถ้าลายเซ็นไม่สวย</span>
+            </div>
+          </div>
+          <div class="d-grid">
+            <button type="submit" class="btn btn-success btn-approve">✅ {{ cfg.button }}</button>
+          </div>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+<script>
+  const canvas = document.getElementById('sigCanvas');
+  const form = document.getElementById('approveForm');
+  if(canvas && form){
+    const ctx = canvas.getContext('2d');
+    let drawing = false;
+    let hasInk = false;
+
+    function clearCanvas(){
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      hasInk = false;
+      document.getElementById('signatureData').value = '';
+    }
+    function pos(e){
+      const r = canvas.getBoundingClientRect();
+      const t = e.touches ? e.touches[0] : e;
+      return {x:(t.clientX-r.left)*(canvas.width/r.width), y:(t.clientY-r.top)*(canvas.height/r.height)};
+    }
+    function start(e){e.preventDefault(); drawing=true; const p=pos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y);}
+    function move(e){if(!drawing)return; e.preventDefault(); const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); hasInk=true;}
+    function end(e){drawing=false;}
+
+    canvas.addEventListener('mousedown',start); canvas.addEventListener('mousemove',move); window.addEventListener('mouseup',end);
+    canvas.addEventListener('touchstart',start,{passive:false}); canvas.addEventListener('touchmove',move,{passive:false}); canvas.addEventListener('touchend',end);
+    document.getElementById('clearSigBtn').addEventListener('click', clearCanvas);
+    clearCanvas();
+
+    form.addEventListener('submit', (e)=>{
+      if(!hasInk){
+        e.preventDefault(); alert('กรุณาวาดลายเซ็นก่อนกด Approve'); return;
+      }
+      document.getElementById('signatureData').value = canvas.toDataURL('image/png');
+      const btn = form.querySelector('button[type=submit]');
+      btn.disabled = true; btn.textContent = '⏳ กำลังบันทึกและส่งอีเมล...';
+    });
+  }
+</script>
+</body>
+</html>

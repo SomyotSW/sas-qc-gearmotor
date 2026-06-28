@@ -5,6 +5,7 @@ import io
 import tempfile
 import html
 import re
+import base64
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
@@ -112,7 +113,47 @@ def _barcode_drawing(value, max_width=170*mm):
     return bc
 
 
-def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=None):
+
+def _signature_image_from_data_uri(data_uri, width=38*mm, height=16*mm):
+    """แปลงลายเซ็น base64 จากหน้า Approve เป็น ReportLab Image"""
+    data_uri = str(data_uri or '').strip()
+    if not data_uri.startswith('data:image'):
+        return None
+    try:
+        b64 = data_uri.split(',', 1)[1]
+        raw = base64.b64decode(b64)
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+        tmp.write(raw)
+        tmp.close()
+        img = Image(tmp.name)
+        iw = float(getattr(img, 'imageWidth', 1) or 1)
+        ih = float(getattr(img, 'imageHeight', 1) or 1)
+        ratio = min(width / iw, height / ih)
+        img.drawWidth = iw * ratio
+        img.drawHeight = ih * ratio
+        return img
+    except Exception:
+        return None
+
+
+def _approval_cell(approval, style_small, is_admin=False):
+    approval = approval or {}
+    name = approval.get('name') or ('Admin SAS04' if is_admin else '')
+    sig = _signature_image_from_data_uri(approval.get('signature_data'))
+    if sig:
+        return [sig, _p(name, style_small)]
+    if approval or is_admin:
+        return [_p(f'Approved by {name}', style_small)]
+    return ''
+
+
+def _approval_date(approval, style_small):
+    approval = approval or {}
+    approved_at = str(approval.get('approved_at') or '').strip()
+    date_only = approved_at[:10] if approved_at else '____________'
+    return _p(f'วันที่ / Date: {date_only}', style_small)
+
+def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=None, qc_qr_image_stream=None, warehouse_qr_image_stream=None):
     """
     job structure:
     {
@@ -257,19 +298,58 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
     story.append(check_tbl)
     story.append(Spacer(1, 3*mm))
 
+    approvals = job.get('approvals') or {}
+    admin_approval = approvals.get('admin') or {'name': job.get('created_by', 'Admin SAS04'), 'approved_at': job.get('created_at', '')}
+    qc_approval = approvals.get('qc') or {}
+    warehouse_approval = approvals.get('warehouse') or {}
+
     sign_tbl = Table([
         [_p('Admin Motor SAS04', cell_c), _p('QC Inspector', cell_c), _p('Warehouse / Packing', cell_c)],
-        ['', '', ''],
-        [_p('วันที่ / Date: ____________', small), _p('วันที่ / Date: ____________', small), _p('วันที่ / Date: ____________', small)],
-    ], colWidths=[58*mm, 58*mm, 58*mm], rowHeights=[7*mm, 14*mm, 7*mm])
+        [
+            _approval_cell(admin_approval, small, is_admin=True),
+            _approval_cell(qc_approval, small),
+            _approval_cell(warehouse_approval, small),
+        ],
+        [
+            _approval_date(admin_approval, small),
+            _approval_date(qc_approval, small),
+            _approval_date(warehouse_approval, small),
+        ],
+    ], colWidths=[58*mm, 58*mm, 58*mm], rowHeights=[7*mm, 18*mm, 7*mm])
     sign_tbl.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), 0.35, colors.HexColor('#cbd5e1')),
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#eaf4ff')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('TOPPADDING', (0, 1), (-1, 1), 2),
+        ('BOTTOMPADDING', (0, 1), (-1, 1), 2),
     ]))
     story.append(sign_tbl)
-    story.append(Spacer(1, 3*mm))
+    story.append(Spacer(1, 2*mm))
+
+    # QR Code แยกตามแผนก ใช้สำหรับกด Approve หลังได้รับเอกสาร
+    # วางทันทีใต้ช่องเซ็น เพื่อให้ตรงกับกรอบล่างของแต่ละแผนกและไม่หลุดหน้าแรกง่าย
+    qr_cells = ['', '', '']
+    if qc_qr_image_stream:
+        qr_cells[1] = _qr_image(qc_qr_image_stream, width=21*mm, height=21*mm)
+    if warehouse_qr_image_stream:
+        qr_cells[2] = _qr_image(warehouse_qr_image_stream, width=21*mm, height=21*mm)
+
+    dept_qr_tbl = Table([
+        ['', _p('QC Inspector Approve QR', cell_c), _p('Warehouse Prepare QR', cell_c)],
+        qr_cells,
+        ['', _p('QC สแกนหลังตรวจสินค้าเสร็จ', small), _p('Warehouse สแกนหลังเตรียมสินค้าเสร็จ', small)],
+    ], colWidths=[58*mm, 58*mm, 58*mm], rowHeights=[5*mm, 23*mm, 6*mm])
+    dept_qr_tbl.setStyle(TableStyle([
+        ('GRID', (1, 0), (-1, -1), 0.35, colors.HexColor('#cbd5e1')),
+        ('BACKGROUND', (1, 0), (-1, 0), colors.HexColor('#eaf4ff')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+    ]))
+    story.append(dept_qr_tbl)
+    story.append(Spacer(1, 2*mm))
     story.append(_p('หมายเหตุ: QR Code บนหัวเอกสารจะเปิดหน้า QC Form และเติมข้อมูล QR No., บริษัท และรายการสินค้าให้อัตโนมัติ โดย QC สามารถกรอกผลตรวจแยกตาม Item เช่น ประเภทสินค้า, Model, อัตราทด, กระแส, เสียง, น้ำมัน และรูปภาพของแต่ละรายการ', note))
 
     doc.build(story)

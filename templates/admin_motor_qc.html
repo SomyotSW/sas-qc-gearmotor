@@ -34,6 +34,18 @@
     .badge-soft{background:#eaf4ff;color:#0b63ce;border-radius:999px;padding:6px 12px;font-weight:800;}
     .required-dot{color:#dc2626;}
     .summary-box{border:1px solid #bfdbfe;background:#eff6ff;border-radius:16px;padding:14px;color:#1e3a8a;}
+
+    .review-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:9999;display:none;align-items:center;justify-content:center;padding:18px;}
+    .review-modal{width:min(920px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:22px;box-shadow:0 30px 80px rgba(0,0,0,.35);}
+    .review-head{background:linear-gradient(135deg,#0f172a,#0b63ce);color:#fff;padding:20px 24px;}
+    .review-head h3{margin:0;font-weight:900;}
+    .review-body{padding:22px 24px;}
+    .review-table{width:100%;border-collapse:collapse;font-size:.95rem;}
+    .review-table th,.review-table td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;}
+    .review-table th{background:#eaf4ff;color:#0f172a;}
+    .review-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;border-top:1px solid #e2e8f0;padding:16px 24px;background:#f8fafc;}
+    .btn-approve{background:linear-gradient(180deg,#22c55e,#15803d);border:0;color:#fff;font-weight:900;border-radius:14px;padding:12px 18px;}
+    .btn-cancel-review{background:#e2e8f0;border:0;color:#0f172a;font-weight:800;border-radius:14px;padding:12px 18px;}
     @media(max-width:768px){.top-actions{right:12px}.sas-logo{height:42px}.hero,.content{padding:22px 18px}.hero h1{font-size:1.45rem}.top-actions a{font-size:.92rem;padding:7px 10px}}
   </style>
 </head>
@@ -97,6 +109,37 @@
     </div>
   </div>
 
+
+  <div class="review-backdrop" id="reviewBackdrop" aria-hidden="true">
+    <div class="review-modal">
+      <div class="review-head">
+        <h3>🔎 Re-Check เอกสารก่อน Generate PDF</h3>
+        <div class="mt-1">โปรดตรวจสอบ OR No., บริษัท และรายการสินค้าทั้งหมดให้ถูกต้องก่อนกด Approve Generate PDF</div>
+      </div>
+      <div class="review-body">
+        <div class="row g-3 mb-3">
+          <div class="col-md-4"><b>QR / OR No.</b><div id="reviewQrNo" class="text-primary fw-bold"></div></div>
+          <div class="col-md-8"><b>บริษัท</b><div id="reviewCompany" class="text-primary fw-bold"></div></div>
+        </div>
+        <div class="table-responsive">
+          <table class="review-table">
+            <thead>
+              <tr><th style="width:70px;">Item</th><th>ประเภทสินค้า</th><th>Model</th><th style="width:130px;">สถานะ</th></tr>
+            </thead>
+            <tbody id="reviewItems"></tbody>
+          </table>
+        </div>
+        <div class="alert alert-warning mt-3 mb-0">
+          เมื่อกด <b>Approve Generate PDF</b> ระบบจะสร้างไฟล์ PDF, ลง Approve ของ <b>Admin SAS04</b>, สร้าง QR แยกสำหรับ Warehouse และ QC Inspector และส่งอีเมลพร้อมแนบ PDF ให้ Warehouse ทันที
+        </div>
+      </div>
+      <div class="review-actions">
+        <button type="button" class="btn-cancel-review" id="cancelReviewBtn">กลับไปแก้ไข</button>
+        <button type="button" class="btn-approve" id="approveGenerateBtn">✅ Approve Generate PDF</button>
+      </div>
+    </div>
+  </div>
+
 <script>
   const MAX_ITEMS = 30;
   const PRODUCT_TYPES = {{ product_types|tojson }};
@@ -156,10 +199,58 @@
   addBtn.addEventListener('click', addItem);
   addItem();
 
-  document.getElementById('qcMotorForm').addEventListener('submit', ()=>{
+  const form = document.getElementById('qcMotorForm');
+  const reviewBackdrop = document.getElementById('reviewBackdrop');
+  const reviewItems = document.getElementById('reviewItems');
+  let reviewApproved = false;
+
+  function escapeHtml(v){
+    return String(v || '').replace(/[&<>'"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m]));
+  }
+
+  function buildReview(){
+    document.getElementById('reviewQrNo').textContent = form.querySelector('[name="qr_no"]').value || '-';
+    document.getElementById('reviewCompany').textContent = form.querySelector('[name="company_name"]').value || '-';
+    reviewItems.innerHTML = '';
+    const cards = [...wrap.querySelectorAll('.item-card')];
+    cards.forEach((card, idx)=>{
+      const p = card.querySelector('[name="item_product_type[]"]')?.value || '-';
+      const m = card.querySelector('[name="item_model[]"]')?.value || '-';
+      const a = card.querySelector('[name="item_assembly[]"]')?.value || '-';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>Item ${idx+1}</td><td>${escapeHtml(p)}</td><td>${escapeHtml(m)}</td><td>${escapeHtml(a)}</td>`;
+      reviewItems.appendChild(tr);
+    });
+  }
+
+  form.addEventListener('submit', (e)=>{
+    if(!reviewApproved){
+      e.preventDefault();
+      if(!form.checkValidity()){ form.reportValidity(); return; }
+      buildReview();
+      reviewBackdrop.style.display = 'flex';
+      reviewBackdrop.setAttribute('aria-hidden','false');
+      return;
+    }
     const btn = document.getElementById('generateBtn');
     btn.disabled = true;
-    btn.textContent = '⏳ กำลังสร้าง PDF...';
+    btn.textContent = '⏳ กำลังสร้าง PDF และส่งอีเมล...';
+  });
+
+  document.getElementById('cancelReviewBtn').addEventListener('click', ()=>{
+    reviewBackdrop.style.display = 'none';
+    reviewBackdrop.setAttribute('aria-hidden','true');
+  });
+
+  document.getElementById('approveGenerateBtn').addEventListener('click', ()=>{
+    reviewApproved = true;
+    reviewBackdrop.style.display = 'none';
+    const hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = 'admin_approved';
+    hidden.value = '1';
+    form.appendChild(hidden);
+    form.requestSubmit();
   });
 </script>
 </body>

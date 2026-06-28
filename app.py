@@ -34,6 +34,7 @@ import time
 import re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.message import EmailMessage
 from collections import defaultdict
 
 ALERT_EMAIL        = "Chottanin@synergy-as.com"
@@ -628,6 +629,133 @@ def _collect_qc_report_images(report_data):
     return image_urls, image_labels
 
 
+# ============================================================
+# ✅ Motor QC Approval Workflow Helpers
+# ============================================================
+def _make_qr_stream(data: str, box_size: int = 6):
+    """สร้าง QR PNG stream จาก URL/ข้อความ"""
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=box_size,
+        border=2,
+    )
+    qr.add_data(str(data or ''))
+    qr.make(fit=True)
+    img = qr.make_image(fill_color='black', back_color='white')
+    stream = io.BytesIO()
+    img.save(stream, format='PNG')
+    stream.seek(0)
+    return stream
+
+
+def _motor_qc_approval_urls(job_key: str):
+    safe_key = _safe_firebase_key(job_key)
+    return {
+        'warehouse': url_for('motor_qc_department_approve', role='warehouse', job_key=safe_key, _external=True),
+        'qc': url_for('motor_qc_department_approve', role='qc', job_key=safe_key, _external=True),
+    }
+
+
+def _motor_qc_logo_path():
+    logo_path = os.path.join(app.root_path, 'static', 'logo_sas.png')
+    return logo_path if os.path.exists(logo_path) else None
+
+
+def _build_motor_qc_precheck_pdf_bytes(job: dict) -> bytes:
+    """สร้าง PDF QC-GEARMOTOR PRE-CHECK ล่าสุด พร้อม QR และลายเซ็น approval"""
+    job = job or {}
+    job_key = job.get('job_key') or job.get('qr_no') or ''
+    approval_urls = job.get('approval_urls') or _motor_qc_approval_urls(job_key)
+    job['approval_urls'] = approval_urls
+
+    form_url = job.get('form_url') or url_for('form', motor_qc_job=_safe_firebase_key(job_key), _external=True)
+    job['form_url'] = form_url
+
+    pdf_stream = create_motor_qc_job_pdf(
+        job,
+        qr_image_stream=_make_qr_stream(form_url, box_size=8),
+        barcode_value=form_url,
+        logo_path=_motor_qc_logo_path(),
+        qc_qr_image_stream=_make_qr_stream(approval_urls.get('qc'), box_size=5),
+        warehouse_qr_image_stream=_make_qr_stream(approval_urls.get('warehouse'), box_size=5),
+    )
+    pdf_stream.seek(0)
+    return pdf_stream.read()
+
+
+def _send_workflow_email(to_list, cc_list, subject, body, attachment_bytes=None, attachment_name=None):
+    """ส่งอีเมล Workflow พร้อมแนบ PDF โดยใช้ SMTP ของระบบ ไม่ผูกกับเครื่องผู้ใช้"""
+    smtp_user = os.environ.get('SMTP_EMAIL_ADDRESS') or os.environ.get('ALERT_EMAIL_ADDRESS', '')
+    smtp_pass = os.environ.get('SMTP_EMAIL_PASSWORD') or os.environ.get('ALERT_EMAIL_PASSWORD', '')
+    smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+    smtp_port = int(os.environ.get('SMTP_PORT', '465'))
+
+    to_list = [x.strip() for x in (to_list or []) if str(x).strip()]
+    cc_list = [x.strip() for x in (cc_list or []) if str(x).strip()]
+
+    if not smtp_user or not smtp_pass:
+        print(f"[MAIL SKIPPED] SMTP env missing | subject={subject}", flush=True)
+        return False
+
+    try:
+        msg = EmailMessage()
+        msg['Subject'] = subject
+        msg['From'] = smtp_user
+        msg['To'] = ', '.join(to_list)
+        if cc_list:
+            msg['Cc'] = ', '.join(cc_list)
+        msg.set_content(body)
+
+        if attachment_bytes and attachment_name:
+            msg.add_attachment(
+                attachment_bytes,
+                maintype='application',
+                subtype='pdf',
+                filename=attachment_name,
+            )
+
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=20) as smtp:
+            smtp.login(smtp_user, smtp_pass)
+            smtp.send_message(msg)
+        print(f"[MAIL SENT] {subject}", flush=True)
+        return True
+    except Exception as e:
+        print(f"[MAIL ERROR] {e}", flush=True)
+        return False
+
+
+def _motor_qc_role_config(role: str):
+    role = str(role or '').strip().lower()
+    configs = {
+        'warehouse': {
+            'role': 'warehouse',
+            'label': 'Warehouse / Packing',
+            'title': 'Warehouse เตรียมสินค้าเรียบร้อย',
+            'popup_message': 'โปรดตรวจสอบความถูกต้องอีกครั้ง หากเรียบร้อยแล้ว โปรดลงชื่อและกด Approve',
+            'status': 'warehouse_prepared',
+            'button': 'Approve เตรียมสินค้าเรียบร้อย',
+            'to': ['Chottanin442@gmail.com', 'sas04@synergy-as.com'],
+            'cc': ['tanai@synergy-as.com'],
+            'subject_tpl': 'เตรียมสินค้าเรียบร้อยแล้ว QC Report OR No. : {qr_no} : {company_name} โปรดทำการ QC สินค้าตามรายการที่กำหนด',
+            'body_tpl': 'เตรียมสินค้าเรียบร้อยแล้ว QC Report OR No. : {qr_no} : {company_name}  โปรดทำการ QC สินค้าตามรายการที่กำหนด\n\nด้วยความเคารพ \nTanai B. ( Eas )',
+        },
+        'qc': {
+            'role': 'qc',
+            'label': 'QC Inspector',
+            'title': 'QC Inspector ตรวจสินค้าเรียบร้อย',
+            'popup_message': 'โปรดตรวจสอบความถูกต้องอีกครั้ง หากเสร็จสิ้น โปรดลงชื่อและกด Approve',
+            'status': 'qc_approved',
+            'button': 'Approve QC เรียบร้อย',
+            'to': ['tanai@synergy-as.com', 'sas04@synergy-as.com'],
+            'cc': ['Chottanin@synergy-as.com'],
+            'subject_tpl': 'QC สินค้าเรียบร้อยแล้ว OR No. : {qr_no} : {company_name} โปรดทำการจัดส่งสินค้าตามรายการที่กำหนดได้เลย',
+            'body_tpl': 'QC สินค้าเรียบร้อยแล้ว OR No. : {qr_no} : {company_name}  โปรดทำการจัดส่งสินค้าตามรายการที่กำหนดได้เลย\n\nด้วยความเคารพ \n\nQC Inspector',
+        },
+    }
+    return configs.get(role)
+
+
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -772,7 +900,9 @@ def admin_motor_qc_generate():
         job_key = _safe_firebase_key(qr_no)
         now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
         form_url = url_for('form', motor_qc_job=job_key, _external=True)
+        approval_urls = _motor_qc_approval_urls(job_key)
         product_type_summary = _product_type_summary(items)
+        now_str = now_th.strftime('%Y-%m-%d %H:%M:%S')
 
         job = {
             'job_key': job_key,
@@ -782,44 +912,43 @@ def admin_motor_qc_generate():
             'product_types': sorted(list({x.get('product_type') for x in items if x.get('product_type')})),
             'items': items,
             'form_url': form_url,
+            'approval_urls': approval_urls,
             'item_count': len(items),
             'created_by': 'Admin Motor',
-            'created_at': now_th.strftime('%Y-%m-%d %H:%M:%S'),
-            'status': 'generated',
+            'created_at': now_str,
+            'status': 'admin_generated',
+            'approvals': {
+                'admin': {
+                    'name': 'Admin SAS04',
+                    'approved_at': now_str,
+                    'role_label': 'Admin Motor SAS04',
+                    'method': 'Approve Generate PDF',
+                }
+            }
         }
 
-        # ✅ บันทึกข้อมูลไว้ก่อน เพื่อให้ QR Scan แล้วดึงข้อมูลกลับเข้า form ได้ทันที
+        # ✅ บันทึกข้อมูลไว้ก่อน เพื่อให้ QR / Barcode Scan แล้วเปิดข้อมูลได้ทันที
         motor_qc_jobs_ref.child(job_key).set(job)
 
-        # ✅ QR ในหัวเอกสารเปิด form พร้อม prefill ข้อมูลหลาย Item
-        qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=2)
-        qr.add_data(form_url)
-        qr.make(fit=True)
-        qr_img = qr.make_image(fill_color='black', back_color='white')
-        qr_stream = io.BytesIO()
-        qr_img.save(qr_stream, format='PNG')
-        qr_stream.seek(0)
-
-        logo_path = os.path.join(app.root_path, 'static', 'logo_sas.png')
-        if not os.path.exists(logo_path):
-            logo_path = None
-
-        # ✅ Barcode สำหรับ Scanner บน PC ให้ทำงานหลักการเดียวกับ QR Code
-        # ใช้ URL เปิดฟอร์มโดยตรง ไม่ฝังรายการสินค้าทั้งหมดลงใน barcode
-        # เพื่อไม่ให้ barcode ยาวเกินจนล้นหน้า PDF และอ่านยาก
-        pdf_stream = create_motor_qc_job_pdf(
-            job,
-            qr_image_stream=qr_stream,
-            barcode_value=form_url,
-            logo_path=logo_path,
-        )
-        pdf_stream.seek(0)
-        pdf_bytes = pdf_stream.read()
+        # ✅ สร้าง PDF พร้อม Admin Approve + QR สำหรับ Warehouse และ QC Inspector
+        pdf_bytes = _build_motor_qc_precheck_pdf_bytes(job)
 
         # ✅ อัปโหลดขึ้น R2 เพื่อให้มีประวัติและเปิดย้อนหลังได้
         pdf_key = f"motor_qc_jobs/{job_key}.pdf"
         pdf_url = r2_upload_bytes(pdf_bytes, pdf_key, 'application/pdf')
         motor_qc_jobs_ref.child(job_key).update({'pdf_url': pdf_url})
+
+        # ✅ ส่งอีเมลถึง Warehouse พร้อมแนบ PDF ฉบับเดียวกับที่ดาวน์โหลด
+        subject = f"เอกสาร QC Report OR No. : {qr_no} : {company_name} โปรดเตรียมสินค้าตามรายการที่กำหนด"
+        body = f"เอกสาร QC Report OR No. : {qr_no} : {company_name} เรียบร้อยแล้ว โปรดเตรียมสินค้าตามรายการที่กำหนด\n\nด้วยความเคารพ \nAdmin SAS04"
+        _send_workflow_email(
+            to_list=['tanai@synergy-as.com'],
+            cc_list=['Chottanin@synergy-as.com'],
+            subject=subject,
+            body=body,
+            attachment_bytes=pdf_bytes,
+            attachment_name=f"{qr_no}_QC_Motor_Precheck.pdf",
+        )
 
         return send_file(
             io.BytesIO(pdf_bytes),
@@ -829,6 +958,89 @@ def admin_motor_qc_generate():
         )
     except Exception as e:
         return f"เกิดข้อผิดพลาดในการสร้างเอกสาร QC-Motor: {e}", 500
+
+
+@app.route('/motor-qc-approve/<role>/<job_key>', methods=['GET', 'POST'])
+def motor_qc_department_approve(role, job_key):
+    cfg = _motor_qc_role_config(role)
+    if not cfg:
+        return "ไม่พบประเภทการ Approve", 404
+
+    safe_key = _safe_firebase_key(job_key)
+    job = motor_qc_jobs_ref.child(safe_key).get() or None
+    if not job:
+        return "ไม่พบเอกสาร QC-Motor", 404
+
+    if request.method == 'POST':
+        approver_name = (request.form.get('approver_name') or '').strip()
+        signature_data = (request.form.get('signature_data') or '').strip()
+
+        if not approver_name or not signature_data.startswith('data:image'):
+            return render_template(
+                'motor_qc_approve.html',
+                job=job,
+                cfg=cfg,
+                role=cfg['role'],
+                approved=False,
+                error='กรุณากรอกชื่อและวาดลายเซ็นก่อนกด Approve'
+            ), 400
+
+        now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
+        now_str = now_th.strftime('%Y-%m-%d %H:%M:%S')
+
+        approvals = job.get('approvals') or {}
+        approvals[cfg['role']] = {
+            'name': approver_name,
+            'signature_data': signature_data,
+            'approved_at': now_str,
+            'role_label': cfg['label'],
+            'method': 'QR Approval',
+        }
+        job['approvals'] = approvals
+        job['status'] = cfg['status']
+        job['updated_at'] = now_str
+
+        motor_qc_jobs_ref.child(safe_key).update({
+            'approvals': approvals,
+            'status': cfg['status'],
+            'updated_at': now_str,
+        })
+
+        pdf_bytes = _build_motor_qc_precheck_pdf_bytes(job)
+        pdf_key = f"motor_qc_jobs/{safe_key}.pdf"
+        pdf_url = r2_upload_bytes(pdf_bytes, pdf_key, 'application/pdf')
+        motor_qc_jobs_ref.child(safe_key).update({'pdf_url': pdf_url})
+
+        qr_no = job.get('qr_no') or safe_key
+        company_name = job.get('company_name') or '-'
+        subject = cfg['subject_tpl'].format(qr_no=qr_no, company_name=company_name)
+        body = cfg['body_tpl'].format(qr_no=qr_no, company_name=company_name)
+
+        _send_workflow_email(
+            to_list=cfg['to'],
+            cc_list=cfg['cc'],
+            subject=subject,
+            body=body,
+            attachment_bytes=pdf_bytes,
+            attachment_name=f"{qr_no}_QC_Motor_Precheck.pdf",
+        )
+
+        return render_template(
+            'motor_qc_approve.html',
+            job=job,
+            cfg=cfg,
+            role=cfg['role'],
+            approved=True,
+            pdf_url=pdf_url,
+        )
+
+    return render_template(
+        'motor_qc_approve.html',
+        job=job,
+        cfg=cfg,
+        role=cfg['role'],
+        approved=False,
+    )
 
 
 @app.route('/login', methods=['GET', 'POST'])
