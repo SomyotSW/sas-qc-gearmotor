@@ -684,28 +684,126 @@ def _build_motor_qc_precheck_pdf_bytes(job: dict) -> bytes:
     return pdf_stream.read()
 
 
-def _send_workflow_email(to_list, cc_list, subject, body, attachment_bytes=None, attachment_name=None):
-    """ส่งอีเมล Workflow พร้อมแนบ PDF โดยใช้ SMTP ของระบบ ไม่ผูกกับเครื่องผู้ใช้"""
-    smtp_user = os.environ.get('SMTP_EMAIL_ADDRESS') or os.environ.get('ALERT_EMAIL_ADDRESS', '')
-    smtp_pass = os.environ.get('SMTP_EMAIL_PASSWORD') or os.environ.get('ALERT_EMAIL_PASSWORD', '')
-    smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
-    smtp_port = int(os.environ.get('SMTP_PORT', '465'))
+def _env_first(*names):
+    """คืนค่า env ตัวแรกที่มีค่า พร้อมชื่อ env ที่ใช้จริง"""
+    for name in names:
+        val = os.environ.get(name)
+        if val is not None and str(val).strip():
+            return str(val).strip(), name
+    return '', ''
 
-    to_list = [x.strip() for x in (to_list or []) if str(x).strip()]
-    cc_list = [x.strip() for x in (cc_list or []) if str(x).strip()]
 
-    if not smtp_user or not smtp_pass:
-        print(f"[MAIL SKIPPED] SMTP env missing | subject={subject}", flush=True)
-        return False
+def _workflow_mail_config():
+    """อ่าน SMTP config แบบรองรับชื่อ env หลายแบบ เพื่อไม่ให้ Production ข้ามการส่งเมลเงียบ ๆ"""
+    smtp_user, user_env = _env_first(
+        'SMTP_EMAIL_ADDRESS', 'SMTP_USERNAME', 'SMTP_USER',
+        'ALERT_EMAIL_ADDRESS', 'EMAIL_ADDRESS', 'MAIL_USERNAME',
+        'GMAIL_USER', 'GMAIL_EMAIL'
+    )
+    smtp_pass, pass_env = _env_first(
+        'SMTP_EMAIL_PASSWORD', 'SMTP_PASSWORD', 'SMTP_PASS',
+        'ALERT_EMAIL_PASSWORD', 'EMAIL_PASSWORD', 'MAIL_PASSWORD',
+        'GMAIL_APP_PASSWORD', 'GMAIL_PASSWORD'
+    )
+    smtp_host, host_env = _env_first('SMTP_HOST', 'MAIL_SERVER')
+    smtp_port_raw, port_env = _env_first('SMTP_PORT', 'MAIL_PORT')
+
+    smtp_host = smtp_host or 'smtp.gmail.com'
+    try:
+        smtp_port = int(str(smtp_port_raw or '465').strip())
+    except Exception:
+        smtp_port = 465
+
+    # Gmail App Password มักคัดลอกมาแบบมีช่องว่าง เช่น abcd efgh ijkl mnop
+    # ต้องส่ง login แบบไม่มีช่องว่าง
+    if 'gmail' in smtp_host.lower():
+        smtp_pass = re.sub(r'\s+', '', smtp_pass or '')
+
+    return {
+        'user': smtp_user,
+        'password': smtp_pass,
+        'host': smtp_host,
+        'port': smtp_port,
+        'user_env': user_env,
+        'pass_env': pass_env,
+        'host_env': host_env or 'default',
+        'port_env': port_env or 'default',
+    }
+
+
+def _record_mail_event(job_key, stage, result):
+    """บันทึกสถานะการส่งเมลไว้ใน Firebase เพื่อเปิดดูย้อนหลังได้ว่าเมล fail เพราะอะไร"""
+    if not job_key:
+        return
+    try:
+        safe_key = _safe_firebase_key(job_key)
+        now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
+        payload = {
+            'stage': stage or '',
+            'ok': bool(result.get('ok')),
+            'subject': result.get('subject', ''),
+            'to': result.get('to', []),
+            'cc': result.get('cc', []),
+            'error': result.get('error', ''),
+            'smtp_host': result.get('smtp_host', ''),
+            'smtp_port': result.get('smtp_port', ''),
+            'smtp_user_env': result.get('smtp_user_env', ''),
+            'smtp_pass_env': result.get('smtp_pass_env', ''),
+            'created_at': now_th.strftime('%Y-%m-%d %H:%M:%S'),
+        }
+        motor_qc_jobs_ref.child(safe_key).child('mail_events').push(payload)
+        motor_qc_jobs_ref.child(safe_key).child('last_mail_status').set(payload)
+    except Exception as e:
+        print(f"[MAIL LOG ERROR] {e}", flush=True)
+
+
+def _send_workflow_email(to_list, cc_list, subject, body, attachment_bytes=None, attachment_name=None, stage='', job_key=''):
+    """ส่งอีเมล Workflow พร้อมแนบ PDF โดยใช้ SMTP ของระบบ ไม่ผูกกับเครื่องผู้ใช้
+
+    คืนค่า dict เสมอ เพื่อ debug Production ได้ ไม่ข้ามเงียบเหมือน V5
+    """
+    cfg = _workflow_mail_config()
+
+    to_list = [str(x).strip() for x in (to_list or []) if str(x).strip()]
+    cc_list = [str(x).strip() for x in (cc_list or []) if str(x).strip()]
+    all_recipients = to_list + cc_list
+
+    result = {
+        'ok': False,
+        'stage': stage or '',
+        'subject': subject or '',
+        'to': to_list,
+        'cc': cc_list,
+        'smtp_host': cfg['host'],
+        'smtp_port': cfg['port'],
+        'smtp_user_env': cfg['user_env'],
+        'smtp_pass_env': cfg['pass_env'],
+        'error': '',
+    }
+
+    if not cfg['user'] or not cfg['password']:
+        result['error'] = (
+            'SMTP env missing: ให้ตั้งค่า SMTP_EMAIL_ADDRESS และ SMTP_EMAIL_PASSWORD '
+            'บน Render Environment หรือใช้ ALERT_EMAIL_ADDRESS / ALERT_EMAIL_PASSWORD เป็น fallback ได้'
+        )
+        print(f"[MAIL FAILED] {result['error']} | subject={subject}", flush=True)
+        _record_mail_event(job_key, stage, result)
+        return result
+
+    if not all_recipients:
+        result['error'] = 'No recipient email address'
+        print(f"[MAIL FAILED] {result['error']} | subject={subject}", flush=True)
+        _record_mail_event(job_key, stage, result)
+        return result
 
     try:
         msg = EmailMessage()
         msg['Subject'] = subject
-        msg['From'] = smtp_user
+        msg['From'] = f"SAS QC Motor <{cfg['user']}>"
         msg['To'] = ', '.join(to_list)
         if cc_list:
             msg['Cc'] = ', '.join(cc_list)
-        msg.set_content(body)
+        msg.set_content(body or '')
 
         if attachment_bytes and attachment_name:
             msg.add_attachment(
@@ -715,15 +813,61 @@ def _send_workflow_email(to_list, cc_list, subject, body, attachment_bytes=None,
                 filename=attachment_name,
             )
 
-        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=20) as smtp:
-            smtp.login(smtp_user, smtp_pass)
-            smtp.send_message(msg)
-        print(f"[MAIL SENT] {subject}", flush=True)
-        return True
-    except Exception as e:
-        print(f"[MAIL ERROR] {e}", flush=True)
-        return False
+        if int(cfg['port']) == 465:
+            with smtplib.SMTP_SSL(cfg['host'], int(cfg['port']), timeout=30) as smtp:
+                smtp.login(cfg['user'], cfg['password'])
+                smtp.send_message(msg, from_addr=cfg['user'], to_addrs=all_recipients)
+        else:
+            with smtplib.SMTP(cfg['host'], int(cfg['port']), timeout=30) as smtp:
+                smtp.ehlo()
+                smtp.starttls()
+                smtp.ehlo()
+                smtp.login(cfg['user'], cfg['password'])
+                smtp.send_message(msg, from_addr=cfg['user'], to_addrs=all_recipients)
 
+        result['ok'] = True
+        print(f"[MAIL SENT] stage={stage} | to={to_list} | cc={cc_list} | subject={subject}", flush=True)
+        _record_mail_event(job_key, stage, result)
+        return result
+
+    except smtplib.SMTPAuthenticationError as e:
+        result['error'] = f"SMTP Authentication failed: ตรวจ Gmail App Password / 2-Step Verification / Email ผู้ส่ง ({e})"
+    except smtplib.SMTPRecipientsRefused as e:
+        result['error'] = f"SMTP recipients refused: {e}"
+    except smtplib.SMTPException as e:
+        result['error'] = f"SMTP error: {e}"
+    except Exception as e:
+        result['error'] = f"Unexpected mail error: {e}"
+
+    print(f"[MAIL ERROR] stage={stage} | {result['error']} | subject={subject}", flush=True)
+    _record_mail_event(job_key, stage, result)
+    return result
+
+
+@app.route('/admin-motor-qc/mail-test')
+def admin_motor_qc_mail_test():
+    """ทดสอบ SMTP บน Production โดยต้องตั้ง MAIL_TEST_KEY ก่อน เช่น /admin-motor-qc/mail-test?key=xxxx&to=email"""
+    required_key = (os.environ.get('MAIL_TEST_KEY') or '').strip()
+    supplied_key = (request.args.get('key') or '').strip()
+    if not required_key or supplied_key != required_key:
+        return jsonify({
+            'ok': False,
+            'error': 'Unauthorized หรือยังไม่ได้ตั้ง MAIL_TEST_KEY บน Render Environment'
+        }), 403
+
+    cfg = _workflow_mail_config()
+    test_to = (request.args.get('to') or cfg.get('user') or 'Chottanin@synergy-as.com').strip()
+    now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
+    res = _send_workflow_email(
+        to_list=[test_to],
+        cc_list=[],
+        subject=f"SAS QC Motor Mail Test {now_th.strftime('%Y-%m-%d %H:%M:%S')}",
+        body="ทดสอบการส่งอีเมลจาก Production Render ของระบบ SAS QC Motor",
+        stage='mail_test',
+        job_key='',
+    )
+    status = 200 if res.get('ok') else 500
+    return jsonify(res), status
 
 def _motor_qc_role_config(role: str):
     role = str(role or '').strip().lower()
@@ -941,14 +1085,19 @@ def admin_motor_qc_generate():
         # ✅ ส่งอีเมลถึง Warehouse พร้อมแนบ PDF ฉบับเดียวกับที่ดาวน์โหลด
         subject = f"เอกสาร QC Report OR No. : {qr_no} : {company_name} โปรดเตรียมสินค้าตามรายการที่กำหนด"
         body = f"เอกสาร QC Report OR No. : {qr_no} : {company_name} เรียบร้อยแล้ว โปรดเตรียมสินค้าตามรายการที่กำหนด\n\nด้วยความเคารพ \nAdmin SAS04"
-        _send_workflow_email(
+        mail_result = _send_workflow_email(
             to_list=['tanai@synergy-as.com'],
             cc_list=['Chottanin@synergy-as.com'],
             subject=subject,
             body=body,
             attachment_bytes=pdf_bytes,
             attachment_name=f"{qr_no}_QC_Motor_Precheck.pdf",
+            stage='admin_to_warehouse',
+            job_key=job_key,
         )
+        if not mail_result.get('ok'):
+            # ไม่หยุดการดาวน์โหลด PDF แต่บันทึก/แสดงใน Render Logs + Firebase last_mail_status แล้ว
+            print(f"[WORKFLOW WARNING] Admin generated PDF but email failed: {mail_result.get('error')}", flush=True)
 
         return send_file(
             io.BytesIO(pdf_bytes),
@@ -1016,13 +1165,15 @@ def motor_qc_department_approve(role, job_key):
         subject = cfg['subject_tpl'].format(qr_no=qr_no, company_name=company_name)
         body = cfg['body_tpl'].format(qr_no=qr_no, company_name=company_name)
 
-        _send_workflow_email(
+        mail_result = _send_workflow_email(
             to_list=cfg['to'],
             cc_list=cfg['cc'],
             subject=subject,
             body=body,
             attachment_bytes=pdf_bytes,
             attachment_name=f"{qr_no}_QC_Motor_Precheck.pdf",
+            stage=f"{cfg['role']}_approval",
+            job_key=safe_key,
         )
 
         return render_template(
@@ -1032,6 +1183,8 @@ def motor_qc_department_approve(role, job_key):
             role=cfg['role'],
             approved=True,
             pdf_url=pdf_url,
+            mail_result=mail_result,
+            mail_error=None if mail_result.get('ok') else mail_result.get('error'),
         )
 
     return render_template(

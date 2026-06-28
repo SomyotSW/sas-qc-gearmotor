@@ -47,7 +47,12 @@
     </div>
     <div class="content">
       {% if approved %}
-        <div class="alert alert-success fw-bold">✅ Approve เรียบร้อยแล้ว ระบบส่งอีเมลพร้อมแนบไฟล์ PDF แล้ว</div>
+        {% if mail_error %}
+          <div class="alert alert-warning fw-bold">⚠️ Approve ถูกบันทึกแล้ว แต่ส่งอีเมลไม่สำเร็จ: {{ mail_error }}</div>
+          <div class="alert alert-info">ไฟล์ PDF ล่าสุดถูกสร้างแล้ว สามารถเปิดส่งเองชั่วคราวได้ และให้ตรวจ Render Logs / last_mail_status ใน Firebase</div>
+        {% else %}
+          <div class="alert alert-success fw-bold">✅ Approve เรียบร้อยแล้ว ระบบส่งอีเมลพร้อมแนบไฟล์ PDF แล้ว</div>
+        {% endif %}
         {% if pdf_url %}<a class="btn btn-primary fw-bold" href="{{ pdf_url }}" target="_blank">เปิดไฟล์ PDF ล่าสุด</a>{% endif %}
       {% else %}
         {% if error %}<div class="alert alert-danger fw-bold">{{ error }}</div>{% endif %}
