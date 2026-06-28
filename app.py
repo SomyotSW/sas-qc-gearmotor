@@ -873,7 +873,7 @@ def admin_motor_qc_mail_test():
 def _motor_qc_checkpoints():
     """หัวข้อ QC ที่ QC Inspector ต้องติ๊กก่อน Approve และจะถูกพิมพ์ X ลง PDF ล่าสุด"""
     return [
-        ('1', 'ตรวจ Model / Nameplate / Serial / Power / Voltage / Ratio ให้ตรงกับเอกสารขาย'),
+        ('1', 'ตรวจจำนวนสินค้า / Model / Nameplate / Serial / Power / Voltage / Ratio ให้ตรงกับเอกสารขาย'),
         ('2', 'ตรวจสภาพภายนอก สี รอยกระแทก หน้าแปลน ขาแท่น เพลา Keyway และอุปกรณ์ประกอบ'),
         ('3', 'ตรวจการประกอบ Motor + Gear: Bolt, Coupling, Adapter, Alignment และความแน่นของจุดยึด'),
         ('4', 'ตรวจอัตราทดเกียร์ ทิศทางการหมุน และความผิดปกติของ Output Shaft'),
@@ -1031,21 +1031,28 @@ def admin_motor_qc_generate():
 
         product_types = request.form.getlist('item_product_type[]')
         models = request.form.getlist('item_model[]')
+        quantities = request.form.getlist('item_qty[]')
         assemblies = request.form.getlist('item_assembly[]')
 
         items = []
-        row_count = min(max(len(models), len(product_types), len(assemblies)), 30)
+        row_count = min(max(len(models), len(product_types), len(quantities), len(assemblies)), 30)
         for i in range(row_count):
             model = str(models[i] if i < len(models) else '').strip()
             product_type = str(product_types[i] if i < len(product_types) else '').strip()
             if not model and not product_type:
                 continue
+            qty_raw = quantities[i] if i < len(quantities) else '1'
+            try:
+                qty = max(1, int(float(str(qty_raw).strip() or '1')))
+            except Exception:
+                qty = 1
             assembly = assemblies[i] if i < len(assemblies) else 'ไม่ประกอบ'
             assembly = 'ประกอบ' if str(assembly).strip() == 'ประกอบ' else 'ไม่ประกอบ'
             items.append({
                 'no': len(items) + 1,
                 'product_type': product_type,
                 'model': model,
+                'qty': qty,
                 'assembly': assembly,
             })
 
@@ -1054,7 +1061,7 @@ def admin_motor_qc_generate():
                 'admin_motor_qc.html',
                 product_types=PRODUCT_TYPES,
                 default_qr_no=qr_no or _next_motor_qc_no(),
-                error='กรุณากรอก QR No., บริษัท, ประเภทสินค้า และ Model ให้ครบอย่างน้อย 1 รายการ',
+                error='กรุณากรอก QR No., บริษัท, ประเภทสินค้า, Model และจำนวน ให้ครบอย่างน้อย 1 รายการ',
                 old=request.form
             ), 400
 
@@ -1155,8 +1162,14 @@ def motor_qc_department_approve(role, job_key):
         qc_checklist_payload = {}
         if cfg.get('requires_qc_checklist'):
             required_checks = _motor_qc_checkpoints()
-            checked = set(str(x).strip() for x in request.form.getlist('qc_check[]'))
-            missing = [no for no, _ in required_checks if str(no) not in checked]
+            missing = []
+            for no, _text in required_checks:
+                status = (request.form.get(f'qc_status_{no}') or '').strip().upper()
+                note = (request.form.get(f'qc_note_{no}') or '').strip()
+                if status not in ('OK', 'NG'):
+                    missing.append(no)
+                else:
+                    qc_checklist_payload[str(no)] = {'status': status, 'note': note}
             if missing:
                 return render_template(
                     'motor_qc_approve.html',
@@ -1164,10 +1177,9 @@ def motor_qc_department_approve(role, job_key):
                     cfg=cfg,
                     role=cfg['role'],
                     approved=False,
-                    error='กรุณาติ๊กหัวข้อ QC ให้ครบทุกข้อก่อนกด Approve เพื่อให้ PDF ล่าสุดมีเครื่องหมาย X ครบทุกช่อง OK',
+                    error='กรุณาเลือก OK หรือ NG ให้ครบทุกข้อก่อนกด Approve เพื่อให้ PDF ล่าสุดมีเครื่องหมาย X ลงช่องที่ถูกต้อง',
                     qc_checkpoints=required_checks
                 ), 400
-            qc_checklist_payload = {str(no): True for no, _ in required_checks}
 
         now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
         now_str = now_th.strftime('%Y-%m-%d %H:%M:%S')
@@ -1180,17 +1192,41 @@ def motor_qc_department_approve(role, job_key):
             'role_label': cfg['label'],
             'method': 'QR Approval',
         }
+        if cfg['role'] == 'warehouse':
+            wh_nos = request.form.getlist('warehouse_item_no[]')
+            wh_qtys = request.form.getlist('warehouse_item_prepared_qty[]')
+            wh_notes = request.form.getlist('warehouse_item_note[]')
+            wh_items = []
+            items_list = job.get('items') or []
+            item_by_no = {str((it or {}).get('no')): it for it in items_list if isinstance(it, dict)}
+            for idx, no in enumerate(wh_nos[:30]):
+                no_s = str(no or idx + 1).strip() or str(idx + 1)
+                qty_raw = wh_qtys[idx] if idx < len(wh_qtys) else ''
+                note = (wh_notes[idx] if idx < len(wh_notes) else '').strip()
+                try:
+                    prepared_qty = max(0, int(float(str(qty_raw).strip() or '0')))
+                except Exception:
+                    prepared_qty = 0
+                wh_items.append({'no': no_s, 'prepared_qty': prepared_qty, 'note': note})
+                if no_s in item_by_no:
+                    item_by_no[no_s]['warehouse_prepared_qty'] = prepared_qty
+                    item_by_no[no_s]['warehouse_note'] = note
+            approvals[cfg['role']]['items'] = wh_items
+            job['items'] = items_list
         if qc_checklist_payload:
             approvals[cfg['role']]['qc_checklist'] = qc_checklist_payload
         job['approvals'] = approvals
         job['status'] = cfg['status']
         job['updated_at'] = now_str
 
-        motor_qc_jobs_ref.child(safe_key).update({
+        update_payload = {
             'approvals': approvals,
             'status': cfg['status'],
             'updated_at': now_str,
-        })
+        }
+        if cfg['role'] == 'warehouse':
+            update_payload['items'] = job.get('items') or []
+        motor_qc_jobs_ref.child(safe_key).update(update_payload)
 
         pdf_bytes = _build_motor_qc_precheck_pdf_bytes(job)
         pdf_key = f"motor_qc_jobs/{safe_key}.pdf"
@@ -1329,6 +1365,7 @@ def submit():
             product_types = request.form.getlist('qc_item_product_type[]')
             models = request.form.getlist('qc_item_model[]')
             assemblies = request.form.getlist('qc_item_assembly[]')
+            quantities = request.form.getlist('qc_item_qty[]')
             gear_ratios = request.form.getlist('qc_item_gear_ratio[]')
             motor_currents = request.form.getlist('qc_item_motor_current[]')
             gear_sounds = request.form.getlist('qc_item_gear_sound[]')
@@ -1355,6 +1392,11 @@ def submit():
                 product_type_i = product_types[idx-1] if idx-1 < len(product_types) else ''
                 model_i = models[idx-1] if idx-1 < len(models) else ''
                 assembly_i = assemblies[idx-1] if idx-1 < len(assemblies) else ''
+                qty_raw = quantities[idx-1] if idx-1 < len(quantities) else '1'
+                try:
+                    qty_i = max(1, int(float(str(qty_raw).strip() or '1')))
+                except Exception:
+                    qty_i = 1
                 item_images = {}
                 for file_key in file_keys.keys():
                     # ชื่อ field ฝั่ง form เช่น qc_item_motor_current_img_1
@@ -1368,6 +1410,7 @@ def submit():
                     'no': no,
                     'product_type': product_type_i,
                     'model': model_i,
+                    'qty': qty_i,
                     'assembly': assembly_i,
                     'gear_ratio': gear_ratios[idx-1] if idx-1 < len(gear_ratios) else '',
                     'motor_current': motor_currents[idx-1] if idx-1 < len(motor_currents) else '',
@@ -1385,7 +1428,7 @@ def submit():
 
             product_type = _product_type_summary(qc_items)
             motor_nameplate = "\n".join([
-                f"Item {it.get('no')}: {it.get('model','')} ({it.get('product_type','')} / {it.get('assembly','')})"
+                f"Item {it.get('no')}: {it.get('model','')} x {it.get('qty', 1)} ({it.get('product_type','')} / {it.get('assembly','')})"
                 for it in qc_items
             ])
             motor_current = "\n".join([f"Item {it.get('no')}: {it.get('motor_current','')} A" for it in qc_items if it.get('motor_current')])
@@ -1475,6 +1518,7 @@ def submit():
                         'submitted_at': now_th,
                         'product_type': it.get('product_type'),
                         'model': it.get('model'),
+                        'qty': it.get('qty'),
                     } for it in qc_items}
                     motor_qc_jobs_ref.child(job_key_safe).child('qc_items_status').update(status_obj)
             except Exception as _e:

@@ -68,7 +68,7 @@
             </div>
             <span class="badge bg-primary">Scan QR Prefill</span>
           </div>
-          <div class="small text-muted">ระบบนี้รองรับหลายรายการใน 1 Order: แต่ละ Item สามารถมีประเภทสินค้า, Model, อัตราทด, กระแส, เสียง, น้ำมัน และรูปภาพของตัวเองได้</div>
+          <div class="small text-muted">ระบบนี้รองรับหลายรายการใน 1 Order: แต่ละ Item สามารถมีประเภทสินค้า, Model, จำนวน, อัตราทด, กระแส, เสียง, น้ำมัน และรูปภาพของตัวเองได้</div>
         </div>
         {% endif %}
 
@@ -92,7 +92,7 @@
             <div class="item-qc-head">
               <div>
                 <div class="item-title">Item {{ item.get('no', idx) }} <span class="soft-badge">{{ ptype }}</span> <span class="soft-badge">{{ item.get('assembly','') }}</span></div>
-                <div class="item-model">Model: {{ item.get('model','') }}</div>
+                <div class="item-model">Model: {{ item.get('model','') }} | จำนวนตามเอกสาร: <b>{{ item.get('qty', 1) }}</b></div>
               </div>
               <div class="text-muted small">กรอกผลตรวจและแนบรูปเฉพาะรายการนี้</div>
             </div>
@@ -101,8 +101,13 @@
             <input type="hidden" name="qc_item_product_type[]" value="{{ ptype }}">
             <input type="hidden" name="qc_item_model[]" value="{{ item.get('model','') }}">
             <input type="hidden" name="qc_item_assembly[]" value="{{ item.get('assembly','') }}">
+            <input type="hidden" name="qc_item_qty[]" value="{{ item.get('qty', 1) }}">
 
             <div class="row">
+              <div class="col-md-3">
+                <label>จำนวนตามเอกสาร</label>
+                <input type="text" class="form-control" value="{{ item.get('qty', 1) }}" readonly>
+              </div>
               <div class="col-md-3">
                 <label>อัตราทดเกียร์</label>
                 <input type="text" name="qc_item_gear_ratio[]" class="form-control" placeholder="เช่น i=30">

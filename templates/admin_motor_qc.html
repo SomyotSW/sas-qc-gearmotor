@@ -34,6 +34,9 @@
     .badge-soft{background:#eaf4ff;color:#0b63ce;border-radius:999px;padding:6px 12px;font-weight:800;}
     .required-dot{color:#dc2626;}
     .summary-box{border:1px solid #bfdbfe;background:#eff6ff;border-radius:16px;padding:14px;color:#1e3a8a;}
+    .qty-group{display:flex;align-items:center;gap:6px;}
+    .qty-group .btn-qty{width:38px;height:42px;border:1px solid #bfdbfe;background:#eaf4ff;color:#0b63ce;border-radius:12px;font-weight:900;font-size:1.15rem;line-height:1;}
+    .qty-group input{text-align:center;font-weight:900;}
 
     .review-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:9999;display:none;align-items:center;justify-content:center;padding:18px;}
     .review-modal{width:min(920px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:22px;box-shadow:0 30px 80px rgba(0,0,0,.35);}
@@ -61,7 +64,7 @@
       <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
         <div>
           <h1>ออกเอกสาร QC-Motor</h1>
-          <p>สร้างเอกสารแนบงานก่อนส่งสินค้า โดยแต่ละ Item สามารถเป็นคนละประเภทสินค้าได้ พร้อม QR/Barcode ให้ QC สแกนแล้วกรอกผลแยกรายการ</p>
+          <p>สร้างเอกสารแนบงานก่อนส่งสินค้า โดยแต่ละ Item สามารถเป็นคนละประเภทสินค้าและจำนวนต่างกันได้ พร้อม QR/Barcode ให้ QC สแกนแล้วกรอกผลแยกรายการ</p>
         </div>
         <span class="badge-soft bg-white">สูงสุด 30 รายการ</span>
       </div>
@@ -89,7 +92,7 @@
         <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
           <div>
             <h5 class="fw-black mb-0" style="font-weight:900;color:#0f172a;">รายการสินค้า</h5>
-            <div class="hint">เลือกประเภทสินค้า + กรอก Model + สถานะประกอบ แยกในแต่ละ Item</div>
+            <div class="hint">เลือกประเภทสินค้า + กรอก Model + จำนวน + สถานะประกอบ แยกในแต่ละ Item</div>
           </div>
           <div class="badge-soft" id="itemCounter">1 / 30</div>
         </div>
@@ -99,7 +102,7 @@
 
         <div class="summary-box mt-4">
           <b>PDF ที่ได้จะรองรับข้อมูลหลายรายการ:</b>
-          ประเภทสินค้าแต่ละ Item, Model แต่ละ Item, สถานะประกอบ/ไม่ประกอบ, Barcode, QR สำหรับเปิด QC Form และ Checklist จุดตรวจ Gearmotor
+          ประเภทสินค้าแต่ละ Item, Model แต่ละ Item, จำนวน, สถานะประกอบ/ไม่ประกอบ, Barcode, QR สำหรับเปิด QC Form และ Checklist จุดตรวจ Gearmotor
         </div>
 
         <div class="d-grid mt-4">
@@ -124,7 +127,7 @@
         <div class="table-responsive">
           <table class="review-table">
             <thead>
-              <tr><th style="width:70px;">Item</th><th>ประเภทสินค้า</th><th>Model</th><th style="width:130px;">สถานะ</th></tr>
+              <tr><th style="width:70px;">Item</th><th>ประเภทสินค้า</th><th>Model</th><th style="width:90px;">จำนวน</th><th style="width:130px;">สถานะ</th></tr>
             </thead>
             <tbody id="reviewItems"></tbody>
           </table>
@@ -172,7 +175,7 @@
     div.innerHTML = `
       <div class="row g-3 align-items-end">
         <div class="col-md-1"><div class="item-no">Item ${count+1}</div></div>
-        <div class="col-md-4">
+        <div class="col-md-3">
           <label class="form-label">ประเภทสินค้า <span class="required-dot">*</span></label>
           <select name="item_product_type[]" class="form-select" required>${productTypeOptions()}</select>
         </div>
@@ -181,6 +184,14 @@
           <input type="text" name="item_model[]" class="form-control" placeholder="เช่น R97-YVP-5.5-4P-37.13-M1-0-X" required>
         </div>
         <div class="col-md-2">
+          <label class="form-label">จำนวน <span class="required-dot">*</span></label>
+          <div class="qty-group">
+            <button type="button" class="btn-qty qty-minus">−</button>
+            <input type="number" name="item_qty[]" class="form-control" value="1" min="1" step="1" required>
+            <button type="button" class="btn-qty qty-plus">+</button>
+          </div>
+        </div>
+        <div class="col-md-1">
           <label class="form-label">สถานะ</label>
           <select name="item_assembly[]" class="form-select">
             <option value="ประกอบ">ประกอบ</option>
@@ -192,6 +203,9 @@
         </div>
       </div>`;
     div.querySelector('.btn-remove').addEventListener('click',()=>{ div.remove(); renumber(); });
+    const qtyInput = div.querySelector('[name="item_qty[]"]');
+    div.querySelector('.qty-minus').addEventListener('click',()=>{ qtyInput.value = Math.max(1, Number(qtyInput.value || 1) - 1); });
+    div.querySelector('.qty-plus').addEventListener('click',()=>{ qtyInput.value = Math.max(1, Number(qtyInput.value || 1) + 1); });
     wrap.appendChild(div);
     renumber();
   }
@@ -216,9 +230,10 @@
     cards.forEach((card, idx)=>{
       const p = card.querySelector('[name="item_product_type[]"]')?.value || '-';
       const m = card.querySelector('[name="item_model[]"]')?.value || '-';
+      const q = card.querySelector('[name="item_qty[]"]')?.value || '1';
       const a = card.querySelector('[name="item_assembly[]"]')?.value || '-';
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>Item ${idx+1}</td><td>${escapeHtml(p)}</td><td>${escapeHtml(m)}</td><td>${escapeHtml(a)}</td>`;
+      tr.innerHTML = `<td>Item ${idx+1}</td><td>${escapeHtml(p)}</td><td>${escapeHtml(m)}</td><td class="text-center fw-bold">${escapeHtml(q)}</td><td>${escapeHtml(a)}</td>`;
       reviewItems.appendChild(tr);
     });
   }

@@ -513,8 +513,8 @@ def _draw_qc_items_table(c, y, width, height, margin, qc_items, start_page_num):
     """วาดตารางสรุป QC หลายรายการ รองรับสูงสุด 30 รายการและขึ้นหน้าใหม่อัตโนมัติ"""
     page_num = start_page_num
     footer_space = 2.2 * cm
-    cols = [1.0*cm, 3.2*cm, 4.3*cm, 1.5*cm, 1.35*cm, 1.35*cm, 1.35*cm, 2.05*cm, 1.3*cm]
-    headers = ['Item', 'ประเภท', 'Model', 'สถานะ', 'Ratio', 'Amp', 'dB', 'Oil', 'Warr.']
+    cols = [0.9*cm, 2.6*cm, 3.6*cm, 1.0*cm, 1.3*cm, 1.25*cm, 1.25*cm, 1.25*cm, 1.85*cm, 1.15*cm]
+    headers = ['Item', 'ประเภท', 'Model', 'Qty', 'สถานะ', 'Ratio', 'Amp', 'dB', 'Oil', 'Warr.']
     y = _draw_table_header(c, y, margin, cols, headers)
     row_h = 0.88 * cm
 
@@ -547,6 +547,7 @@ def _draw_qc_items_table(c, y, width, height, margin, qc_items, start_page_num):
             _item_get(item, 'no'),
             _item_get(item, 'product_type'),
             _item_get(item, 'model'),
+            _item_get(item, 'qty', '1'),
             _item_get(item, 'assembly'),
             _item_get(item, 'gear_ratio', '-'),
             _item_get(item, 'motor_current', '-'),
@@ -555,7 +556,7 @@ def _draw_qc_items_table(c, y, width, height, margin, qc_items, start_page_num):
             _item_get(item, 'warranty', '-'),
         ]
         for i, (cw, val) in enumerate(zip(cols, values)):
-            center = i in (0, 3, 4, 5, 6, 8)
+            center = i in (0, 3, 4, 5, 6, 7, 9)
             _draw_cell_text(c, val, x, y, cw, row_h, font_size=8.5, leading=8.5, max_lines=2, center=center)
             if i > 0:
                 c.line(x, y, x, y - row_h)
@@ -570,8 +571,8 @@ def _draw_warranty_items_table(c, y, width, height, margin, qc_items, data, star
     """วาดตารางวันเริ่มและวันสิ้นสุดรับประกันแยกตาม Item"""
     page_num = start_page_num
     footer_space = 2.2 * cm
-    cols = [1.0*cm, 6.0*cm, 2.0*cm, 3.1*cm, 5.3*cm]
-    headers = ['Item', 'Model', 'Warranty', 'เริ่มรับประกัน', 'สิ้นสุดการรับประกัน']
+    cols = [1.0*cm, 5.2*cm, 1.2*cm, 2.0*cm, 3.1*cm, 4.5*cm]
+    headers = ['Item', 'Model', 'Qty', 'Warranty', 'เริ่มรับประกัน', 'สิ้นสุดการรับประกัน']
 
     # header ของตารางนี้ต้องสูงขึ้นเล็กน้อย เพื่อให้หัวข้อภาษาไทยไม่เบียดกัน
     row_h_head = 0.82 * cm
@@ -624,6 +625,7 @@ def _draw_warranty_items_table(c, y, width, height, margin, qc_items, data, star
         values = [
             no_text,
             _item_get(item, 'model'),
+            _item_get(item, 'qty', '1'),
             (f'{months} เดือน' if months else _item_get(item, 'warranty', '-')),
             (_format_th_date(start_date) if start_date else '-'),
             (_format_th_date(end_date) if end_date else '-'),
@@ -631,8 +633,8 @@ def _draw_warranty_items_table(c, y, width, height, margin, qc_items, data, star
 
         x = margin
         for i, (cw, val) in enumerate(zip(cols, values)):
-            center = i in (0, 2, 3, 4)
-            color = RED_WARN if i == 4 and val != '-' else BLACK
+            center = i in (0, 2, 3, 4, 5)
+            color = RED_WARN if i == 5 and val != '-' else BLACK
             _draw_cell_text(c, val, x, y, cw, row_h, font_size=8.7, leading=8.7, max_lines=2, color=color, center=center)
             if i > 0:
                 c.line(x, y, x, y - row_h)

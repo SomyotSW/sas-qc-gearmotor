@@ -155,7 +155,7 @@ def _approval_date(approval, style_small):
 
 
 QC_CHECKPOINTS = [
-    ('1', 'ตรวจ Model / Nameplate / Serial / Power / Voltage / Ratio ให้ตรงกับเอกสารขาย'),
+    ('1', 'ตรวจจำนวนสินค้า / Model / Nameplate / Serial / Power / Voltage / Ratio ให้ตรงกับเอกสารขาย'),
     ('2', 'ตรวจสภาพภายนอก สี รอยกระแทก หน้าแปลน ขาแท่น เพลา Keyway และอุปกรณ์ประกอบ'),
     ('3', 'ตรวจการประกอบ Motor + Gear: Bolt, Coupling, Adapter, Alignment และความแน่นของจุดยึด'),
     ('4', 'ตรวจอัตราทดเกียร์ ทิศทางการหมุน และความผิดปกติของ Output Shaft'),
@@ -168,16 +168,34 @@ QC_CHECKPOINTS = [
 ]
 
 
-def _qc_ok_mark(job, checkpoint_no):
-    """ถ้า QC Inspector สแกนหลังตรวจเสร็จและติ๊ก checkpoint แล้ว ให้พิมพ์ X ในช่อง OK ของ PDF ล่าสุด"""
+def _qc_mark(job, checkpoint_no, target_status='OK'):
+    """พิมพ์ X ลงช่อง OK หรือ NG จากข้อมูลที่ QC เลือกตอน Approve"""
+    approvals = (job or {}).get('approvals') or {}
+    qc = approvals.get('qc') or {}
+    checklist = qc.get('qc_checklist') or {}
+    key = str(checkpoint_no)
+    target_status = str(target_status or '').upper()
+    if isinstance(checklist, dict):
+        val = checklist.get(key) or checklist.get(int(key))
+        if isinstance(val, dict):
+            return 'X' if str(val.get('status') or '').upper() == target_status else ''
+        # รองรับข้อมูลเก่า V7 ที่เป็น True = OK
+        if target_status == 'OK' and val:
+            return 'X'
+    if isinstance(checklist, list) and target_status == 'OK':
+        return 'X' if key in [str(x) for x in checklist] else ''
+    return ''
+
+
+def _qc_note(job, checkpoint_no):
     approvals = (job or {}).get('approvals') or {}
     qc = approvals.get('qc') or {}
     checklist = qc.get('qc_checklist') or {}
     key = str(checkpoint_no)
     if isinstance(checklist, dict):
-        return 'X' if checklist.get(key) or checklist.get(int(key)) else ''
-    if isinstance(checklist, list):
-        return 'X' if key in [str(x) for x in checklist] else ''
+        val = checklist.get(key) or checklist.get(int(key))
+        if isinstance(val, dict):
+            return str(val.get('note') or '')
     return ''
 
 
@@ -203,14 +221,14 @@ def _department_qr_block(qc_qr_image_stream, warehouse_qr_image_stream, cell_c, 
         ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
     ]))
 
-    note_p = _p('หมายเหตุ: QR Code บนหัวเอกสารจะเปิดหน้า QC Form และเติมข้อมูล QR No., บริษัท และรายการสินค้าให้อัตโนมัติ โดย QC สามารถกรอกผลตรวจแยกตาม Item เช่น ประเภทสินค้า, Model, อัตราทด, กระแส, เสียง, น้ำมัน และรูปภาพของแต่ละรายการ', note)
+    note_p = _p('หมายเหตุ: QR Code บนหัวเอกสารจะเปิดหน้า QC Form และเติมข้อมูล QR No., บริษัท และรายการสินค้าให้อัตโนมัติ โดย QC สามารถกรอกผลตรวจแยกตาม Item เช่น ประเภทสินค้า, Model, จำนวน, อัตราทด, กระแส, เสียง, น้ำมัน และรูปภาพของแต่ละรายการ', note)
     return [dept_qr_tbl, Spacer(1, 2*mm), note_p]
 
 def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=None, qc_qr_image_stream=None, warehouse_qr_image_stream=None):
     """
     job structure:
     {
-      qr_no, company_name, product_type, item_count, items:[{no, product_type, model, assembly}],
+      qr_no, company_name, product_type, item_count, items:[{no, product_type, model, qty, assembly}],
       form_url, created_at
     }
     """
@@ -303,17 +321,24 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
     story.append(Spacer(1, 2*mm))
 
     story.append(_section_bar('1) รายการสินค้า / Product Items', section))
-    item_rows = [[_p('Item', head), _p('ประเภทสินค้า', head), _p('Model สินค้า', head), _p('สถานะงาน', head), _p('QC Result', head), _p('หมายเหตุ', head)]]
+    item_rows = [[
+        _p('Item', head), _p('ประเภทสินค้า', head), _p('Model สินค้า', head), _p('จำนวน', head),
+        _p('สถานะงาน', head), _p('เตรียมจริง', head), _p('QC Result', head), _p('หมายเหตุ', head)
+    ]]
     for item in (job.get('items') or [])[:30]:
+        wh_qty = item.get('warehouse_prepared_qty')
+        wh_note = item.get('warehouse_note') or ''
         item_rows.append([
             _p(str(item.get('no', '')), cell_c),
             _p(item.get('product_type') or job.get('product_type', ''), cell),
             _p(item.get('model', ''), cell),
+            _p(str(item.get('qty', 1)), cell_c),
             _p(item.get('assembly', ''), cell_c),
+            _p('' if wh_qty is None else str(wh_qty), cell_c),
             _p('Pass / NG', cell_c),
-            _p('', cell),
+            _p(wh_note, cell),
         ])
-    item_tbl = Table(item_rows, colWidths=[12*mm, 37*mm, 69*mm, 21*mm, 20*mm, 16*mm], repeatRows=1)
+    item_tbl = Table(item_rows, colWidths=[10*mm, 30*mm, 54*mm, 13*mm, 18*mm, 17*mm, 14*mm, 19*mm], repeatRows=1)
     item_tbl.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0b63ce')),
         ('GRID', (0, 0), (-1, -1), 0.35, colors.HexColor('#cbd5e1')),
@@ -328,8 +353,10 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
     checks = QC_CHECKPOINTS
     check_rows = [[_p('No.', head), _p('หัวข้อที่ต้องตรวจ', head), _p('OK', head), _p('NG', head), _p('หมายเหตุ', head)]]
     for no, text in checks:
-        ok_mark = _qc_ok_mark(job, no)
-        check_rows.append([_p(no, cell_c), _p(text, cell), _p(ok_mark, cell_c), _p('', cell_c), _p('', cell)])
+        ok_mark = _qc_mark(job, no, 'OK')
+        ng_mark = _qc_mark(job, no, 'NG')
+        check_note = _qc_note(job, no)
+        check_rows.append([_p(no, cell_c), _p(text, cell), _p(ok_mark, cell_c), _p(ng_mark, cell_c), _p(check_note, cell)])
     check_tbl = Table(check_rows, colWidths=[12*mm, 111*mm, 14*mm, 14*mm, 24*mm], repeatRows=1)
     check_tbl.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0b63ce')),
