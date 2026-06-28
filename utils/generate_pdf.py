@@ -36,8 +36,9 @@ _font_candidates = [
     os.path.join(BASE_DIR, "static", "THSarabunNew.ttf"),
     os.path.join(BASE_DIR, "THSarabunNew.ttf"),
     "/usr/share/fonts/truetype/thai/THSarabunNew.ttf",
-    "/usr/share/fonts/opentype/tlwg/Garuda.otf",
+    # fallback ตัวนี้รองรับไทย/อังกฤษ/ตัวเลขในฟอนต์เดียวกัน เหมาะกับ local/Render
     "/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf",
+    "/usr/share/fonts/opentype/tlwg/Garuda.otf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
 ]
 _font_registered = False
@@ -55,12 +56,7 @@ if not _font_registered:
 
 
 def _font_for_text(text):
-    """ใช้ Helvetica กับข้อความ Latin/ตัวเลขล้วน กันฟอนต์ไทยบางชุดไม่แสดง ASCII"""
-    t = str(text or '')
-    has_thai = re.search(r'[ก-๙]', t) is not None
-    has_latin = re.search(r'[A-Za-z0-9]', t) is not None
-    if has_latin and not has_thai:
-        return 'Helvetica'
+    # ใช้ฟอนต์เดียวกันทั้ง PDF เพื่อให้ตัวอักษรไทย/อังกฤษ/ตัวเลขไม่โดดขนาดกัน
     return 'THSarabunNew'
 
 sas_logo_path  = os.path.join(BASE_DIR, "static", "logo_sas.png")
@@ -148,18 +144,38 @@ def _format_th_date(d):
     return d.strftime("%d/%m/%Y")
 
 
-def _compute_warranty_end_date(data):
-    w_raw = data.get("warranty")
+def _extract_warranty_months(w_raw):
+    """ดึงจำนวนเดือนรับประกันจากค่าเช่น 18, 18 เดือน, 24M"""
     try:
-        digits = "".join(ch for ch in str(w_raw) if ch.isdigit())
+        digits = "".join(ch for ch in str(w_raw or "") if ch.isdigit())
         months = int(digits) if digits else None
     except Exception:
         months = None
-    if months not in (18, 24, 36):
-        return None
-    doc_date   = _parse_th_date(data.get("date")) or date.today()
+    return months if months in (18, 24, 36) else None
+
+
+def _compute_warranty_period(w_raw, doc_date_raw=None):
+    """คืน (months, warranty_start_date, warranty_end_date) โดยเริ่มรับประกันหลังวันตรวจ 7 วัน"""
+    months = _extract_warranty_months(w_raw)
+    if not months:
+        return None, None, None
+    doc_date = _parse_th_date(doc_date_raw) or date.today()
     start_date = doc_date + timedelta(days=7)
-    return _add_months(start_date, months)
+    end_date = _add_months(start_date, months)
+    return months, start_date, end_date
+
+
+def _compute_warranty_end_date(data):
+    _months, _start_date, end_date = _compute_warranty_period(data.get("warranty"), data.get("date"))
+    return end_date
+
+
+def _compute_item_warranty_period(data, item):
+    """คำนวณวันเริ่ม/สิ้นสุดรับประกันราย Item สำหรับงานหลายรายการ"""
+    item = item or {}
+    w_raw = item.get('warranty') or data.get('warranty')
+    doc_date_raw = item.get('date') or data.get('date')
+    return _compute_warranty_period(w_raw, doc_date_raw)
 
 
 # ──────────────────────────────────────────────
@@ -180,9 +196,9 @@ def draw_header_bar(c, width, height):
 
     # ชื่อบริษัท (ขาว)
     c.setFillColor(WHITE)
-    c.setFont("Helvetica-Bold", 15)
+    c.setFont("THSarabunNew", 17)
     c.drawString(1.8 * cm, height - 1.35 * cm, "SYNERGY ASIA SOLUTION CO., LTD.")
-    c.setFont("Helvetica", 9)
+    c.setFont("THSarabunNew", 12)
     c.drawString(1.8 * cm, height - 2.0 * cm, "www.synergy-as.com  |  www.motorsas.com")
 
     # โลโก้ขวา
@@ -257,7 +273,7 @@ def draw_footer(c, width, page_num=None):
     c.rect(0, 0, width, footer_h, fill=1, stroke=0)
 
     c.setFillColor(WHITE)
-    c.setFont("Helvetica", 9)
+    c.setFont("THSarabunNew", 12)
     c.drawString(1.5 * cm, 0.45 * cm, "SAS Service: 099-8527166")
     c.drawCentredString(width / 2, 0.45 * cm, "SAS QC Gear Motor Report")
     if page_num:
@@ -394,46 +410,93 @@ def _item_get(item, key, default=''):
     return _safe_str((item or {}).get(key), default)
 
 
-def _draw_cell_text(c, text, x, y_top, w, h, font_size=9, leading=9.5, max_lines=2, color=BLACK, center=False):
+def _wrap_text_to_width(text, font_name, font_size, max_width, max_lines=2):
+    """wrap โดยใช้ความกว้างจริงของฟอนต์ เพื่อไม่ให้ข้อความล้นข้ามช่อง"""
     text = '' if text is None else str(text)
     text = text.replace('\r', ' ').replace('\n', ' ')
-    # canvas ไม่มี word wrap ภาษาไทยดีพอ จึง wrap แบบประมาณจำนวนตัวอักษรต่อความกว้าง
-    approx_chars = max(6, int(w / (font_size * 0.42)))
-    words = text.split(' ')
+    if not text.strip():
+        return ['']
+
+    tokens = text.split(' ')
     lines = []
     cur = ''
-    for word in words:
-        if not word:
+
+    def fits(s):
+        return pdfmetrics.stringWidth(s, font_name, font_size) <= max_width
+
+    def split_long_token(token):
+        parts, buf = [], ''
+        for ch in token:
+            cand = buf + ch
+            if fits(cand) or not buf:
+                buf = cand
+            else:
+                parts.append(buf)
+                buf = ch
+        if buf:
+            parts.append(buf)
+        return parts
+
+    for token in tokens:
+        if token == '':
             continue
-        cand = (cur + ' ' + word).strip()
-        if len(cand) <= approx_chars:
-            cur = cand
+        if not fits(token):
+            pieces = split_long_token(token)
         else:
-            if cur:
-                lines.append(cur)
-            while len(word) > approx_chars:
-                lines.append(word[:approx_chars])
-                word = word[approx_chars:]
-            cur = word
-    if cur:
+            pieces = [token]
+        for piece in pieces:
+            cand = (cur + ' ' + piece).strip() if cur else piece
+            if fits(cand):
+                cur = cand
+            else:
+                if cur:
+                    lines.append(cur)
+                cur = piece
+                if len(lines) >= max_lines:
+                    break
+        if len(lines) >= max_lines:
+            break
+    if cur and len(lines) < max_lines:
         lines.append(cur)
     if not lines:
         lines = ['']
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
-        if lines[-1]:
-            lines[-1] = lines[-1][:max(0, approx_chars-2)] + '..'
+
+    # ใส่ .. เฉพาะเมื่อยังยาวเกินจำนวนบรรทัด
+    original = ' '.join(tokens)
+    rendered = ' '.join(lines)
+    if len(rendered) < len(original) and lines:
+        last = lines[-1]
+        while last and not fits(last + '..'):
+            last = last[:-1]
+        lines[-1] = (last + '..') if last else '..'
+    return lines[:max_lines]
+
+
+def _draw_cell_text(c, text, x, y_top, w, h, font_size=9, leading=9.5, max_lines=2, color=BLACK, center=False):
+    """วาดข้อความในช่องตารางแบบไม่ล้นข้ามช่อง + ใช้ฟอนต์เดียวกันทั้งหมด"""
+    font_name = 'THSarabunNew'
+    text = '' if text is None else str(text)
+    inner_pad = 3
+    inner_w = max(4, w - inner_pad * 2)
+    lines = _wrap_text_to_width(text, font_name, font_size, inner_w, max_lines=max_lines)
+
+    # clip ข้อความให้อยู่ในกรอบช่องเท่านั้น ต่อให้ Model ยาวมากก็ไม่โดดไปช่องอื่น
+    c.saveState()
+    path = c.beginPath()
+    path.rect(x, y_top - h, w, h)
+    c.clipPath(path, stroke=0, fill=0)
+
     c.setFillColor(color)
-    c.setFont(_font_for_text(text), font_size)
+    c.setFont(font_name, font_size)
     total_h = len(lines) * leading
     yy = y_top - (h - total_h) / 2 - leading + 2
     for line in lines:
         if center:
             c.drawCentredString(x + w / 2, yy, line)
         else:
-            c.drawString(x + 3, yy, line)
+            c.drawString(x + inner_pad, yy, line)
         yy -= leading
-
+    c.restoreState()
 
 def _draw_table_header(c, y, margin, cols, headers):
     row_h = 0.72 * cm
@@ -494,6 +557,83 @@ def _draw_qc_items_table(c, y, width, height, margin, qc_items, start_page_num):
         for i, (cw, val) in enumerate(zip(cols, values)):
             center = i in (0, 3, 4, 5, 6, 8)
             _draw_cell_text(c, val, x, y, cw, row_h, font_size=8.5, leading=8.5, max_lines=2, center=center)
+            if i > 0:
+                c.line(x, y, x, y - row_h)
+            x += cw
+        y -= row_h
+
+    c.setLineWidth(0.5)
+    return y, page_num
+
+
+def _draw_warranty_items_table(c, y, width, height, margin, qc_items, data, start_page_num):
+    """วาดตารางวันเริ่มและวันสิ้นสุดรับประกันแยกตาม Item"""
+    page_num = start_page_num
+    footer_space = 2.2 * cm
+    cols = [1.0*cm, 6.0*cm, 2.0*cm, 3.1*cm, 5.3*cm]
+    headers = ['Item', 'Model', 'Warranty', 'เริ่มรับประกัน', 'สิ้นสุดการรับประกัน']
+
+    # header ของตารางนี้ต้องสูงขึ้นเล็กน้อย เพื่อให้หัวข้อภาษาไทยไม่เบียดกัน
+    row_h_head = 0.82 * cm
+    x = margin
+    c.setFillColor(NAVY_LIGHT)
+    c.roundRect(margin, y - row_h_head, sum(cols), row_h_head, 2, fill=1, stroke=0)
+    for cw, htxt in zip(cols, headers):
+        _draw_cell_text(c, htxt, x, y, cw, row_h_head, font_size=9.5, leading=9.5, max_lines=2, color=WHITE, center=True)
+        x += cw
+    y -= row_h_head
+
+    row_h = 0.78 * cm
+    for item in qc_items[:30]:
+        if y - row_h < footer_space:
+            draw_footer(c, width, page_num=page_num)
+            c.showPage()
+            page_num += 1
+            draw_header_bar(c, width, height)
+            content_top = height - 2.8 * cm - 0.5 * cm
+            c.setFillColor(NAVY)
+            c.setFont('THSarabunNew', 20)
+            c.drawCentredString(width / 2, content_top, 'รายงานการตรวจเช็คสินค้า QC Report (ต่อ)')
+            c.setStrokeColor(GOLD)
+            c.setLineWidth(1.5)
+            c.line(margin, content_top - 6, width - margin, content_top - 6)
+            c.setLineWidth(0.5)
+            y = content_top - 26
+            y = draw_section_bar(c, y, width, 'การรับประกัน / Warranty (ต่อ)', margin)
+            y -= 4
+            x = margin
+            c.setFillColor(NAVY_LIGHT)
+            c.roundRect(margin, y - row_h_head, sum(cols), row_h_head, 2, fill=1, stroke=0)
+            for cw, htxt in zip(cols, headers):
+                _draw_cell_text(c, htxt, x, y, cw, row_h_head, font_size=9.5, leading=9.5, max_lines=2, color=WHITE, center=True)
+                x += cw
+            y -= row_h_head
+
+        no_text = _item_get(item, 'no')
+        try:
+            no_int = int(no_text)
+        except Exception:
+            no_int = 0
+        c.setFillColor(ACCENT if no_int % 2 == 0 else WHITE)
+        c.rect(margin, y - row_h, sum(cols), row_h, fill=1, stroke=0)
+        c.setStrokeColor(GRAY_LINE)
+        c.setLineWidth(0.3)
+        c.rect(margin, y - row_h, sum(cols), row_h, fill=0, stroke=1)
+
+        months, start_date, end_date = _compute_item_warranty_period(data, item)
+        values = [
+            no_text,
+            _item_get(item, 'model'),
+            (f'{months} เดือน' if months else _item_get(item, 'warranty', '-')),
+            (_format_th_date(start_date) if start_date else '-'),
+            (_format_th_date(end_date) if end_date else '-'),
+        ]
+
+        x = margin
+        for i, (cw, val) in enumerate(zip(cols, values)):
+            center = i in (0, 2, 3, 4)
+            color = RED_WARN if i == 4 and val != '-' else BLACK
+            _draw_cell_text(c, val, x, y, cw, row_h, font_size=8.7, leading=8.7, max_lines=2, color=color, center=center)
             if i > 0:
                 c.line(x, y, x, y - row_h)
             x += cw
@@ -626,7 +766,28 @@ def create_qc_pdf(data, image_urls=None, image_labels=None):
         y, page_num = _draw_qc_items_table(c, y, width, height, margin, qc_items, page_num)
         y -= 10
 
-        if y < 6.0 * cm:
+        # SECTION: การรับประกัน / Warranty สำหรับงานหลาย Item
+        # ต้องแสดงวันสิ้นสุดการรับประกันเสมอ ไม่ให้ข้อมูลสำคัญหายจากเอกสาร
+        if y < 5.3 * cm:
+            draw_footer(c, width, page_num=page_num)
+            c.showPage()
+            page_num += 1
+            draw_header_bar(c, width, height)
+            c.setFillColor(NAVY)
+            c.setFont('THSarabunNew', 20)
+            c.drawCentredString(width / 2, content_top, 'รายงานการตรวจเช็คสินค้า QC Report (ต่อ)')
+            c.setStrokeColor(GOLD)
+            c.setLineWidth(1.5)
+            c.line(margin, content_top - 6, width - margin, content_top - 6)
+            c.setLineWidth(0.5)
+            y = content_top - 26
+
+        y = draw_section_bar(c, y, width, 'การรับประกัน / Warranty', margin)
+        y -= 4
+        y, page_num = _draw_warranty_items_table(c, y, width, height, margin, qc_items, data, page_num)
+        y -= 10
+
+        if y < 4.8 * cm:
             draw_footer(c, width, page_num=page_num)
             c.showPage()
             page_num += 1

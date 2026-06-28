@@ -804,11 +804,13 @@ def admin_motor_qc_generate():
         if not os.path.exists(logo_path):
             logo_path = None
 
-        barcode_items = '|'.join([f"{it['no']}:{it.get('product_type','')}:{it.get('model','')}:{it.get('assembly','')}" for it in items])
+        # ✅ Barcode สำหรับ Scanner บน PC ให้ทำงานหลักการเดียวกับ QR Code
+        # ใช้ URL เปิดฟอร์มโดยตรง ไม่ฝังรายการสินค้าทั้งหมดลงใน barcode
+        # เพื่อไม่ให้ barcode ยาวเกินจนล้นหน้า PDF และอ่านยาก
         pdf_stream = create_motor_qc_job_pdf(
             job,
             qr_image_stream=qr_stream,
-            barcode_value=f"{qr_no}|{job_key}|{barcode_items}"[:180],
+            barcode_value=form_url,
             logo_path=logo_path,
         )
         pdf_stream.seek(0)

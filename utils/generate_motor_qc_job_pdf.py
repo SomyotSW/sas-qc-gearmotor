@@ -94,9 +94,22 @@ def _logo_image(logo_path):
     return ''
 
 
-def _barcode_drawing(value):
-    # Code128 เป็น Flowable อยู่แล้ว วางใน Table ได้โดยตรง
-    return code128.Code128(str(value or ''), barHeight=11*mm, barWidth=0.36*mm, humanReadable=True)
+def _barcode_drawing(value, max_width=170*mm):
+    """สร้าง Code128 ให้เป็นแถบเดียวและย่อให้พอดีกับหน้ากระดาษ"""
+    value = str(value or '').strip()
+    if not value:
+        value = '-'
+
+    # เริ่มด้วย barWidth ปกติ แล้วคำนวณลดขนาดอัตโนมัติถ้า URL ยาว
+    bw = 0.28 * mm
+    bc = code128.Code128(value, barHeight=14*mm, barWidth=bw, humanReadable=False)
+    try:
+        if bc.width > max_width:
+            bw = max(0.10 * mm, bw * (max_width / float(bc.width)))
+            bc = code128.Code128(value, barHeight=14*mm, barWidth=bw, humanReadable=False)
+    except Exception:
+        pass
+    return bc
 
 
 def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=None):
@@ -174,17 +187,25 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
     story.append(info_tbl)
     story.append(Spacer(1, 3*mm))
 
+    # Barcode สำหรับยิง Scanner บน PC: ให้เป็นแถบเดียวเหมือน QR Code
+    # โดยฝัง form_url ไม่ฝังข้อมูลทุกรายการสินค้า เพื่อไม่ให้ barcode ยาวจนล้นกระดาษ
+    barcode_data = barcode_value or job.get('form_url') or job.get('qr_no', '')
     barcode_tbl = Table(
-        [[_p('BARCODE DATA', cell_c), _barcode_drawing(barcode_value), _p('ใช้สำหรับอ้างอิงเอกสาร / เปิดงาน QC', note)]],
-        colWidths=[28*mm, 98*mm, 49*mm],
+        [[_barcode_drawing(barcode_data)]],
+        colWidths=[175*mm],
+        rowHeights=[18*mm],
     )
     barcode_tbl.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), 0.35, colors.HexColor('#cbd5e1')),
-        ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#eaf4ff')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
     ]))
     story.append(barcode_tbl)
+    story.append(_p('Barcode Scanner Data: เปิดฟอร์ม QC อัตโนมัติเหมือน QR Code', note))
     story.append(Spacer(1, 3*mm))
 
     story.append(_section_bar('1) รายการสินค้า / Product Items', section))
