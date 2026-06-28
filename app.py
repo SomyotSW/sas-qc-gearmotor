@@ -8,6 +8,7 @@ from firebase_admin import credentials, db
 import datetime
 import io
 from utils.generate_pdf import create_qc_pdf
+from utils.generate_motor_qc_job_pdf import create_motor_qc_job_pdf
 from utils.qr_generator import generate_qr_code
 import json
 import qrcode
@@ -513,6 +514,54 @@ INSPECTOR_MAP = {
     "QC999": "คุณโชติธนินท์",
 }
 
+# ✅ Product type list ใช้ร่วมกันระหว่าง form.html และหน้าออกเอกสาร QC-Motor
+PRODUCT_TYPES = [
+    "AC/DC Gear Motor",
+    "BLDC Gear Motor",
+    "Servo Motor and Servo Drive",
+    "Planetary GearReducer",
+    "RFKS Series",
+    "H/B Gear Box",
+    "Hypoid GearMotor",
+    "Cycloidal GearMotor",
+    "SRV WormGear",
+    "SMR Gearbox",
+    "Small AC Gearmotor",
+    "Belt Conveyor",
+    "Automation",
+    "Others",
+]
+
+# ✅ Admin Motor QC Job Database
+motor_qc_jobs_ref = db.reference("/motor_qc_jobs")
+
+
+def _safe_firebase_key(value: str) -> str:
+    """Firebase key ห้ามมี . # $ [ ] / จึงต้องแปลงให้ปลอดภัย"""
+    return re.sub(r"[.#$\[\]/]", "_", str(value or "").strip())[:120]
+
+
+def _safe_next_url(next_url: str) -> str:
+    next_url = str(next_url or "").strip()
+    if next_url.startswith("/") and not next_url.startswith("//"):
+        return next_url
+    return ""
+
+
+def _next_motor_qc_no():
+    prefix = "MO" + datetime.datetime.now().strftime("%Y%m%d")
+    try:
+        rows = motor_qc_jobs_ref.order_by_key().start_at(prefix).end_at(prefix + "\uf8ff").get() or {}
+        max_no = 0
+        if isinstance(rows, dict):
+            for key in rows.keys():
+                m = re.match(rf"^{prefix}(\d{{3}})$", str(key))
+                if m:
+                    max_no = max(max_no, int(m.group(1)))
+        return prefix + str(max_no + 1).zfill(3)
+    except Exception:
+        return prefix + "001"
+
 
 @app.route('/')
 def home():
@@ -611,8 +660,107 @@ def check_status_api():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route('/admin-motor-qc', methods=['GET'])
+def admin_motor_qc():
+    return render_template(
+        'admin_motor_qc.html',
+        product_types=PRODUCT_TYPES,
+        default_qr_no=_next_motor_qc_no()
+    )
+
+
+@app.route('/admin-motor-qc/generate', methods=['POST'])
+def admin_motor_qc_generate():
+    try:
+        qr_no = (request.form.get('qr_no') or _next_motor_qc_no()).strip().upper()
+        company_name = (request.form.get('company_name') or '').strip()
+        product_type = (request.form.get('product_type') or '').strip()
+
+        models = request.form.getlist('item_model[]')
+        assemblies = request.form.getlist('item_assembly[]')
+        items = []
+        for i, model in enumerate(models[:30]):
+            model = str(model or '').strip()
+            if not model:
+                continue
+            assembly = assemblies[i] if i < len(assemblies) else 'ไม่ประกอบ'
+            assembly = 'ประกอบ' if str(assembly).strip() == 'ประกอบ' else 'ไม่ประกอบ'
+            items.append({
+                'no': len(items) + 1,
+                'model': model,
+                'assembly': assembly,
+            })
+
+        if not qr_no or not company_name or not product_type or not items:
+            return render_template(
+                'admin_motor_qc.html',
+                product_types=PRODUCT_TYPES,
+                default_qr_no=qr_no or _next_motor_qc_no(),
+                error='กรุณากรอก QR No., บริษัท, ประเภทสินค้า และรายการสินค้าอย่างน้อย 1 รายการ',
+                old=request.form
+            ), 400
+
+        job_key = _safe_firebase_key(qr_no)
+        now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
+        form_url = url_for('form', motor_qc_job=job_key, _external=True)
+
+        job = {
+            'job_key': job_key,
+            'qr_no': qr_no,
+            'company_name': company_name,
+            'product_type': product_type,
+            'items': items,
+            'form_url': form_url,
+            'item_count': len(items),
+            'created_by': 'Admin Motor',
+            'created_at': now_th.strftime('%Y-%m-%d %H:%M:%S'),
+            'status': 'generated',
+        }
+
+        # ✅ บันทึกข้อมูลไว้ก่อน เพื่อให้ QR Scan แล้วดึงข้อมูลกลับเข้า form ได้ทันที
+        motor_qc_jobs_ref.child(job_key).set(job)
+
+        # ✅ QR ในหัวเอกสารเปิด form พร้อม prefill ข้อมูล
+        qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=2)
+        qr.add_data(form_url)
+        qr.make(fit=True)
+        qr_img = qr.make_image(fill_color='black', back_color='white')
+        qr_stream = io.BytesIO()
+        qr_img.save(qr_stream, format='PNG')
+        qr_stream.seek(0)
+
+        logo_path = os.path.join(app.root_path, 'static', 'logo_sas.png')
+        if not os.path.exists(logo_path):
+            logo_path = None
+
+        pdf_stream = create_motor_qc_job_pdf(
+            job,
+            qr_image_stream=qr_stream,
+            barcode_value=f"{qr_no}|{job_key}",
+            logo_path=logo_path,
+        )
+        pdf_stream.seek(0)
+        pdf_bytes = pdf_stream.read()
+
+        # ✅ อัปโหลดขึ้น R2 เพื่อให้มีประวัติและเปิดย้อนหลังได้
+        pdf_key = f"motor_qc_jobs/{job_key}.pdf"
+        pdf_url = r2_upload_bytes(pdf_bytes, pdf_key, 'application/pdf')
+        motor_qc_jobs_ref.child(job_key).update({'pdf_url': pdf_url})
+
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f"{qr_no}_QC_Motor_Precheck.pdf"
+        )
+    except Exception as e:
+        return f"เกิดข้อผิดพลาดในการสร้างเอกสาร QC-Motor: {e}", 500
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    next_url = _safe_next_url(request.values.get('next') or session.get('after_login_url', ''))
+
     if request.method == 'POST':
         ip = _get_client_ip()
 
@@ -623,35 +771,55 @@ def login():
                 f"IP: {ip}\nUA: {request.headers.get('User-Agent','')[:200]}"
             )
             BLOCKED_IPS.add(ip)
-            return render_template('login.html', error=True, blocked=True)
+            return render_template('login.html', error=True, blocked=True, next_url=next_url)
 
         employee_id = (request.form.get('employee_id') or '').strip().upper()
         allowed_ids = list(INSPECTOR_MAP.keys())
 
         if employee_id not in allowed_ids:
             record_failed_login(ip, employee_id)
-            return render_template('login.html', error=True)
+            return render_template('login.html', error=True, next_url=next_url)
 
         session['employee_id'] = employee_id
         session['inspector_name'] = INSPECTOR_MAP.get(employee_id, employee_id)
         session['just_logged_in'] = True
+
+        target = _safe_next_url(request.form.get('next') or session.pop('after_login_url', ''))
+        if target:
+            return redirect(target)
         return redirect(url_for('form'))
 
-    return render_template('login.html')
+    return render_template('login.html', next_url=next_url)
 
 
 @app.route('/form')
 def form():
     if 'employee_id' not in session:
-        return redirect(url_for('login'))
+        # ✅ ถ้า QC สแกน QR จากเอกสารก่อน login ให้จำ URL เดิมไว้ แล้วกลับมาหน้านี้หลัง login
+        if request.query_string:
+            session['after_login_url'] = request.full_path.rstrip('?')
+        return redirect(url_for('login', next=request.full_path.rstrip('?') if request.query_string else ''))
+
     just_logged_in = session.pop('just_logged_in', False)
-    return render_template('form.html', employee_id=session['employee_id'], welcome=just_logged_in)
+
+    prefill_job = None
+    motor_qc_job_key = (request.args.get('motor_qc_job') or '').strip()
+    if motor_qc_job_key:
+        prefill_job = motor_qc_jobs_ref.child(_safe_firebase_key(motor_qc_job_key)).get() or None
+
+    return render_template(
+        'form.html',
+        employee_id=session['employee_id'],
+        welcome=just_logged_in,
+        prefill_job=prefill_job,
+        prefill_job_json=json.dumps(prefill_job, ensure_ascii=False) if prefill_job else 'null'
+    )
 
 
 @app.route('/submit', methods=['POST'])
 def submit():
     try:
-        if not request.content_type.startswith('multipart/form-data'):
+        if not (request.content_type or '').startswith('multipart/form-data'):
             return "Invalid Content-Type", 400
         
         or_no = request.form.get('or_no')
@@ -669,6 +837,12 @@ def submit():
         acdc_parts = request.form.getlist('acdc_parts')
         servo_motor_model = request.form.get('servo_motor_model')
         servo_drive_model = request.form.get('servo_drive_model')
+
+        # ✅ ข้อมูลจากเอกสาร QC-Motor ที่ Admin Motor Generate ไว้
+        motor_qc_job_key = request.form.get('motor_qc_job_key')
+        motor_qc_qr_no = request.form.get('motor_qc_qr_no')
+        motor_qc_item_no = request.form.get('motor_qc_item_no')
+        assembly_status = request.form.get('assembly_status')
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         serial = f"SAS{timestamp}"
@@ -729,9 +903,24 @@ def submit():
             "acdc_parts": acdc_parts,
             "servo_motor_model": servo_motor_model,
             "servo_drive_model": servo_drive_model,
+            "motor_qc_job_key": motor_qc_job_key,
+            "motor_qc_qr_no": motor_qc_qr_no,
+            "motor_qc_item_no": motor_qc_item_no,
+            "assembly_status": assembly_status,
             "images": images,
             "date": datetime.datetime.now().strftime("%Y-%m-%d")
         })
+
+        # ✅ อัปเดตสถานะรายการใน QC-Motor Job ว่าถูก Scan/Submit แล้ว
+        if motor_qc_job_key:
+            try:
+                job_key_safe = _safe_firebase_key(motor_qc_job_key)
+                motor_qc_jobs_ref.child(job_key_safe).child('last_qc_serial').set(serial)
+                motor_qc_jobs_ref.child(job_key_safe).child('last_qc_submit_at').set(
+                    (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime('%Y-%m-%d %H:%M:%S')
+                )
+            except Exception as _e:
+                print(f"⚠️ update motor_qc_jobs failed: {_e}", flush=True)
 
         def background_finalize():
             try:

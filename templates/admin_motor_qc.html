@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ออกเอกสาร QC-Motor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body{
+      min-height:100vh;
+      background:url("{{ url_for('static', filename='BG.png') }}") no-repeat center center fixed;
+      background-size:cover;
+      font-family:'Segoe UI',sans-serif;
+      padding:82px 18px 40px;
+    }
+    body::before{content:"";position:fixed;inset:0;background:rgba(255,255,255,.88);z-index:-1;}
+    .sas-logo{position:fixed;top:15px;left:15px;height:50px;z-index:10;}
+    .top-actions{position:fixed;top:15px;right:20px;z-index:10;display:flex;gap:10px;align-items:center;}
+    .btn-home,.btn-login{background:linear-gradient(180deg,#5aa7ff 0%,#2f79d8 100%);color:#fff!important;border:none;border-radius:10px;padding:8px 18px;font-size:1.05rem;font-weight:800;box-shadow:0 4px 12px rgba(0,70,160,.25);text-decoration:none;}
+    .btn-login{background:linear-gradient(180deg,#34d270 0%,#169c4a 100%);}
+    .shell{max-width:1080px;margin:auto;background:#fff;border-radius:22px;box-shadow:0 22px 50px rgba(15,23,42,.16);overflow:hidden;}
+    .hero{background:linear-gradient(135deg,#0b63ce 0%,#38bdf8 100%);color:#fff;padding:28px 32px;}
+    .hero h1{font-weight:900;margin:0;font-size:2rem;}
+    .hero p{margin:8px 0 0;opacity:.95;}
+    .content{padding:28px 32px;}
+    label{font-weight:800;color:#1e293b;}
+    .form-control,.form-select{border-radius:12px;padding:12px 14px;}
+    .item-card{border:1px solid #dbeafe;background:#f8fbff;border-radius:16px;padding:14px;margin-bottom:12px;}
+    .item-no{font-weight:900;color:#0b63ce;}
+    .btn-add{border:1px dashed #0b63ce;background:#eef6ff;color:#0b63ce;font-weight:900;border-radius:14px;padding:12px 16px;width:100%;}
+    .btn-generate{background:linear-gradient(180deg,#1677ff,#0958d9);border:0;border-radius:16px;padding:15px 22px;font-size:1.2rem;font-weight:900;box-shadow:0 14px 26px rgba(9,88,217,.28);}
+    .hint{font-size:.95rem;color:#64748b;}
+    .badge-soft{background:#eaf4ff;color:#0b63ce;border-radius:999px;padding:6px 12px;font-weight:800;}
+    @media(max-width:768px){.top-actions{right:12px}.sas-logo{height:42px}.hero,.content{padding:22px 18px}.hero h1{font-size:1.45rem}}
+  </style>
+</head>
+<body>
+  <img src="{{ url_for('static', filename='logo_sas.png') }}" alt="SAS Logo" class="sas-logo">
+  <div class="top-actions">
+    <a href="/login" class="btn-login">🔐 QC Login</a>
+    <a href="/" class="btn-home">🏠 Home</a>
+  </div>
+
+  <div class="shell">
+    <div class="hero">
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+        <div>
+          <h1>ออกเอกสาร QC-Motor</h1>
+          <p>สำหรับ Admin Motor สร้างเอกสารแนบงานก่อนส่งสินค้า พร้อม QR/Barcode ให้ทีม QC สแกนแล้วเปิดฟอร์มอัตโนมัติ</p>
+        </div>
+        <span class="badge-soft bg-white">สูงสุด 30 รายการ</span>
+      </div>
+    </div>
+
+    <div class="content">
+      {% if error %}
+      <div class="alert alert-danger fw-bold">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" action="/admin-motor-qc/generate" id="qcMotorForm">
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label">QR No.</label>
+            <input type="text" name="qr_no" class="form-control" value="{{ default_qr_no }}" placeholder="เช่น MO20260628001" required>
+            <div class="hint mt-1">ระบบจะใส่เลขอัตโนมัติ แก้เองได้ถ้าต้องการ</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">บริษัท</label>
+            <input type="text" name="company_name" class="form-control" placeholder="ชื่อบริษัทลูกค้า ไทย/อังกฤษ" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">ประเภทสินค้า</label>
+            <select name="product_type" class="form-select" required>
+              <option value="">-- เลือกประเภทสินค้า --</option>
+              {% for t in product_types %}
+              <option value="{{ t }}">{{ t }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <h5 class="fw-black mb-0" style="font-weight:900;color:#0f172a;">รายการสินค้า</h5>
+            <div class="hint">กรอก Model สินค้า และเลือกสถานะ ประกอบ / ไม่ประกอบ ต่อรายการ</div>
+          </div>
+          <div class="badge-soft" id="itemCounter">1 / 30</div>
+        </div>
+
+        <div id="itemsWrap"></div>
+        <button type="button" class="btn-add" id="addItemBtn">➕ เพิ่มรายการสินค้า</button>
+
+        <div class="alert alert-info mt-4">
+          <b>เอกสาร PDF ที่ได้จะมี:</b> ข้อมูลลูกค้า, รายการสินค้า, Barcode, QR สำหรับเปิด QC Form, และ Checklist จุดตรวจ Gearmotor เช่น Nameplate, Assembly, Current, Sound, Oil, Wiring, Packing
+        </div>
+
+        <div class="d-grid mt-4">
+          <button type="submit" class="btn btn-primary btn-generate" id="generateBtn">📄 Generate PDF เอกสาร QC-Motor</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+<script>
+  const MAX_ITEMS = 30;
+  const wrap = document.getElementById('itemsWrap');
+  const addBtn = document.getElementById('addItemBtn');
+  const counter = document.getElementById('itemCounter');
+
+  function renumber(){
+    const cards = [...wrap.querySelectorAll('.item-card')];
+    cards.forEach((card, idx)=>{
+      card.querySelector('.item-no').textContent = `Item ${idx+1}`;
+      const removeBtn = card.querySelector('.btn-remove');
+      removeBtn.disabled = cards.length <= 1;
+    });
+    counter.textContent = `${cards.length} / ${MAX_ITEMS}`;
+    addBtn.disabled = cards.length >= MAX_ITEMS;
+  }
+
+  function addItem(){
+    const count = wrap.querySelectorAll('.item-card').length;
+    if(count >= MAX_ITEMS) return;
+    const div = document.createElement('div');
+    div.className = 'item-card';
+    div.innerHTML = `
+      <div class="row g-2 align-items-end">
+        <div class="col-md-2"><div class="item-no">Item ${count+1}</div></div>
+        <div class="col-md-6">
+          <label class="form-label">Model สินค้า</label>
+          <input type="text" name="item_model[]" class="form-control" placeholder="เช่น R97-YVP-5.5-4P-37.13-M1-0-X" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">สถานะ</label>
+          <select name="item_assembly[]" class="form-select">
+            <option value="ประกอบ">ประกอบ</option>
+            <option value="ไม่ประกอบ">ไม่ประกอบ</option>
+          </select>
+        </div>
+        <div class="col-md-1 d-grid">
+          <button type="button" class="btn btn-outline-danger btn-remove">ลบ</button>
+        </div>
+      </div>`;
+    div.querySelector('.btn-remove').addEventListener('click',()=>{ div.remove(); renumber(); });
+    wrap.appendChild(div);
+    renumber();
+  }
+
+  addBtn.addEventListener('click', addItem);
+  addItem();
+
+  document.getElementById('qcMotorForm').addEventListener('submit', ()=>{
+    const btn = document.getElementById('generateBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ กำลังสร้าง PDF...';
+  });
+</script>
+</body>
+</html>

@@ -28,11 +28,17 @@
       z-index: 10;
     }
 
-    .btn-home {
+    .top-actions {
       position: fixed;
       top: 15px;
       right: 20px;
       z-index: 10;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .btn-home, .btn-qc-motor {
       background: linear-gradient(180deg, #5aa7ff 0%, #2f79d8 100%);
       color: #fff !important;
       border: none;
@@ -42,10 +48,16 @@
       font-weight: 700;
       box-shadow: 0 4px 12px rgba(0,70,160,0.25);
       text-decoration: none;
-      transition: filter 0.15s;
+      transition: filter 0.15s, transform 0.12s;
+      white-space: nowrap;
     }
-    .btn-home:hover {
+    .btn-qc-motor {
+      background: linear-gradient(180deg, #34d270 0%, #169c4a 100%);
+      box-shadow: 0 4px 12px rgba(15,125,60,0.25);
+    }
+    .btn-home:hover, .btn-qc-motor:hover {
       filter: brightness(1.1);
+      transform: translateY(-1px);
       text-decoration: none;
     }
 
@@ -96,12 +108,17 @@
     @media (max-width: 768px) {
       .side-img { display: none; }
       .login-container { width: 100%; max-width: 400px; }
+      .top-actions { right: 12px; gap: 6px; }
+      .btn-home, .btn-qc-motor { padding: 7px 10px; font-size: 0.9rem; }
     }
   </style>
 </head>
 <body>
   <img src="{{ url_for('static', filename='logo_sas.png') }}" alt="SAS Logo" class="sas-logo">
-  <a href="/" class="btn-home">🏠 Home</a>
+  <div class="top-actions">
+    <a href="/admin-motor-qc" class="btn-qc-motor">📄 ออกเอกสารQC-Motor</a>
+    <a href="/" class="btn-home">🏠 Home</a>
+  </div>
 
   <div class="overlay">
     <div class="layout-row">
@@ -110,6 +127,7 @@
       <div class="login-container">
         <h2>เข้าสู่ระบบ QC</h2>
         <form method="post" action="/login">
+          <input type="hidden" name="next" value="{{ next_url or request.args.get('next', '') }}">
           <div class="mb-3">
             <label class="form-label">รหัสพนักงาน</label>
             <input type="text" name="employee_id" class="form-control" placeholder="เช่น QC001" required>

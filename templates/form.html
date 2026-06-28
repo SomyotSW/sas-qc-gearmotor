@@ -89,6 +89,29 @@
       <form action="/submit" method="POST" enctype="multipart/form-data" onsubmit="return handleSubmit()">
         <input type="hidden" name="inspector" value="{{ employee_id }}">
 
+        {% if prefill_job %}
+        <div class="alert alert-info border-0 shadow-sm" style="background:#eaf4ff;border-radius:16px;">
+          <input type="hidden" name="motor_qc_job_key" value="{{ prefill_job.get('job_key','') }}">
+          <input type="hidden" name="motor_qc_qr_no" value="{{ prefill_job.get('qr_no','') }}">
+          <input type="hidden" name="motor_qc_item_no" id="motor_qc_item_no" value="">
+          <input type="hidden" name="assembly_status" id="assembly_status" value="">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <div>
+              <b>📄 ข้อมูลจากเอกสาร QC-Motor:</b>
+              <span class="ms-1">{{ prefill_job.get('qr_no','') }} | {{ prefill_job.get('company_name','') }}</span>
+            </div>
+            <span class="badge bg-primary">Scan QR Prefill</span>
+          </div>
+          <label class="form-label mb-1">เลือกรายการสินค้าที่กำลังตรวจ</label>
+          <select id="motor_qc_item_select" class="form-select mb-2" onchange="applyMotorQcItem()">
+            {% for item in prefill_job.get('items', []) %}
+            <option value="{{ loop.index0 }}">Item {{ item.get('no', loop.index) }} : {{ item.get('model','') }} ({{ item.get('assembly','') }})</option>
+            {% endfor %}
+          </select>
+          <div class="small text-muted">ระบบจะเติม OR No., บริษัท, ประเภทสินค้า และ Model ให้อัตโนมัติ หากมีหลายรายการให้เลือก Item ก่อนส่งข้อมูล QC</div>
+        </div>
+        {% endif %}
+
         <div class="row">
           <div class="col-md-6">
             <label>OR No.</label>
@@ -116,8 +139,8 @@
               <option value="SRV WormGear">SRV WormGear</option>
               <option value="SMR Gearbox">SMR Gearbox</option>
               <option value="Small AC Gearmotor">Small AC Gearmotor</option>
-              <option value="Belt Conveyor">Others</option>
-              <option value="Automation">Others</option>
+              <option value="Belt Conveyor">Belt Conveyor</option>
+              <option value="Automation">Automation</option>
               <option value="Others">Others</option>
             </select>
           </div>
@@ -261,6 +284,8 @@
   </div>
 
   <script>
+    const PREFILL_JOB = {{ prefill_job_json|safe }};
+
     function handleSubmit() {
       document.getElementById("overlay").style.display = "flex";
       const audio = new Audio("/static/waiting.mp3");
@@ -293,6 +318,45 @@
       const controller = document.getElementById("part_controller");
       document.getElementById("controller_image").style.display = controller.checked ? "block" : "none";
     }
+
+    function setFormValueByName(name, value) {
+      const el = document.querySelector(`[name="${name}"]`);
+      if (el) el.value = value || "";
+    }
+
+    function applyMotorQcItem() {
+      if (!PREFILL_JOB || !Array.isArray(PREFILL_JOB.items) || PREFILL_JOB.items.length === 0) return;
+      const select = document.getElementById("motor_qc_item_select");
+      const idx = select ? Number(select.value || 0) : 0;
+      const item = PREFILL_JOB.items[idx] || PREFILL_JOB.items[0];
+
+      setFormValueByName("motor_nameplate", item.model || "");
+      const itemNo = document.getElementById("motor_qc_item_no");
+      const assemblyStatus = document.getElementById("assembly_status");
+      if (itemNo) itemNo.value = item.no || (idx + 1);
+      if (assemblyStatus) assemblyStatus.value = item.assembly || "";
+
+      // ถ้าเป็น AC/DC หรือ BLDC และเอกสารระบุว่าประกอบ ให้ติ๊ก Motor + Gear ให้เบื้องต้น
+      const productType = document.getElementById("product_type")?.value || "";
+      if ((productType === "AC/DC Gear Motor" || productType === "BLDC Gear Motor") && item.assembly === "ประกอบ") {
+        const motor = document.getElementById("part_motor");
+        const gear = document.getElementById("part_gear");
+        if (motor) motor.checked = true;
+        if (gear) gear.checked = true;
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      if (PREFILL_JOB) {
+        setFormValueByName("or_no", PREFILL_JOB.qr_no || "");
+        setFormValueByName("company_name", PREFILL_JOB.company_name || "");
+        setFormValueByName("product_type", PREFILL_JOB.product_type || "");
+        updateFormFields();
+        applyMotorQcItem();
+      } else {
+        updateFormFields();
+      }
+    });
   </script>
 </body>
 </html>
