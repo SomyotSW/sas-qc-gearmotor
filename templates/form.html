@@ -108,7 +108,7 @@
             <option value="{{ loop.index0 }}">Item {{ item.get('no', loop.index) }} : {{ item.get('model','') }} ({{ item.get('assembly','') }})</option>
             {% endfor %}
           </select>
-          <div class="small text-muted">ระบบจะเติม OR No., บริษัท, ประเภทสินค้า และ Model ให้อัตโนมัติ หากมีหลายรายการให้เลือก Item ก่อนส่งข้อมูล QC</div>
+          <div class="small text-muted">ระบบจะเติม OR No., บริษัท, ประเภทสินค้า และ Model ทุกรายการให้อัตโนมัติ หากต้องการระบุรายการที่กำลังตรวจ ให้เลือก Item ด้านบนก่อนส่งข้อมูล QC</div>
         </div>
         {% endif %}
 
@@ -146,7 +146,8 @@
           </div>
           <div class="col-md-6">
             <label>ชื่อมอเตอร์ ( Model : )</label>
-            <input type="text" name="motor_nameplate" class="form-control">
+            <textarea name="motor_nameplate" class="form-control" rows="4" placeholder="ระบบจะดึง Model ทุกรายการจากเอกสาร QC-Motor มาแสดงที่นี่"></textarea>
+            <div id="motor_model_count_hint" class="small text-muted mt-1" style="display:none;"></div>
           </div>
         </div>
 
@@ -324,13 +325,39 @@
       if (el) el.value = value || "";
     }
 
+    function getAllMotorModelsText() {
+      if (!PREFILL_JOB || !Array.isArray(PREFILL_JOB.items)) return "";
+      return PREFILL_JOB.items
+        .filter(item => (item.model || "").trim() !== "")
+        .map((item, idx) => {
+          const no = item.no || (idx + 1);
+          const model = item.model || "";
+          const assembly = item.assembly ? ` (${item.assembly})` : "";
+          return `Item ${no}: ${model}${assembly}`;
+        })
+        .join("\n");
+    }
+
+    function applyAllMotorModels() {
+      const modelsText = getAllMotorModelsText();
+      if (modelsText) setFormValueByName("motor_nameplate", modelsText);
+
+      const hint = document.getElementById("motor_model_count_hint");
+      if (hint && PREFILL_JOB && Array.isArray(PREFILL_JOB.items)) {
+        hint.style.display = "block";
+        hint.textContent = `ระบบดึง Model จากเอกสาร QC-Motor ทั้งหมด ${PREFILL_JOB.items.length} รายการ`;
+      }
+    }
+
     function applyMotorQcItem() {
       if (!PREFILL_JOB || !Array.isArray(PREFILL_JOB.items) || PREFILL_JOB.items.length === 0) return;
       const select = document.getElementById("motor_qc_item_select");
       const idx = select ? Number(select.value || 0) : 0;
       const item = PREFILL_JOB.items[idx] || PREFILL_JOB.items[0];
 
-      setFormValueByName("motor_nameplate", item.model || "");
+      // ช่อง Model ต้องแสดงครบทุก Item จากเอกสาร ไม่ใช่แค่รายการที่เลือก
+      applyAllMotorModels();
+
       const itemNo = document.getElementById("motor_qc_item_no");
       const assemblyStatus = document.getElementById("assembly_status");
       if (itemNo) itemNo.value = item.no || (idx + 1);

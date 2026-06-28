@@ -142,7 +142,7 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
     info = [
         [_p('QR No.', cell_c), _p(job.get('qr_no', '-'), cell), _p('วันที่ออกเอกสาร', cell_c), _p(job.get('created_at', '-'), cell)],
         [_p('บริษัท', cell_c), _p(job.get('company_name', '-'), cell), _p('ประเภทสินค้า', cell_c), _p(job.get('product_type', '-'), cell)],
-        [_p('จำนวนรายการ', cell_c), _p(str(job.get('item_count') or len(job.get('items', []))), cell), _p('ผู้จัดทำ', cell_c), _p(job.get('created_by', 'Admin Motor'), cell)],
+        [_p('จำนวนรายการ', cell_c), _p(str(job.get('item_count') or len(job.get('items', []))), cell), _p('ผู้จัดทำ', cell_c), _p(job.get('created_by', 'Admin Motor SAS04'), cell)],
     ]
     info_tbl = Table(info, colWidths=[28*mm, 72*mm, 28*mm, 47*mm])
     info_tbl.setStyle(TableStyle([
@@ -220,7 +220,7 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
     story.append(Spacer(1, 3*mm))
 
     sign_tbl = Table([
-        [_p('Admin Motor', cell_c), _p('QC Inspector', cell_c), _p('Warehouse / Packing', cell_c)],
+        [_p('Admin Motor SAS04', cell_c), _p('QC Inspector', cell_c), _p('Warehouse / Packing', cell_c)],
         ['', '', ''],
         [_p('วันที่ / Date: ____________', small), _p('วันที่ / Date: ____________', small), _p('วันที่ / Date: ____________', small)],
     ], colWidths=[58*mm, 58*mm, 58*mm], rowHeights=[7*mm, 14*mm, 7*mm])
