@@ -221,7 +221,7 @@ def _department_qr_block(qc_qr_image_stream, warehouse_qr_image_stream, cell_c, 
         ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
     ]))
 
-    note_p = _p('หมายเหตุ: QR Code บนหัวเอกสารจะเปิดหน้า QC Form และเติมข้อมูล QR No., บริษัท และรายการสินค้าให้อัตโนมัติ โดย QC สามารถกรอกผลตรวจแยกตาม Item เช่น ประเภทสินค้า, Model, จำนวน, อัตราทด, กระแส, เสียง, น้ำมัน และรูปภาพของแต่ละรายการ', note)
+    note_p = _p('หมายเหตุ: QR Code บนหัวเอกสารจะเปิดหน้า QC Form และเติมข้อมูล QR No., บริษัท และรายการสินค้าให้อัตโนมัติ โดย QC สามารถกรอกผลตรวจแยกตาม Item เช่น ประเภทสินค้า, Model, จำนวน, อัตราทด, กระแส, เสียง, น้ำมัน และรูปภาพของแต่ละรายการ โดยไฟล์ใบจอง PDF จะถูกแนบท้ายเอกสารชุดนี้ในไฟล์เดียวกันทุกขั้นตอน', note)
     return [dept_qr_tbl, Spacer(1, 2*mm), note_p]
 
 def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=None, qc_qr_image_stream=None, warehouse_qr_image_stream=None):
@@ -265,7 +265,7 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
 
     header_left = [
         _p('QC-GEARMOTOR PRE-CHECK DOCUMENT', title),
-        _p('เอกสารแนบงานก่อนส่งสินค้า - สแกน QR เพื่อเปิดฟอร์ม QC พร้อมข้อมูลอัตโนมัติ', subtitle),
+        _p('เอกสารแนบงานก่อนส่งสินค้า - สแกน QR เพื่อเปิดฟอร์ม QC พร้อมข้อมูลอัตโนมัติ / ใบจองแนบท้ายไฟล์เดียวกัน', subtitle),
     ]
     header_tbl = Table(
         [[_logo_image(logo_path), header_left, _qr_image(qr_image_stream)]],
@@ -285,6 +285,11 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
         [_p('บริษัท', cell_c), _p(job.get('company_name', '-'), cell), _p('จำนวนรายการ', cell_c), _p(str(job.get('item_count') or len(job.get('items', []))), cell)],
         [_p('ประเภทสินค้า', cell_c), _p(job.get('product_type', 'หลายประเภทสินค้า'), cell), _p('ผู้จัดทำ', cell_c), _p(job.get('created_by', 'Admin Motor'), cell)],
     ]
+    if job.get('booking_pdf_filename'):
+        booking_text = str(job.get('booking_pdf_filename') or '-')
+        if job.get('booking_pdf_page_count'):
+            booking_text += f" ({job.get('booking_pdf_page_count')} หน้า)"
+        info.append([_p('ใบจอง PDF', cell_c), _p(booking_text, cell), _p('สถานะไฟล์', cell_c), _p('แนบท้ายเอกสารชุดนี้', cell)])
     info_tbl = Table(info, colWidths=[28*mm, 72*mm, 28*mm, 47*mm])
     info_tbl.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), 0.35, colors.HexColor('#cbd5e1')),

@@ -63,13 +63,16 @@
           <div class="alert alert-warning fw-bold">⚠️ Approve ถูกบันทึกแล้ว แต่ส่งอีเมลไม่สำเร็จ: {{ mail_error }}</div>
           <div class="alert alert-info">ไฟล์ PDF ล่าสุดถูกสร้างแล้ว สามารถเปิดส่งเองชั่วคราวได้ และให้ตรวจ Render Logs / last_mail_status ใน Firebase</div>
         {% else %}
-          <div class="alert alert-success fw-bold">✅ Approve เรียบร้อยแล้ว ระบบส่งอีเมลพร้อมแนบไฟล์ PDF แล้ว</div>
+          <div class="alert alert-success fw-bold">✅ Approve เรียบร้อยแล้ว ระบบส่งอีเมลพร้อมแนบไฟล์ PDF ชุดเดียวกันแล้ว</div>
         {% endif %}
         {% if pdf_url %}<a class="btn btn-primary fw-bold" href="{{ pdf_url }}" target="_blank">เปิดไฟล์ PDF ล่าสุด</a>{% endif %}
       {% else %}
         {% if error %}<div class="alert alert-danger fw-bold">{{ error }}</div>{% endif %}
         <div class="info-box mb-3">
           <b>โปรดตรวจสอบรายการสินค้า:</b>
+          {% if job.get('booking_pdf_filename') %}
+          <div class="small text-primary fw-bold mt-1">📎 ใบจอง PDF: {{ job.get('booking_pdf_filename') }} - แนบท้ายไฟล์ QC-GEARMOTOR PRE-CHECK DOCUMENT ทุกครั้ง</div>
+          {% endif %}
           <div class="table-responsive mt-2">
             <table class="table table-sm table-bordered bg-white mb-0">
               <thead class="table-primary"><tr><th>Item</th><th>ประเภทสินค้า</th><th>Model</th><th>จำนวนตามเอกสาร</th><th>สถานะ</th><th>เตรียมจริงล่าสุด</th><th>หมายเหตุ Warehouse</th></tr></thead>

@@ -34,6 +34,9 @@
     .badge-soft{background:#eaf4ff;color:#0b63ce;border-radius:999px;padding:6px 12px;font-weight:800;}
     .required-dot{color:#dc2626;}
     .summary-box{border:1px solid #bfdbfe;background:#eff6ff;border-radius:16px;padding:14px;color:#1e3a8a;}
+    .booking-box{border:1px solid #c7d2fe;background:linear-gradient(180deg,#f8fbff,#eef6ff);border-radius:18px;padding:16px;margin:6px 0 22px;}
+    .booking-title{font-weight:900;color:#0f172a;display:flex;align-items:center;gap:8px;}
+    .booking-file-note{font-size:.9rem;color:#475569;margin-top:8px;}
     .qty-group{display:flex;align-items:center;gap:6px;}
     .qty-group .btn-qty{width:38px;height:42px;border:1px solid #bfdbfe;background:#eaf4ff;color:#0b63ce;border-radius:12px;font-weight:900;font-size:1.15rem;line-height:1;}
     .qty-group input{text-align:center;font-weight:900;}
@@ -75,7 +78,7 @@
       <div class="alert alert-danger fw-bold">{{ error }}</div>
       {% endif %}
 
-      <form method="post" action="/admin-motor-qc/generate" id="qcMotorForm">
+      <form method="post" action="/admin-motor-qc/generate" id="qcMotorForm" enctype="multipart/form-data">
         <div class="row g-3 mb-3">
           <div class="col-md-4">
             <label class="form-label">QR No. <span class="required-dot">*</span></label>
@@ -86,6 +89,19 @@
             <label class="form-label">บริษัท <span class="required-dot">*</span></label>
             <input type="text" name="company_name" class="form-control" placeholder="ชื่อบริษัทลูกค้า ไทย/อังกฤษ" required>
             <div class="hint mt-1">หนึ่ง Order สามารถมีหลายประเภทสินค้า / หลาย Model ได้</div>
+          </div>
+        </div>
+
+        <div class="booking-box">
+          <div class="row g-3 align-items-center">
+            <div class="col-lg-4">
+              <div class="booking-title">📎 อัปโหลดใบจอง PDF <span class="required-dot">*</span></div>
+              <div class="hint">ไฟล์นี้จะถูกรวมท้าย QC-GEARMOTOR PRE-CHECK DOCUMENT และแนบไปกับทุกขั้นตอนเมล/Approve</div>
+            </div>
+            <div class="col-lg-8">
+              <input type="file" name="booking_pdf" id="bookingPdfInput" class="form-control" accept="application/pdf,.pdf" required>
+              <div class="booking-file-note" id="bookingFileNote">รองรับไฟล์ .pdf เท่านั้น / ระบบจะรวมเป็นไฟล์เดียวกับเอกสาร QC-Motor</div>
+            </div>
           </div>
         </div>
 
@@ -102,7 +118,7 @@
 
         <div class="summary-box mt-4">
           <b>PDF ที่ได้จะรองรับข้อมูลหลายรายการ:</b>
-          ประเภทสินค้าแต่ละ Item, Model แต่ละ Item, จำนวน, สถานะประกอบ/ไม่ประกอบ, Barcode, QR สำหรับเปิด QC Form และ Checklist จุดตรวจ Gearmotor
+          ประเภทสินค้าแต่ละ Item, Model แต่ละ Item, จำนวน, สถานะประกอบ/ไม่ประกอบ, ใบจอง PDF แนบท้ายไฟล์เดียวกัน, Barcode, QR สำหรับเปิด QC Form และ Checklist จุดตรวจ Gearmotor
         </div>
 
         <div class="d-grid mt-4">
@@ -122,7 +138,8 @@
       <div class="review-body">
         <div class="row g-3 mb-3">
           <div class="col-md-4"><b>QR / OR No.</b><div id="reviewQrNo" class="text-primary fw-bold"></div></div>
-          <div class="col-md-8"><b>บริษัท</b><div id="reviewCompany" class="text-primary fw-bold"></div></div>
+          <div class="col-md-4"><b>บริษัท</b><div id="reviewCompany" class="text-primary fw-bold"></div></div>
+          <div class="col-md-4"><b>ใบจอง PDF</b><div id="reviewBooking" class="text-primary fw-bold"></div></div>
         </div>
         <div class="table-responsive">
           <table class="review-table">
@@ -133,7 +150,7 @@
           </table>
         </div>
         <div class="alert alert-warning mt-3 mb-0">
-          เมื่อกด <b>Approve Generate PDF</b> ระบบจะสร้างไฟล์ PDF, ลง Approve ของ <b>Admin SAS04</b>, สร้าง QR แยกสำหรับ Warehouse และ QC Inspector และส่งอีเมลพร้อมแนบ PDF ให้ Warehouse ทันที
+          เมื่อกด <b>Approve Generate PDF</b> ระบบจะสร้างไฟล์ PDF, ลง Approve ของ <b>Admin SAS04</b>, สร้าง QR แยกสำหรับ Warehouse และ QC Inspector รวมใบจองไว้ท้ายไฟล์เดียวกัน และส่งอีเมลพร้อมแนบ PDF ให้ Warehouse ทันที
         </div>
       </div>
       <div class="review-actions">
@@ -213,6 +230,25 @@
   addBtn.addEventListener('click', addItem);
   addItem();
 
+  const bookingPdfInput = document.getElementById('bookingPdfInput');
+  bookingPdfInput?.addEventListener('change', () => {
+    const file = bookingPdfInput.files?.[0];
+    const note = document.getElementById('bookingFileNote');
+    if(!file){
+      note.textContent = 'รองรับไฟล์ .pdf เท่านั้น / ระบบจะรวมเป็นไฟล์เดียวกับเอกสาร QC-Motor';
+      return;
+    }
+    if(!file.name.toLowerCase().endsWith('.pdf')){
+      bookingPdfInput.setCustomValidity('กรุณาอัปโหลดใบจองเป็นไฟล์ PDF เท่านั้น');
+      note.textContent = '❌ ไฟล์ต้องเป็น .pdf เท่านั้น';
+      note.style.color = '#dc2626';
+    }else{
+      bookingPdfInput.setCustomValidity('');
+      note.textContent = `✅ เลือกไฟล์ใบจองแล้ว: ${file.name}`;
+      note.style.color = '#15803d';
+    }
+  });
+
   const form = document.getElementById('qcMotorForm');
   const reviewBackdrop = document.getElementById('reviewBackdrop');
   const reviewItems = document.getElementById('reviewItems');
@@ -223,8 +259,11 @@
   }
 
   function buildReview(){
+    const bookingInput = form.querySelector('[name="booking_pdf"]');
+    const bookingFile = bookingInput?.files?.[0];
     document.getElementById('reviewQrNo').textContent = form.querySelector('[name="qr_no"]').value || '-';
     document.getElementById('reviewCompany').textContent = form.querySelector('[name="company_name"]').value || '-';
+    document.getElementById('reviewBooking').textContent = bookingFile ? bookingFile.name : '-';
     reviewItems.innerHTML = '';
     const cards = [...wrap.querySelectorAll('.item-card')];
     cards.forEach((card, idx)=>{

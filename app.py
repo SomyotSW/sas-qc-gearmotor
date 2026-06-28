@@ -662,8 +662,66 @@ def _motor_qc_logo_path():
     return logo_path if os.path.exists(logo_path) else None
 
 
+def _pdf_reader_writer():
+    """โหลด PDF library เฉพาะตอนใช้งาน เพื่อให้ระบบเดิมยัง start ได้"""
+    try:
+        from pypdf import PdfReader, PdfWriter
+        return PdfReader, PdfWriter
+    except Exception as e:
+        raise RuntimeError(
+            "ต้องติดตั้ง pypdf เพื่อรวมไฟล์ใบจองเข้ากับ QC-GEARMOTOR PRE-CHECK DOCUMENT "
+            "ให้เพิ่ม pypdf ใน requirements.txt แล้ว Deploy ใหม่"
+        ) from e
+
+
+def _pdf_page_count(pdf_bytes: bytes) -> int:
+    PdfReader, _PdfWriter = _pdf_reader_writer()
+    reader = PdfReader(io.BytesIO(pdf_bytes or b''))
+    if getattr(reader, 'is_encrypted', False):
+        try:
+            reader.decrypt('')
+        except Exception:
+            raise RuntimeError('ไฟล์ PDF ถูกเข้ารหัส ไม่สามารถแนบ/รวมไฟล์ได้')
+    return len(reader.pages)
+
+
+def _merge_pdf_bytes(pdf_parts) -> bytes:
+    """รวม PDF หลายชุดให้อยู่ในไฟล์เดียว: PRE-CHECK + ใบจอง"""
+    PdfReader, PdfWriter = _pdf_reader_writer()
+    writer = PdfWriter()
+    for idx, part in enumerate(pdf_parts or [], start=1):
+        if not part:
+            continue
+        reader = PdfReader(io.BytesIO(part))
+        if getattr(reader, 'is_encrypted', False):
+            try:
+                reader.decrypt('')
+            except Exception:
+                raise RuntimeError(f'ไฟล์ PDF ลำดับที่ {idx} ถูกเข้ารหัส ไม่สามารถรวมไฟล์ได้')
+        for page in reader.pages:
+            writer.add_page(page)
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
+def _append_booking_pdf_if_any(precheck_pdf_bytes: bytes, job: dict) -> bytes:
+    """ถ้ามีใบจอง ให้รวมท้าย PRE-CHECK PDF ทุกครั้งก่อน download/email/upload"""
+    job = job or {}
+    booking_key = str(job.get('booking_pdf_key') or '').strip()
+    if not booking_key:
+        return precheck_pdf_bytes
+    try:
+        booking_bytes = r2_download_bytes(booking_key)
+        merged = _merge_pdf_bytes([precheck_pdf_bytes, booking_bytes])
+        print(f"[MOTOR QC PDF] merged booking PDF key={booking_key} pages={job.get('booking_pdf_page_count','?')}", flush=True)
+        return merged
+    except Exception as e:
+        raise RuntimeError(f"รวมไฟล์ใบจองเข้ากับ QC-GEARMOTOR PRE-CHECK DOCUMENT ไม่สำเร็จ: {e}")
+
+
 def _build_motor_qc_precheck_pdf_bytes(job: dict) -> bytes:
-    """สร้าง PDF QC-GEARMOTOR PRE-CHECK ล่าสุด พร้อม QR และลายเซ็น approval"""
+    """สร้าง PDF QC-GEARMOTOR PRE-CHECK ล่าสุด พร้อม QR/ลายเซ็น และแนบใบจองท้ายไฟล์ถ้ามี"""
     job = job or {}
     job_key = job.get('job_key') or job.get('qr_no') or ''
     approval_urls = job.get('approval_urls') or _motor_qc_approval_urls(job_key)
@@ -681,7 +739,8 @@ def _build_motor_qc_precheck_pdf_bytes(job: dict) -> bytes:
         warehouse_qr_image_stream=_make_qr_stream(approval_urls.get('warehouse'), box_size=5),
     )
     pdf_stream.seek(0)
-    return pdf_stream.read()
+    precheck_bytes = pdf_stream.read()
+    return _append_booking_pdf_if_any(precheck_bytes, job)
 
 
 def _env_first(*names):
@@ -1028,6 +1087,7 @@ def admin_motor_qc_generate():
     try:
         qr_no = (request.form.get('qr_no') or _next_motor_qc_no()).strip().upper()
         company_name = (request.form.get('company_name') or '').strip()
+        booking_pdf_file = request.files.get('booking_pdf')
 
         product_types = request.form.getlist('item_product_type[]')
         models = request.form.getlist('item_model[]')
@@ -1065,7 +1125,53 @@ def admin_motor_qc_generate():
                 old=request.form
             ), 400
 
+        if not booking_pdf_file or not booking_pdf_file.filename:
+            return render_template(
+                'admin_motor_qc.html',
+                product_types=PRODUCT_TYPES,
+                default_qr_no=qr_no or _next_motor_qc_no(),
+                error='กรุณาอัปโหลดไฟล์ใบจอง PDF เพื่อแนบคู่กับ QC-GEARMOTOR PRE-CHECK DOCUMENT',
+                old=request.form
+            ), 400
+
+        original_booking_filename = booking_pdf_file.filename.strip()
+        if not original_booking_filename.lower().endswith('.pdf'):
+            return render_template(
+                'admin_motor_qc.html',
+                product_types=PRODUCT_TYPES,
+                default_qr_no=qr_no or _next_motor_qc_no(),
+                error='ไฟล์ใบจองต้องเป็น PDF เท่านั้น',
+                old=request.form
+            ), 400
+
+        booking_pdf_bytes = booking_pdf_file.read()
+        if not booking_pdf_bytes:
+            return render_template(
+                'admin_motor_qc.html',
+                product_types=PRODUCT_TYPES,
+                default_qr_no=qr_no or _next_motor_qc_no(),
+                error='ไฟล์ใบจอง PDF ว่างหรืออ่านไฟล์ไม่ได้',
+                old=request.form
+            ), 400
+
+        try:
+            booking_page_count = _pdf_page_count(booking_pdf_bytes)
+            if booking_page_count <= 0:
+                raise RuntimeError('ไม่พบหน้าใน PDF')
+        except Exception as e:
+            return render_template(
+                'admin_motor_qc.html',
+                product_types=PRODUCT_TYPES,
+                default_qr_no=qr_no or _next_motor_qc_no(),
+                error=f'ไฟล์ใบจอง PDF ไม่ถูกต้องหรือรวมไฟล์ไม่ได้: {e}',
+                old=request.form
+            ), 400
+
         job_key = _safe_firebase_key(qr_no)
+        safe_booking_filename = secure_filename(original_booking_filename) or f'{job_key}_booking.pdf'
+        booking_pdf_key = f"motor_qc_jobs/{job_key}/booking_{safe_booking_filename}"
+        booking_pdf_url = r2_upload_bytes(booking_pdf_bytes, booking_pdf_key, 'application/pdf')
+
         now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
         form_url = url_for('form', motor_qc_job=job_key, _external=True)
         approval_urls = _motor_qc_approval_urls(job_key)
@@ -1082,6 +1188,10 @@ def admin_motor_qc_generate():
             'form_url': form_url,
             'approval_urls': approval_urls,
             'item_count': len(items),
+            'booking_pdf_filename': original_booking_filename,
+            'booking_pdf_key': booking_pdf_key,
+            'booking_pdf_url': booking_pdf_url,
+            'booking_pdf_page_count': booking_page_count,
             'created_by': 'Admin Motor',
             'created_at': now_str,
             'status': 'admin_generated',
