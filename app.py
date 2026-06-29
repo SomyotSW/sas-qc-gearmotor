@@ -954,8 +954,8 @@ def _motor_qc_role_config(role: str):
             'popup_message': 'โปรดตรวจสอบความถูกต้องอีกครั้ง หากเรียบร้อยแล้ว โปรดลงชื่อและกด Approve',
             'status': 'warehouse_prepared',
             'button': 'Approve เตรียมสินค้าเรียบร้อย',
-            'to': ['Chottanin442@gmail.com', 'sas04@synergy-as.com'],
-            'cc': ['tanai@synergy-as.com'],
+            'to': ['wiroj@synergy-as.com', 'sas04@synergy-as.com'],
+            'cc': ['tanai@synergy-as.com','Chottanin@synergy-as.com' , 'sas06@synergy-as.com' , 'traiwit@synergy-as.com' , 'kongkiat@synergy-as.com'],
             'subject_tpl': 'เตรียมสินค้าเรียบร้อยแล้ว QC Report OR No. : {qr_no} : {company_name} โปรดทำการ QC สินค้าตามรายการที่กำหนด',
             'body_tpl': 'เตรียมสินค้าเรียบร้อยแล้ว QC Report OR No. : {qr_no} : {company_name}  โปรดทำการ QC สินค้าตามรายการที่กำหนด\n\nด้วยความเคารพ \nTanai B. ( Eas )',
         },
@@ -968,7 +968,7 @@ def _motor_qc_role_config(role: str):
             'button': 'Approve QC เรียบร้อย',
             'requires_qc_checklist': True,
             'to': ['tanai@synergy-as.com', 'sas04@synergy-as.com'],
-            'cc': ['Chottanin@synergy-as.com'],
+            'cc': ['Chottanin@synergy-as.com' , 'sas06@synergy-as.com' , 'traiwit@synergy-as.com' , 'kongkiat@synergy-as.com'],
             'subject_tpl': 'QC สินค้าเรียบร้อยแล้ว OR No. : {qr_no} : {company_name} โปรดทำการจัดส่งสินค้าตามรายการที่กำหนดได้เลย',
             'body_tpl': 'QC สินค้าเรียบร้อยแล้ว OR No. : {qr_no} : {company_name}  โปรดทำการจัดส่งสินค้าตามรายการที่กำหนดได้เลย\n\nด้วยความเคารพ \n\nQC Inspector',
         },
@@ -1221,7 +1221,7 @@ def admin_motor_qc_generate():
         body = f"เอกสาร QC Report OR No. : {qr_no} : {company_name} เรียบร้อยแล้ว โปรดเตรียมสินค้าตามรายการที่กำหนด\n\nด้วยความเคารพ \nAdmin SAS04"
         mail_result = _send_workflow_email(
             to_list=['tanai@synergy-as.com'],
-            cc_list=['Chottanin@synergy-as.com'],
+            cc_list=['Chottanin@synergy-as.com' , 'wiroj@synergy-as.com' , 'sas04@synergy-as.com' ,'sas06@synergy-as.com' , 'traiwit@synergy-as.com' , 'kongkiat@synergy-as.com'],
             subject=subject,
             body=body,
             attachment_bytes=pdf_bytes,
