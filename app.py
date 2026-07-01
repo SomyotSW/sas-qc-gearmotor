@@ -1760,6 +1760,12 @@ def sas_quiz3():
     return render_template('sas_quiz3.html')
 
 
+@app.route('/sas_training_4series.html')
+@app.route('/sas-training-4series')
+def sas_training_4series():
+    return render_template('sas_training_4series.html')
+
+
 # ============================================================
 # 🏆 SAS Training Quiz Database API
 # ใช้ Firebase Realtime Database เป็นฐานกลาง เพื่อเช็คข้ามเครื่อง

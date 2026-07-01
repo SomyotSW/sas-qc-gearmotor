@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>SAS 4 Series Training — R/K/F/S Series</title>
+<style>
+:root{
+  --bg:#06111f;--bg2:#081a30;--card:#0d223d;--card2:#102b4e;
+  --blue:#1764d4;--blue2:#2f8cff;--sky:#55c7ff;--cyan:#00d7ff;
+  --gold:#f3b431;--gold2:#ffd86b;--red:#ef4444;--green:#22c55e;
+  --text:#f2f7ff;--muted:#a9c1df;--muted2:#6f8baa;--line:rgba(85,199,255,.18);
+  --shadow:0 20px 60px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:"Segoe UI","Sarabun",Tahoma,sans-serif;
+  background:
+    radial-gradient(circle at 10% 0%,rgba(47,140,255,.25),transparent 32%),
+    radial-gradient(circle at 90% 15%,rgba(0,215,255,.12),transparent 34%),
+    linear-gradient(180deg,#06111f 0%,#081a30 55%,#050b14 100%);
+  color:var(--text);line-height:1.7;overflow-x:hidden;
+}
+body:before{content:"";position:fixed;inset:0;z-index:-1;background-image:linear-gradient(rgba(85,199,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(85,199,255,.045) 1px,transparent 1px);background-size:42px 42px;mask-image:radial-gradient(circle at 50% 25%,#000 0%,transparent 75%)}
+a{color:inherit}.wrap{width:min(1180px,100%);margin:auto;padding:0 22px}.topbar{position:sticky;top:0;z-index:50;background:rgba(6,17,31,.86);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+.nav{display:flex;align-items:center;gap:8px;overflow:auto;padding:10px 22px;scrollbar-width:none}.nav::-webkit-scrollbar{display:none}.nav a{white-space:nowrap;text-decoration:none;color:var(--muted);font-weight:800;font-size:.86rem;padding:8px 14px;border-radius:999px;border:1px solid transparent}.nav a:hover{color:#fff;background:rgba(85,199,255,.09);border-color:var(--line)}.nav .home{color:var(--gold2);border-color:rgba(243,180,49,.35);background:rgba(243,180,49,.10)}
+.hero{min-height:86vh;display:grid;place-items:center;text-align:center;padding:80px 0 54px;position:relative;overflow:hidden}.hero:after{content:"⚙";position:absolute;font-size:42rem;line-height:1;color:rgba(85,199,255,.035);right:-9rem;top:1rem;z-index:-1;animation:spin 70s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.logo{width:126px;height:auto;margin-bottom:18px;filter:drop-shadow(0 12px 30px rgba(47,140,255,.35))}.badge{display:inline-flex;align-items:center;gap:8px;padding:8px 18px;border-radius:999px;background:rgba(243,180,49,.12);border:1px solid rgba(243,180,49,.34);color:var(--gold2);font-weight:900;font-size:.88rem;margin-bottom:18px}
+h1{font-size:clamp(2.4rem,6vw,5.3rem);line-height:1.04;font-weight:1000;letter-spacing:-.04em;text-transform:uppercase;background:linear-gradient(120deg,#fff,#55c7ff 45%,#00d7ff 70%,#ffd86b);-webkit-background-clip:text;background-clip:text;color:transparent}.hero .sub{font-size:clamp(1.05rem,2vw,1.35rem);color:var(--muted);max-width:780px;margin:18px auto 28px}.hero-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;text-decoration:none;border:0;border-radius:16px;padding:15px 24px;font-weight:900;cursor:pointer;box-shadow:0 12px 28px rgba(0,0,0,.22)}.btn.primary{background:linear-gradient(180deg,#55c7ff,#1764d4);color:#fff}.btn.gold{background:linear-gradient(180deg,#ffd86b,#f3b431);color:#1a1100}.btn.ghost{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted)}.btn:hover{transform:translateY(-2px);filter:brightness(1.06)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:38px}.stat{padding:18px;background:rgba(13,34,61,.78);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}.stat b{display:block;font-size:2rem;line-height:1;background:linear-gradient(120deg,var(--gold2),var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent}.stat span{color:var(--muted2);font-size:.86rem;font-weight:800}
+section{padding:76px 0;border-top:1px solid rgba(85,199,255,.08)}.eyebrow{display:inline-flex;gap:8px;align-items:center;color:var(--sky);font-size:.8rem;font-weight:1000;letter-spacing:.14em;text-transform:uppercase;margin-bottom:8px}.eyebrow:before{content:"";width:28px;height:3px;border-radius:3px;background:linear-gradient(90deg,var(--blue2),var(--cyan))}.title{font-size:clamp(1.85rem,3.4vw,3.2rem);line-height:1.15;font-weight:1000;letter-spacing:-.03em;margin-bottom:12px}.desc{color:var(--muted);max-width:820px;margin-bottom:30px;font-size:1.05rem}.grid{display:grid;gap:18px}.grid.two{grid-template-columns:repeat(2,1fr)}.grid.three{grid-template-columns:repeat(3,1fr)}.grid.four{grid-template-columns:repeat(4,1fr)}.card{background:linear-gradient(180deg,rgba(16,43,78,.96),rgba(8,26,48,.95));border:1px solid var(--line);border-radius:22px;padding:24px;box-shadow:var(--shadow);position:relative;overflow:hidden}.card:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at top right,rgba(85,199,255,.12),transparent 38%);pointer-events:none}.card h3{font-size:1.2rem;margin-bottom:10px;color:#fff}.card p,.card li{color:var(--muted);font-size:.98rem}.card ul{padding-left:20px}.pill{display:inline-flex;padding:5px 11px;border-radius:999px;background:rgba(85,199,255,.10);border:1px solid var(--line);color:var(--sky);font-weight:900;font-size:.78rem;margin-bottom:10px}.pill.gold{background:rgba(243,180,49,.11);border-color:rgba(243,180,49,.28);color:var(--gold2)}.pill.green{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.28);color:#86efac}.pill.red{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.28);color:#fca5a5}.series-card{min-height:320px}.series-code{font-size:5.2rem;line-height:.9;font-weight:1000;color:rgba(255,255,255,.10);position:absolute;right:18px;top:16px}.series-card h3{font-size:1.55rem;margin-top:28px}.flow{display:flex;align-items:center;gap:8px;margin:18px 0}.flow span{background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:12px;padding:9px 12px;color:#fff;font-weight:900}.arrow{color:var(--gold2);font-weight:1000;font-size:1.45rem}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:18px;background:rgba(8,26,48,.88);box-shadow:var(--shadow)}table{width:100%;border-collapse:collapse;min-width:720px}th,td{padding:13px 14px;text-align:left;border-bottom:1px solid rgba(85,199,255,.11);vertical-align:top}th{background:rgba(47,140,255,.13);color:var(--sky);font-weight:1000}td{color:var(--muted)}tr:last-child td{border-bottom:0}.note{border-left:4px solid var(--gold);background:rgba(243,180,49,.10);border-radius:0 16px 16px 0;padding:16px 18px;color:#ffe8a6;font-weight:800}.note.blue{border-left-color:var(--cyan);background:rgba(0,215,255,.08);color:#aef3ff}.note.red{border-left-color:var(--red);background:rgba(239,68,68,.08);color:#ffc2c2}.steps{display:grid;gap:14px}.step{display:flex;gap:14px;padding:18px;border:1px solid var(--line);border-radius:18px;background:rgba(13,34,61,.70)}.num{width:38px;height:38px;flex:0 0 38px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(180deg,var(--sky),var(--blue));font-weight:1000}.step b{display:block;color:#fff;margin-bottom:3px}.m-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}.m-box{text-align:center;border:1px solid var(--line);background:rgba(255,255,255,.04);border-radius:18px;padding:16px 8px}.m-box b{display:block;font-size:1.8rem;color:var(--gold2)}.m-box span{color:var(--muted);font-size:.85rem;font-weight:800}.checklist{columns:2;column-gap:36px}.checklist li{break-inside:avoid;margin-bottom:8px;list-style:none}.checklist li:before{content:"✓";color:var(--green);font-weight:1000;margin-right:8px}.quiz{margin-top:28px;background:linear-gradient(135deg,rgba(47,140,255,.14),rgba(0,215,255,.07));border:1px solid var(--line);border-radius:22px;padding:24px}.q{display:none}.q.active{display:block}.q h3{margin-bottom:14px}.choices{display:grid;gap:10px}.choice{padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--muted);text-align:left;font-weight:800;cursor:pointer}.choice:hover{color:#fff;border-color:rgba(85,199,255,.45)}.choice.correct{background:rgba(34,197,94,.13);border-color:rgba(34,197,94,.45);color:#86efac}.choice.wrong{background:rgba(239,68,68,.13);border-color:rgba(239,68,68,.45);color:#fecaca}.quiz-result{display:none;margin-top:14px;color:var(--gold2);font-weight:1000}.footer{padding:44px 0;text-align:center;color:var(--muted2);border-top:1px solid var(--line)}.small{font-size:.86rem;color:var(--muted2)}
+@media(max-width:900px){.grid.two,.grid.three,.grid.four,.stats{grid-template-columns:1fr 1fr}.m-grid{grid-template-columns:repeat(3,1fr)}.checklist{columns:1}.hero{min-height:auto}.nav{padding:10px 14px}}
+@media(max-width:580px){.grid.two,.grid.three,.grid.four,.stats{grid-template-columns:1fr}.m-grid{grid-template-columns:repeat(2,1fr)}section{padding:56px 0}.card{padding:20px}.hero-actions .btn{width:100%}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <nav class="nav">
+    <a class="home" href="/">← Index</a>
+    <a href="#overview">Overview</a><a href="#series">R/K/F/S</a><a href="#mounting">Mounting</a><a href="#oil">Gear Oil</a><a href="#nameplate">Nameplate</a><a href="#options">Options</a><a href="#sf">Service Factor</a><a href="#pm">PM</a><a href="#trouble">Trouble</a><a href="#quiz">Quiz</a>
+  </nav>
+</header>
+<main>
+<section class="hero" id="top">
+  <div class="wrap">
+    <img class="logo" src="/static/logo_sas.png" alt="SAS Logo">
+    <div class="badge">⚙️ SAS TRAINING MODULE</div>
+    <h1>4 Series Training</h1>
+    <p class="sub">คู่มืออบรมพื้นฐาน–กลางสำหรับมอเตอร์เกียร์ R / K / F / S Series เน้นการอ่านรุ่น เลือกท่าติดตั้ง เติมน้ำมัน ตรวจหน้างาน และคุยกับลูกค้าให้ถูกประเด็น</p>
+    <div class="hero-actions"><a class="btn primary" href="#overview">เริ่มอบรม</a><a class="btn gold" href="#field">เช็กลิสต์ฝ่ายขาย</a><a class="btn ghost" href="#quiz">ทำ Quiz</a></div>
+    <div class="stats">
+      <div class="stat"><b>R</b><span>Helical Inline</span></div><div class="stat"><b>K</b><span>Bevel Helical</span></div><div class="stat"><b>F</b><span>Parallel Shaft</span></div><div class="stat"><b>S</b><span>Helical Worm</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="overview">
+  <div class="wrap">
+    <div class="eyebrow">Module Objective</div>
+    <h2 class="title">เรียนให้รู้ว่า “ลูกค้าใช้เกียร์แบบไหน” ก่อนเสนอราคา</h2>
+    <p class="desc">หัวใจของ 4 Series คือการแยกทิศทางการส่งกำลัง รูปแบบเพลา ท่าติดตั้ง และสภาพงานจริง เพราะข้อมูลเหล่านี้มีผลโดยตรงต่อรุ่นสินค้า น้ำมันเกียร์ อุปกรณ์เสริม และ Service Factor</p>
+    <div class="grid three">
+      <div class="card"><span class="pill">1</span><h3>แยกประเภทเกียร์</h3><p>ดูจากแนวเพลาเข้า–ออก ว่าเป็น Inline, Parallel หรือ Right Angle เพื่อเลือก R/K/F/S ได้เร็วขึ้น</p></div>
+      <div class="card"><span class="pill gold">2</span><h3>อ่าน Nameplate</h3><p>ต้องเก็บ Model, Ratio, kW, Voltage, Mounting Position, Oil Grade/Oil Quantity และ Service Factor ให้ครบ</p></div>
+      <div class="card"><span class="pill green">3</span><h3>ป้องกันปัญหาหน้างาน</h3><p>ตำแหน่ง breather plug, oil level plug และ drain plug ต้องสัมพันธ์กับท่าติดตั้ง M1–M6 เสมอ</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="series">
+  <div class="wrap">
+    <div class="eyebrow">R / K / F / S Series</div>
+    <h2 class="title">ภาพรวมการใช้งานของแต่ละ Series</h2>
+    <p class="desc">จำง่าย ๆ คือ R = เพลาแนวเดียวกัน, F = เพลาขนาน, K/S = มุมฉาก แต่ลักษณะเฟืองและจุดเด่นต่างกัน</p>
+    <div class="grid four">
+      <div class="card series-card"><div class="series-code">R</div><span class="pill">Helical</span><h3>R Series</h3><p><b>Inline Helical Gear Motor</b></p><div class="flow"><span>Motor</span><span class="arrow">→</span><span>Gear</span><span class="arrow">→</span><span>Output</span></div><ul><li>ทิศทางกำลังแบบ Coaxial / Inline</li><li>ประสิทธิภาพสูง เสียงต่ำ</li><li>เหมาะกับ Conveyor, Roller, Mixer งานทั่วไป</li></ul></div>
+      <div class="card series-card"><div class="series-code">K</div><span class="pill gold">Bevel Helical</span><h3>K Series</h3><p><b>Right Angle Bevel Gear Motor</b></p><div class="flow"><span>Motor</span><span class="arrow">↱</span><span>90°</span><span class="arrow">→</span><span>Output</span></div><ul><li>ส่งกำลังมุมฉาก แข็งแรง รับแรงบิดดี</li><li>เหมาะกับพื้นที่ติดตั้งจำกัด</li><li>นิยมใน Conveyor, Mixer, Lifter, Heavy duty</li></ul></div>
+      <div class="card series-card"><div class="series-code">F</div><span class="pill">Parallel</span><h3>F Series</h3><p><b>Parallel Shaft Gear Motor</b></p><div class="flow"><span>Motor</span><span class="arrow">⇢</span><span>Parallel</span><span class="arrow">⇢</span><span>Output</span></div><ul><li>เพลาเข้า–ออกขนานกัน</li><li>ประหยัดพื้นที่ด้านความยาว</li><li>ใช้ได้ทั้ง hollow shaft / solid shaft / flange</li></ul></div>
+      <div class="card series-card"><div class="series-code">S</div><span class="pill red">Helical Worm</span><h3>S Series</h3><p><b>Helical Worm Gear Motor</b></p><div class="flow"><span>Motor</span><span class="arrow">↳</span><span>Worm</span><span class="arrow">→</span><span>Output</span></div><ul><li>มุมฉาก ขนาดกะทัดรัด</li><li>ทำอัตราทดสูงได้ในพื้นที่เล็ก</li><li>ต้องใส่ใจเรื่องความร้อนและประสิทธิภาพมากกว่าเกียร์ Helical ล้วน</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<section id="mounting">
+  <div class="wrap">
+    <div class="eyebrow">Mounting Position</div>
+    <h2 class="title">M1–M6 ไม่ใช่แค่ท่าวาง แต่กระทบน้ำมันเกียร์</h2>
+    <p class="desc">เมื่อลูกค้าบอกท่าติดตั้งผิด ตำแหน่งปลั๊กหายใจ ระดับน้ำมัน และปริมาณน้ำมันอาจผิดตาม ส่งผลให้เกียร์ร้อน รั่ว หรือสึกหรอเร็ว</p>
+    <div class="m-grid">
+      <div class="m-box"><b>M1</b><span>ฐานล่าง / แนวนอน</span></div><div class="m-box"><b>M2</b><span>ด้านข้าง 1</span></div><div class="m-box"><b>M3</b><span>กลับหัว / ใต้ฐาน</span></div><div class="m-box"><b>M4</b><span>ด้านข้าง 2</span></div><div class="m-box"><b>M5</b><span>เพลาตั้งด้านหนึ่ง</span></div><div class="m-box"><b>M6</b><span>เพลาตั้งอีกด้าน</span></div>
+    </div>
+    <div class="grid two" style="margin-top:18px">
+      <div class="card"><h3>ตำแหน่งปลั๊กที่ต้องรู้</h3><div class="steps"><div class="step"><div class="num">1</div><div><b>Breather plug</b><p>ปลั๊กหายใจ ช่วยระบายแรงดันภายในห้องเกียร์ ต้องอยู่ตำแหน่งสูงเหมาะสม และต้องเปิด/ถอดตัวล็อกขนส่งก่อนใช้งาน</p></div></div><div class="step"><div class="num">2</div><div><b>Oil level plug / Sight glass</b><p>ใช้เช็กระดับน้ำมัน ควรอยู่ระดับอ้างอิงตามคู่มือรุ่นนั้น ๆ</p></div></div><div class="step"><div class="num">3</div><div><b>Oil drain plug</b><p>ปลั๊กถ่ายน้ำมัน ควรอยู่ตำแหน่งต่ำเพื่อถ่ายน้ำมันออกได้หมด</p></div></div></div></div>
+      <div class="card"><h3>ข้อมูลที่ฝ่ายขายต้องถาม</h3><ul class="checklist"><li>ท่าติดตั้งจริง M1–M6</li><li>เพลาออกอยู่ด้านไหน</li><li>Terminal box ต้องการตำแหน่ง 0°/90°/180°/270° หรือไม่</li><li>พื้นที่ติดตั้งจำกัดด้านใด</li><li>ต้องการ Foot, Flange, Hollow shaft หรือ Solid shaft</li><li>มี Torque arm / Shrink disc / Backstop หรือไม่</li></ul><div class="note blue">จำง่าย: รุ่นถูกแต่ท่าติดตั้งผิด = น้ำมันผิด = ปัญหาหน้างาน</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="oil">
+  <div class="wrap">
+    <div class="eyebrow">Gear Oil</div>
+    <h2 class="title">น้ำมันเกียร์ต้องถูกชนิด ถูกปริมาณ และถูกตำแหน่งเช็ก</h2>
+    <p class="desc">น้ำมันเกียร์มีผลต่ออายุเฟือง แบริ่ง ซีล และอุณหภูมิการทำงาน ปริมาณน้ำมันขึ้นกับ Series, Size, Ratio และ Mounting Position</p>
+    <div class="grid three">
+      <div class="card"><span class="pill gold">Viscosity</span><h3>ความหนืดที่พบได้บ่อย</h3><p>ISO VG 220 / 320 / 460 / 680 / 1000 ขึ้นกับชนิดเกียร์ ความเร็วรอบ อุณหภูมิ และโหลดงาน</p></div>
+      <div class="card"><span class="pill">Level</span><h3>ระดับน้ำมัน</h3><p>ถ้าเป็นตาแมว ให้ยึดระดับที่คู่มือกำหนด หลักใช้งานภาคสนามคือไม่ต่ำกว่าระดับอ้างอิง และไม่เติมจนล้น</p></div>
+      <div class="card"><span class="pill red">Warning</span><h3>น้ำมันผิด = เสียหายเร็ว</h3><p>มากเกินไปทำให้เกิดความร้อนและแรงดัน ต่ำเกินไปทำให้ฟิล์มน้ำมันไม่พอ เฟืองและแบริ่งสึกหรอเร็ว</p></div>
+    </div>
+    <div class="table-wrap" style="margin-top:22px"><table><thead><tr><th>กรณี</th><th>อาการที่อาจเกิดขึ้น</th><th>แนวทางตรวจ</th></tr></thead><tbody><tr><td><b>เติมสูงกว่าที่กำหนด</b></td><td>มอเตอร์กินไฟมากขึ้น เกียร์ร้อน น้ำมันดันซีล รั่วซึม เกิดแรงต้านการหมุน</td><td>ดูระดับจาก sight glass / level plug และเทียบ mounting position</td></tr><tr><td><b>เติมต่ำกว่าที่กำหนด</b></td><td>เฟืองสึกหรอ แตกร้าว อุณหภูมิขึ้นเร็วแบบฉับพลัน เสียงดัง</td><td>เช็กระดับน้ำมัน ตรวจสี/กลิ่น/ฟอง และรอยรั่ว</td></tr><tr><td><b>น้ำมันเสื่อมคุณภาพ</b></td><td>สีเข้ม มีน้ำปน มีฟอง มีเศษโลหะ อุณหภูมิสูงกว่าปกติ</td><td>ถ่ายเปลี่ยนตามระยะ หรือทันทีเมื่อพบความผิดปกติ</td></tr></tbody></table></div>
+  </div>
+</section>
+
+<section id="nameplate">
+  <div class="wrap">
+    <div class="eyebrow">Nameplate Reading</div>
+    <h2 class="title">อ่าน Nameplate ให้ครบ ก่อนคุยรุ่น Replacement</h2>
+    <p class="desc">รูป Nameplate คือข้อมูลที่ทำให้เสนอรุ่นแทนได้แม่นที่สุด โดยเฉพาะงาน Replacement ที่ต้องเทียบรุ่นเดิมให้ใกล้เคียงทั้งมิติ กำลัง และท่าติดตั้ง</p>
+    <div class="grid two">
+      <div class="card"><h3>ฝั่ง Gear ต้องเก็บ</h3><ul class="checklist"><li>Model / Type code</li><li>Ratio i หรือ Output speed n2</li><li>Output torque T2</li><li>Service Factor หรือ fB</li><li>Mounting Position M1–M6</li><li>Oil grade และ Oil quantity</li><li>รูปเพลาออก / หน้าแปลน / ขายึด</li></ul></div>
+      <div class="card"><h3>ฝั่ง Motor ต้องเก็บ</h3><ul class="checklist"><li>kW / HP</li><li>Voltage / Phase / Hz</li><li>Current A</li><li>RPM / Pole</li><li>Efficiency / IE class</li><li>Insulation class / IP</li><li>Brake, encoder, force fan, thermistor</li></ul></div>
+    </div>
+    <div class="note" style="margin-top:18px">ถ้ารูป Nameplate ไม่ชัด ให้ขอ 3 รูปเพิ่ม: รูปเต็มชุดติดตั้ง, รูปเพลาออก/โหลด, รูป Terminal box หรือสายไฟ</div>
+  </div>
+</section>
+
+<section id="field">
+  <div class="wrap">
+    <div class="eyebrow">Sales Field Checklist</div>
+    <h2 class="title">เช็กลิสต์เก็บข้อมูลหน้างานสำหรับฝ่ายขาย</h2>
+    <div class="grid three">
+      <div class="card"><h3>1) Product Data</h3><ul><li>Series: R/K/F/S หรือรูปทรงเดิม</li><li>Power, Ratio, Output RPM</li><li>Torque หรือโหลดใช้งาน</li><li>Model nameplate เดิม</li></ul></div>
+      <div class="card"><h3>2) Installation Data</h3><ul><li>Mounting position M1–M6</li><li>Foot / Flange / Hollow / Solid</li><li>Terminal box direction</li><li>พื้นที่ชนโครงสร้างหรือไม่</li></ul></div>
+      <div class="card"><h3>3) Application Data</h3><ul><li>ชนิดเครื่องจักร</li><li>ชั่วโมงทำงานต่อวัน</li><li>Start/Stop ต่อชั่วโมง</li><li>Shock load / Jam load / Overload</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<section id="drive">
+  <div class="wrap">
+    <div class="eyebrow">Drive Arrangement</div>
+    <h2 class="title">รูปแบบการประกอบมอเตอร์เข้ากับเกียร์</h2>
+    <div class="grid three">
+      <div class="card"><span class="pill green">Compact</span><h3>Gear + Built-in Motor</h3><p><b>ข้อดี:</b> ขนาดกะทัดรัด ประหยัดพื้นที่ เพลา pinion เข้ากับเกียร์ได้แน่น</p><p><b>ข้อเสีย:</b> เปลี่ยนใส่มอเตอร์ยี่ห้ออื่นได้ยากกว่า</p></div>
+      <div class="card"><span class="pill">Flexible</span><h3>Gear + Adaptor + IEC Motor</h3><p><b>ข้อดี:</b> ใช้มอเตอร์ IEC Standard ทดแทนได้ง่าย เหมาะกับงานที่ต้องการความยืดหยุ่น</p><p><b>ข้อเสีย:</b> ใช้พื้นที่ติดตั้งเพิ่มขึ้น</p></div>
+      <div class="card"><span class="pill gold">Service</span><h3>Motor + Coupling + Gear</h3><p><b>ข้อดี:</b> Overhaul หรือเปลี่ยนเฉพาะมอเตอร์ได้ง่าย</p><p><b>ข้อเสีย:</b> อุปกรณ์ต่อเพิ่มมาก พื้นที่ติดตั้งมาก ต้องตั้งศูนย์ coupling ให้ดี</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="options">
+  <div class="wrap">
+    <div class="eyebrow">Options</div>
+    <h2 class="title">อุปกรณ์เสริมที่ต้องถามก่อนเสนอราคา</h2>
+    <div class="grid five"></div>
+    <div class="grid three">
+      <div class="card"><h3>Brake</h3><p>ใช้หยุดหรือ Holding load เช่น Conveyor ที่ต้องหยุดตำแหน่ง หรือเครื่องที่มีโหลดไหลย้อน</p></div>
+      <div class="card"><h3>Force Fan</h3><p>ช่วยระบายความร้อนเมื่อมอเตอร์ใช้ Inverter และเดินรอบต่ำเป็นเวลานาน</p></div>
+      <div class="card"><h3>Encoder</h3><p>ส่งสัญญาณความเร็ว/ตำแหน่งกลับไปที่ Drive หรือ PLC ใช้กับงานควบคุมรอบแม่นยำ</p></div>
+      <div class="card"><h3>Insulated Bearing</h3><p>ช่วยลดความเสี่ยงกระแสรั่วผ่านลูกปืน โดยเฉพาะงาน Inverter และมอเตอร์กำลังสูง</p></div>
+      <div class="card"><h3>Thermistor</h3><p>ตรวจจับความร้อนสะสมของขดลวด ใช้ต่อเข้าระบบป้องกันมอเตอร์ Overheat</p></div>
+      <div class="card"><h3>Backstop / Torque Arm</h3><p>Backstop ป้องกันการหมุนย้อน ส่วน Torque arm ใช้กับ hollow shaft เพื่อรับแรงบิดปฏิกิริยา</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="sf">
+  <div class="wrap">
+    <div class="eyebrow">Service Factor</div>
+    <h2 class="title">เลือก S.F ให้สัมพันธ์กับ Load จริง</h2>
+    <p class="desc">Service Factor คือค่าความเผื่อความสามารถของเกียร์เมื่อเทียบกับโหลดจริง ต้องดูทั้ง Shock load, จำนวน Start/Stop และชั่วโมงทำงานต่อวัน</p>
+    <div class="table-wrap"><table><thead><tr><th>Load Class</th><th>ลักษณะงาน</th><th>ตัวอย่างงาน</th><th>แนวคิด S.F</th></tr></thead><tbody><tr><td><b>I — Light Shock</b></td><td>โหลดค่อนข้างสม่ำเสมอ กระชากต่ำ</td><td>Conveyor เบา, Fan, Screw conveyor เบา</td><td>ใช้ S.F ต่ำถึงกลาง</td></tr><tr><td><b>II — Moderate Shock</b></td><td>มีโหลดกระชากปานกลาง หรือ Start/Stop บ่อย</td><td>Crane บางประเภท, Mixer, Machine tool, Elevator</td><td>ใช้ S.F กลาง</td></tr><tr><td><b>III — Heavy Shock</b></td><td>โหลดหนัก กระแทกสูง มีโอกาสติดขัด</td><td>Crusher, Press, Rolling mill, Heavy mixer</td><td>ใช้ S.F สูง และควรเผื่อ Torque</td></tr></tbody></table></div>
+    <div class="note blue" style="margin-top:18px">ฝ่ายขายอย่าดูแค่ kW เดิม ต้องถามว่าเครื่องจักรทำงานกี่ชั่วโมง/วัน Start-Stop บ่อยไหม และมีโหลดกระแทกหรือไม่</div>
+  </div>
+</section>
+
+<section id="pm">
+  <div class="wrap">
+    <div class="eyebrow">Preventive Maintenance</div>
+    <h2 class="title">ตรวจเบื้องต้นก่อนเกียร์เสีย</h2>
+    <div class="grid three">
+      <div class="card"><span class="pill">Visual</span><h3>ดูสีและระดับน้ำมัน</h3><p>ตรวจจากตาแมวหรือ level plug ว่าน้ำมันอยู่ในระดับอ้างอิง สีผิดปกติ มีฟอง หรือมีน้ำปนหรือไม่</p></div>
+      <div class="card"><span class="pill gold">Temperature</span><h3>วัดอุณหภูมิ</h3><p>ใช้ Infrared thermometer/thermal camera ตรวจเทียบค่าเดิมและสเปกหน้างาน ถ้าสูงขึ้นผิดปกติต้องหาสาเหตุ</p></div>
+      <div class="card"><span class="pill green">Current</span><h3>วัดกระแสมอเตอร์</h3><p>เทียบกับ Nameplate และโหลดจริง หากเกินปกติอาจมาจาก Overload, Oil ผิด, Bearing/gear ฝืด หรือเบรกไม่คลาย</p></div>
+      <div class="card"><span class="pill">Sound</span><h3>ฟังเสียงผิดปกติ</h3><p>เสียงหอน เสียงกระแทก หรือเสียงแบริ่งดัง เป็นสัญญาณเริ่มต้นของการสึกหรอหรือ misalignment</p></div>
+      <div class="card"><span class="pill red">Leak</span><h3>ตรวจรอยรั่วซึม</h3><p>ดูบริเวณซีล output shaft, breather, cover, drain plug และรอยต่อ housing</p></div>
+      <div class="card"><span class="pill">Bolt</span><h3>ตรวจฐานและ coupling</h3><p>น็อตฐานหลวมและ coupling ตั้งศูนย์ไม่ดี ทำให้เกิด vibration และลดอายุเกียร์</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="trouble">
+  <div class="wrap">
+    <div class="eyebrow">Trouble Shooting</div>
+    <h2 class="title">สาเหตุและแนวทางแก้ไขปัญหาเบื้องต้น</h2>
+    <div class="table-wrap"><table><thead><tr><th>ปัญหา</th><th>สาเหตุที่พบบ่อย</th><th>แนวทางแนะนำ/แก้ไข</th></tr></thead><tbody><tr><td><b>น้ำมันรั่ว</b></td><td>ระดับน้ำมันมากเกินไป, น้ำมันเสื่อม, แรงดันในห้องเกียร์สูง, breather อุดตัน, อุณหภูมิสูง, ซีล output shaft เสื่อม</td><td>ปรับระดับน้ำมัน, เปลี่ยนน้ำมัน, ตรวจ breather plug, ตรวจอุณหภูมิ, เปลี่ยนซีล</td></tr><tr><td><b>เกียร์ร้อน</b></td><td>โหลดเกิน, น้ำมันผิดเบอร์, น้ำมันน้อย/มาก, ระบายความร้อนไม่ดี, bearing ฝืด</td><td>ลดโหลด/เพิ่ม S.F, เปลี่ยนน้ำมันให้ถูก, เช็กระดับ, ทำความสะอาด, ตรวจ bearing</td></tr><tr><td><b>เสียงดัง</b></td><td>น้ำมันเสื่อม, เฟืองสึก, bearing เสีย, coupling เยื้องศูนย์, น็อตฐานหลวม</td><td>ตรวจน้ำมัน, ตรวจ vibration, ตั้งศูนย์ coupling, ขันฐาน, เปิดตรวจถ้าจำเป็น</td></tr><tr><td><b>กระแสมอเตอร์สูง</b></td><td>โหลดหนัก, เกียร์ฝืด, เบรกไม่คลาย, voltage ผิด, inverter setting ไม่เหมาะ</td><td>วัดกระแสเทียบ nameplate, ตรวจเบรก/โหลด, ตรวจไฟเข้า, ตรวจ parameter</td></tr><tr><td><b>เพลาหรือ key เสียหาย</b></td><td>โหลดกระแทก, key หลวม, alignment ไม่ดี, shaft fit ไม่ถูก</td><td>ตรวจ fit, เปลี่ยน key/shaft, เพิ่ม service factor, ตรวจ coupling/ฐาน</td></tr></tbody></table></div>
+  </div>
+</section>
+
+<section id="sales">
+  <div class="wrap">
+    <div class="eyebrow">Sales Script</div>
+    <h2 class="title">ประโยคถามลูกค้าให้ได้ข้อมูลครบ</h2>
+    <div class="grid two">
+      <div class="card"><h3>กรณี Replacement</h3><p>“รบกวนขอรูป Nameplate ของ Gear และ Motor, รูปเต็มตอนติดตั้ง, รูปเพลาออก และแจ้งว่าต้องการติดตั้งท่าเดิม M อะไรครับ เพื่อให้เราเทียบรุ่นแทนได้ใกล้เคียงที่สุดและลดปัญหาหน้างานครับ”</p></div>
+      <div class="card"><h3>กรณี New Machine</h3><p>“เครื่องนี้เป็นงานประเภทไหน โหลดกี่กิโล/ตัน ทำงานกี่ชั่วโมงต่อวัน มี Start/Stop บ่อยหรือมีแรงกระแทกไหมครับ จะได้เลือก Ratio, Torque และ Service Factor ให้เหมาะกับงานจริงครับ”</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="quiz">
+  <div class="wrap">
+    <div class="eyebrow">Knowledge Check</div>
+    <h2 class="title">Quiz สั้น ๆ หลังอบรม</h2>
+    <div class="quiz">
+      <div class="q active" data-answer="1"><h3>1) ทำไมต้องรู้ Mounting Position ก่อนเติมน้ำมันเกียร์?</h3><div class="choices"><button class="choice">เพราะทำให้สีเกียร์เปลี่ยน</button><button class="choice">เพราะตำแหน่ง breather/level/drain และปริมาณน้ำมันเปลี่ยนตามท่าติดตั้ง</button><button class="choice">เพราะใช้ดูยี่ห้อมอเตอร์เท่านั้น</button></div></div>
+      <div class="q" data-answer="0"><h3>2) F Series มีลักษณะการส่งกำลังแบบใด?</h3><div class="choices"><button class="choice">Parallel shaft / เพลาขนาน</button><button class="choice">Coaxial inline เท่านั้น</button><button class="choice">ไม่มีเพลาออก</button></div></div>
+      <div class="q" data-answer="2"><h3>3) น้ำมันเกียร์ต่ำกว่าระดับที่กำหนดอาจทำให้เกิดอะไร?</h3><div class="choices"><button class="choice">ช่วยให้เกียร์เย็นขึ้นเสมอ</button><button class="choice">เพิ่มประสิทธิภาพทันที</button><button class="choice">เฟือง/แบริ่งหล่อลื่นไม่พอ เกิดความร้อนและสึกหรอเร็ว</button></div></div>
+      <div class="q" data-answer="1"><h3>4) Option ใดช่วยระบายความร้อนเมื่อใช้ Inverter ที่รอบต่ำ?</h3><div class="choices"><button class="choice">Encoder</button><button class="choice">Force Fan</button><button class="choice">Backstop</button></div></div>
+      <div class="quiz-result" id="quizResult"></div>
+    </div>
+  </div>
+</section>
+</main>
+<footer class="footer"><div class="wrap"><p><b>SAS 4 Series Training — R/K/F/S Series</b></p><p class="small">Internal Training Content | Synergy Asia Solution</p></div></footer>
+<script>
+let score=0, answered=0;
+document.querySelectorAll('.q').forEach((q,qi)=>{
+  const correct=Number(q.dataset.answer);
+  q.querySelectorAll('.choice').forEach((btn,i)=>{
+    btn.addEventListener('click',()=>{
+      if(q.dataset.done) return;
+      q.dataset.done='1'; answered++;
+      if(i===correct){btn.classList.add('correct'); score++;} else {btn.classList.add('wrong'); q.querySelectorAll('.choice')[correct].classList.add('correct');}
+      setTimeout(()=>{
+        q.classList.remove('active');
+        const next=document.querySelectorAll('.q')[qi+1];
+        if(next) next.classList.add('active');
+        else { const r=document.getElementById('quizResult'); r.style.display='block'; r.textContent=`คะแนนของคุณ: ${score}/4 ข้อ`; }
+      },850);
+    });
+  });
+});
+</script>
+</body>
+</html>

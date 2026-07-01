@@ -47,12 +47,92 @@
     .btn-sas-video:hover { filter:brightness(1.06); transform:translateY(-2px); text-decoration:none; box-shadow:0 18px 28px rgba(170,20,60,0.42), inset 0 1px 0 rgba(255,255,255,0.38), inset 0 -2px 0 rgba(0,0,0,0.16); }
     .btn-sas-video:hover::before { transform:translateX(130%); }
     .btn-sas-video:active { transform:translateY(1px) scale(0.99); }
+
+    /* ── 4 Series Training Button: fixed at the circled left area ── */
+    .circle-area-4series {
+      position:fixed;
+      left:58px;
+      top:108px;
+      width:220px;
+      height:220px;
+      z-index:20;
+      text-align:center;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .btn-sas-4series {
+      width:100%;
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:4px;
+      padding:24px;
+      border-radius:50%;
+      border:3px solid rgba(255,255,255,0.72);
+      background:
+        radial-gradient(circle at 35% 25%,rgba(255,255,255,0.32) 0%,transparent 30%),
+        linear-gradient(145deg,#36c6ff 0%,#1764d4 56%,#0c4692 100%);
+      color:#fff!important;
+      font-weight:900;
+      font-size:1.08rem;
+      line-height:1.22;
+      letter-spacing:0.25px;
+      text-decoration:none;
+      box-shadow:
+        0 14px 28px rgba(24,100,212,0.38),
+        inset 0 2px 0 rgba(255,255,255,0.46),
+        inset 0 -6px 0 rgba(0,0,0,0.18);
+      transform:translateY(0);
+      transition:transform 0.12s ease, filter 0.16s ease, box-shadow 0.18s ease;
+      position:relative;
+      overflow:hidden;
+    }
+    .btn-sas-4series::before {
+      content:"";
+      position:absolute;
+      inset:-40%;
+      background:linear-gradient(120deg,transparent 35%,rgba(255,255,255,0.32) 50%,transparent 65%);
+      transform:translateX(-90%) rotate(18deg);
+      transition:transform 0.7s ease;
+      pointer-events:none;
+    }
+    .btn-sas-4series::after {
+      content:"";
+      position:absolute;
+      inset:10px;
+      border-radius:50%;
+      border:1px solid rgba(255,255,255,0.20);
+      pointer-events:none;
+    }
+    .btn-sas-4series:hover {
+      filter:brightness(1.07);
+      transform:translateY(-3px) scale(1.02);
+      text-decoration:none;
+      box-shadow:
+        0 20px 36px rgba(24,100,212,0.48),
+        inset 0 2px 0 rgba(255,255,255,0.46),
+        inset 0 -6px 0 rgba(0,0,0,0.18);
+    }
+    .btn-sas-4series:hover::before { transform:translateX(90%) rotate(18deg); }
+    .btn-sas-4series:active { transform:translateY(1px) scale(0.98); }
+    .btn-sas-4series .icon { font-size:2rem; line-height:1; margin-bottom:2px; position:relative; z-index:1; }
+    .btn-sas-4series .main { display:block; font-size:1.08rem; position:relative; z-index:1; }
+    .btn-sas-4series small { display:block; font-size:0.82rem; margin-top:3px; font-weight:800; opacity:0.95; position:relative; z-index:1; }
+    @media(max-width:1100px){ .circle-area-4series{left:38px;top:118px;width:200px;height:200px;} .btn-sas-4series .main{font-size:1rem;} .btn-sas-4series small{font-size:0.76rem;} }
+    @media(max-width:768px){ .circle-area-4series{position:relative;left:auto;top:auto;width:190px;height:190px;margin:0 auto 18px;} }
+
     @media(max-width:768px){ .side-img{display:none;} .welcome-container{width:100%;max-width:420px;} }
   </style>
 </head>
 <body>
   <img src="/static/logo_sas.png" alt="SAS Logo" class="sas-logo">
   <div class="overlay">
+    <div class="circle-area-4series">
+      <a href="/sas_training_4series.html" class="btn-sas-4series"><span class="icon">⚙️</span><span class="main">4 Series<br>Training</span><small>R / K / F / S Series</small></a>
+    </div>
     <div class="layout-row">
       <img src="/static/3.png" alt="" class="side-img">
       <div class="welcome-container">
