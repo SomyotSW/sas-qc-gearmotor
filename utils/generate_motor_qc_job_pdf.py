@@ -11,6 +11,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.lib.utils import simpleSplit
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, KeepTogether, PageBreak
 )
@@ -224,22 +225,82 @@ def _department_qr_block(qc_qr_image_stream, warehouse_qr_image_stream, cell_c, 
     note_p = _p('หมายเหตุ: QR Code บนหัวเอกสารจะเปิดหน้า QC Form และเติมข้อมูล QR No., บริษัท และรายการสินค้าให้อัตโนมัติ โดย QC สามารถกรอกผลตรวจแยกตาม Item เช่น ประเภทสินค้า, Model, จำนวน, อัตราทด, กระแส, เสียง, น้ำมัน และรูปภาพของแต่ละรายการ โดยไฟล์ใบจอง PDF จะถูกแนบท้ายเอกสารชุดนี้ในไฟล์เดียวกันทุกขั้นตอน', note)
     return [dept_qr_tbl, Spacer(1, 2*mm), note_p]
 
+def _item_notes_footer_lines(job):
+    """รวมหมายเหตุสินค้าที่แอดมินกรอกไว้รายรายการ สำหรับพิมพ์ที่ Footer ของ PDF"""
+    lines = []
+    for item in (job.get('items') or [])[:30]:
+        note = str(item.get('note') or '').strip()
+        if not note:
+            continue
+        tag = f"Item {item.get('no', '')}"
+        model = str(item.get('model') or '').strip()
+        if model:
+            tag += f" ({model})"
+        lines.append(f"{tag}: {note}")
+    return lines
+
+
+def _make_item_notes_footer_callback(footer_lines, font_name):
+    """สร้างฟังก์ชันสำหรับวาดหมายเหตุสินค้าที่ขอบล่างของทุกหน้า ตัวเล็กแต่คมชัด"""
+    if not footer_lines:
+        return None
+
+    label = 'หมายเหตุสินค้า / Item Notes:  '
+    full_text = label + '   |   '.join(footer_lines)
+
+    def _draw(canvas_obj, doc_obj):
+        canvas_obj.saveState()
+        font_size = 6.8
+        line_height = 8.4
+        use_font = font_name
+        try:
+            canvas_obj.setFont(use_font, font_size)
+        except Exception:
+            use_font = 'Helvetica'
+            canvas_obj.setFont(use_font, font_size)
+
+        max_width = doc_obj.width
+        wrapped = simpleSplit(full_text, use_font, font_size, max_width) or ['']
+        max_lines = 3
+        if len(wrapped) > max_lines:
+            wrapped = wrapped[:max_lines]
+            last = wrapped[-1].rstrip()
+            wrapped[-1] = (last[:-1] if last else last) + '…'
+
+        divider_y = 4 * mm + len(wrapped) * line_height
+        canvas_obj.setStrokeColor(colors.HexColor('#cbd5e1'))
+        canvas_obj.setLineWidth(0.35)
+        canvas_obj.line(doc_obj.leftMargin, divider_y, doc_obj.leftMargin + doc_obj.width, divider_y)
+
+        canvas_obj.setFillColor(colors.HexColor('#1e293b'))
+        start_y = 4 * mm + (len(wrapped) - 1) * line_height
+        for i, line in enumerate(wrapped):
+            canvas_obj.drawString(doc_obj.leftMargin, start_y - i * line_height, line)
+
+        canvas_obj.restoreState()
+
+    return _draw
+
+
 def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=None, qc_qr_image_stream=None, warehouse_qr_image_stream=None):
     """
     job structure:
     {
-      qr_no, company_name, product_type, item_count, items:[{no, product_type, model, qty, assembly}],
+      qr_no, company_name, product_type, item_count, items:[{no, product_type, model, qty, assembly, note}],
       form_url, created_at
     }
     """
     stream = io.BytesIO()
+    footer_lines = _item_notes_footer_lines(job)
+    footer_cb = _make_item_notes_footer_callback(footer_lines, FONT_NAME)
+    bottom_margin = 12 * mm if footer_cb else 5 * mm
     doc = SimpleDocTemplate(
         stream,
         pagesize=A4,
         rightMargin=8*mm,
         leftMargin=8*mm,
         topMargin=3.5*mm,
-        bottomMargin=5*mm,
+        bottomMargin=bottom_margin,
         title=f"QC Motor {job.get('qr_no','')}",
     )
 
@@ -413,7 +474,10 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
     else:
         story.extend(dept_block)
 
-    doc.build(story)
+    if footer_cb:
+        doc.build(story, onFirstPage=footer_cb, onLaterPages=footer_cb)
+    else:
+        doc.build(story)
     stream.seek(0)
     return stream
 

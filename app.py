@@ -1093,6 +1093,7 @@ def admin_motor_qc_generate():
         models = request.form.getlist('item_model[]')
         quantities = request.form.getlist('item_qty[]')
         assemblies = request.form.getlist('item_assembly[]')
+        item_notes = request.form.getlist('item_note[]')
 
         items = []
         row_count = min(max(len(models), len(product_types), len(quantities), len(assemblies)), 30)
@@ -1108,12 +1109,14 @@ def admin_motor_qc_generate():
                 qty = 1
             assembly = assemblies[i] if i < len(assemblies) else 'ไม่ประกอบ'
             assembly = 'ประกอบ' if str(assembly).strip() == 'ประกอบ' else 'ไม่ประกอบ'
+            note = str(item_notes[i] if i < len(item_notes) else '').strip()[:200]
             items.append({
                 'no': len(items) + 1,
                 'product_type': product_type,
                 'model': model,
                 'qty': qty,
                 'assembly': assembly,
+                'note': note,
             })
 
         if (not qr_no) or (not company_name) or (not items) or any(not x.get('product_type') or not x.get('model') for x in items):
