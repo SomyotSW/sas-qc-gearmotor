@@ -200,22 +200,26 @@ def _qc_note(job, checkpoint_no):
     return ''
 
 
-def _department_qr_block(qc_qr_image_stream, warehouse_qr_image_stream, cell_c, small, note):
-    """ก้อน QR 2 แผนก + หมายเหตุ ใช้ซ้ำได้ทั้งหน้าแรกหรือหน้าใหม่ด้านล่าง"""
+def _department_qr_block(qc_qr_image_stream, warehouse_qr_image_stream, cell_c, small, note, packed_qr_image_stream=None):
+    """ก้อน QR 3 แผนก + หมายเหตุ ใช้ซ้ำได้ทั้งหน้าแรกหรือหน้าใหม่ด้านล่าง
+    ลำดับ: Warehouse Prepare (ซ้าย) -> QC Inspector Approve (กลาง) -> Packed and Ready to Ship (ขวา)
+    """
     qr_cells = ['', '', '']
+    if warehouse_qr_image_stream:
+        qr_cells[0] = _qr_image(warehouse_qr_image_stream, width=21*mm, height=21*mm)
     if qc_qr_image_stream:
         qr_cells[1] = _qr_image(qc_qr_image_stream, width=21*mm, height=21*mm)
-    if warehouse_qr_image_stream:
-        qr_cells[2] = _qr_image(warehouse_qr_image_stream, width=21*mm, height=21*mm)
+    if packed_qr_image_stream:
+        qr_cells[2] = _qr_image(packed_qr_image_stream, width=21*mm, height=21*mm)
 
     dept_qr_tbl = Table([
-        ['', _p('QC Inspector Approve QR', cell_c), _p('Warehouse Prepare QR', cell_c)],
+        [_p('Warehouse Prepare QR', cell_c), _p('QC Inspector Approve QR', cell_c), _p('Packed and Ready to Ship QR', cell_c)],
         qr_cells,
-        ['', _p('QC สแกนหลังตรวจสินค้าเสร็จ', small), _p('Warehouse สแกนหลังเตรียมสินค้าเสร็จ', small)],
+        [_p('Warehouse สแกนหลังเตรียมสินค้าเสร็จ', small), _p('QC สแกนหลังตรวจสินค้าเสร็จ', small), _p('สแกนหลังแพ็กสินค้าเสร็จ เพื่อแจ้งขนส่งว่าพร้อมส่งแล้ว', small)],
     ], colWidths=[58*mm, 58*mm, 58*mm], rowHeights=[5*mm, 23*mm, 6*mm])
     dept_qr_tbl.setStyle(TableStyle([
-        ('GRID', (1, 0), (-1, -1), 0.35, colors.HexColor('#cbd5e1')),
-        ('BACKGROUND', (1, 0), (-1, 0), colors.HexColor('#eaf4ff')),
+        ('GRID', (0, 0), (-1, -1), 0.35, colors.HexColor('#cbd5e1')),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#eaf4ff')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('TOPPADDING', (0, 0), (-1, -1), 1),
@@ -282,7 +286,7 @@ def _make_item_notes_footer_callback(footer_lines, font_name):
     return _draw
 
 
-def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=None, qc_qr_image_stream=None, warehouse_qr_image_stream=None):
+def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=None, qc_qr_image_stream=None, warehouse_qr_image_stream=None, packed_qr_image_stream=None):
     """
     job structure:
     {
@@ -328,14 +332,19 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
         _p('QC-GEARMOTOR PRE-CHECK DOCUMENT', title),
         _p('เอกสารแนบงานก่อนส่งสินค้า - สแกน QR เพื่อเปิดฟอร์ม QC พร้อมข้อมูลอัตโนมัติ / ใบจองแนบท้ายไฟล์เดียวกัน', subtitle),
     ]
+    qr_caption_style = ParagraphStyle(
+        'SASQrCaption', parent=base, fontSize=7.5, leading=8.5,
+        alignment=TA_CENTER, textColor=colors.HexColor('#334155'),
+    )
+    header_qr_cell = [_qr_image(qr_image_stream), _p('แสกนเพื่อทำการ QC Motor', qr_caption_style)]
     header_tbl = Table(
-        [[_logo_image(logo_path), header_left, _qr_image(qr_image_stream)]],
+        [[_logo_image(logo_path), header_left, header_qr_cell]],
         colWidths=[43*mm, 101*mm, 31*mm],
     )
     header_tbl.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-        ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
+        ('ALIGN', (2, 0), (2, 0), 'CENTER'),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
     ]))
     story.append(header_tbl)
@@ -438,20 +447,23 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
     admin_approval = approvals.get('admin') or {'name': job.get('created_by', 'Admin SAS04'), 'approved_at': job.get('created_at', '')}
     qc_approval = approvals.get('qc') or {}
     warehouse_approval = approvals.get('warehouse') or {}
+    packed_approval = approvals.get('packed') or {}
 
     sign_tbl = Table([
-        [_p('Admin Motor SAS04', cell_c), _p('QC Inspector', cell_c), _p('Warehouse / Packing', cell_c)],
+        [_p('Admin Motor SAS04', cell_c), _p('Warehouse / Packing', cell_c), _p('QC Inspector', cell_c), _p('Packed / Ready to Ship', cell_c)],
         [
             _approval_cell(admin_approval, small, is_admin=True),
-            _approval_cell(qc_approval, small),
             _approval_cell(warehouse_approval, small),
+            _approval_cell(qc_approval, small),
+            _approval_cell(packed_approval, small),
         ],
         [
             _approval_date(admin_approval, small),
-            _approval_date(qc_approval, small),
             _approval_date(warehouse_approval, small),
+            _approval_date(qc_approval, small),
+            _approval_date(packed_approval, small),
         ],
-    ], colWidths=[58*mm, 58*mm, 58*mm], rowHeights=[7*mm, 18*mm, 7*mm])
+    ], colWidths=[44*mm, 44*mm, 44*mm, 43*mm], rowHeights=[7*mm, 18*mm, 7*mm])
     sign_tbl.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), 0.35, colors.HexColor('#cbd5e1')),
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#eaf4ff')),
@@ -465,7 +477,7 @@ def create_motor_qc_job_pdf(job, qr_image_stream, barcode_value='', logo_path=No
 
     # QR Code แยกตามแผนก ใช้สำหรับกด Approve หลังได้รับเอกสาร
     # ถ้ามีรายการ 4 รายการขึ้นไป ให้ย้ายก้อนนี้ไปไว้หน้าถัดไปชิดขอบล่าง เพื่อให้หน้าแรกไม่แน่นและดูมืออาชีพ
-    dept_block = _department_qr_block(qc_qr_image_stream, warehouse_qr_image_stream, cell_c, small, note)
+    dept_block = _department_qr_block(qc_qr_image_stream, warehouse_qr_image_stream, cell_c, small, note, packed_qr_image_stream=packed_qr_image_stream)
     item_count = int(job.get('item_count') or len(job.get('items') or []) or 0)
     if item_count >= 4:
         story.append(PageBreak())

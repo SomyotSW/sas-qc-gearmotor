@@ -654,6 +654,7 @@ def _motor_qc_approval_urls(job_key: str):
     return {
         'warehouse': url_for('motor_qc_department_approve', role='warehouse', job_key=safe_key, _external=True),
         'qc': url_for('motor_qc_department_approve', role='qc', job_key=safe_key, _external=True),
+        'packed': url_for('motor_qc_department_approve', role='packed', job_key=safe_key, _external=True),
     }
 
 
@@ -737,6 +738,7 @@ def _build_motor_qc_precheck_pdf_bytes(job: dict) -> bytes:
         logo_path=_motor_qc_logo_path(),
         qc_qr_image_stream=_make_qr_stream(approval_urls.get('qc'), box_size=5),
         warehouse_qr_image_stream=_make_qr_stream(approval_urls.get('warehouse'), box_size=5),
+        packed_qr_image_stream=_make_qr_stream(approval_urls.get('packed'), box_size=5),
     )
     pdf_stream.seek(0)
     precheck_bytes = pdf_stream.read()
@@ -971,6 +973,18 @@ def _motor_qc_role_config(role: str):
             'cc': ['natenaree@synergy-as.com','Chottanin@synergy-as.com' , 'sas06@synergy-as.com' ,'psungpan@gmail.com' , 'traiwit@synergy-as.com' , 'kongkiat@synergy-as.com'],
             'subject_tpl': 'QC สินค้าเรียบร้อยแล้ว OR No. : {qr_no} : {company_name} โปรดทำการจัดส่งสินค้าตามรายการที่กำหนดได้เลย',
             'body_tpl': 'QC สินค้าเรียบร้อยแล้ว OR No. : {qr_no} : {company_name}  โปรดทำการจัดส่งสินค้าตามรายการที่กำหนดได้เลย\n\nด้วยความเคารพ \n\nQC Inspector',
+        },
+        'packed': {
+            'role': 'packed',
+            'label': 'Packed / Ready to Ship',
+            'title': 'สินค้าบรรจุเรียบร้อย พร้อมจัดส่ง',
+            'popup_message': 'โปรดตรวจสอบความถูกต้องอีกครั้ง หากบรรจุ (Packing) เสร็จเรียบร้อยแล้ว โปรดลงชื่อและกด Approve เพื่อแจ้งขนส่งว่าสินค้าพร้อมส่ง',
+            'status': 'packed_ready_to_ship',
+            'button': 'Approve บรรจุเสร็จ พร้อมส่ง',
+            'to': ['kanjanatuk.r@gmail.com', 'sayamon.s3m@gmail.com', 'sas04@synergy-as.com', 'sas06@synergy-as.com'],
+            'cc': ['tanai@synergy-as.com', 'Chottanin@synergy-as.com', 'paninee@synergy-as.com', 'wiroj@synergy-as.com', 'psungpan@gmail.com', 'traiwit@synergy-as.com', 'natenaree@synergy-as.com', 'kongkiat@synergy-as.com'],
+            'subject_tpl': 'สินค้าถูกบรรจุเรียบร้อยแล้ว โปรดดำเนินการจัดส่ง OR No. : {qr_no} : {company_name}',
+            'body_tpl': 'สินค้าถูกบรรจุเรียบร้อยแล้ว โปรดดำเนินการจัดส่ง\n\nOR No. : {qr_no}\nบริษัท : {company_name}\n\nด้วยความเคารพ \nWarehouse / Packing',
         },
     }
     return configs.get(role)
