@@ -15,7 +15,8 @@ import qrcode
 import threading
 #import pandas as pd
 from io import BytesIO
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
+from openpyxl.styles import Font
 import pdfplumber
 
 # ✅ NEW: Cloudflare R2 (แทน Firebase Storage)
@@ -818,7 +819,8 @@ def _record_mail_event(job_key, stage, result):
         print(f"[MAIL LOG ERROR] {e}", flush=True)
 
 
-def _send_workflow_email(to_list, cc_list, subject, body, attachment_bytes=None, attachment_name=None, stage='', job_key=''):
+def _send_workflow_email(to_list, cc_list, subject, body, attachment_bytes=None, attachment_name=None,
+                          stage='', job_key='', attachment_maintype='application', attachment_subtype='pdf'):
     """ส่งอีเมล Workflow พร้อมแนบ PDF โดยใช้ SMTP ของระบบ ไม่ผูกกับเครื่องผู้ใช้
 
     คืนค่า dict เสมอ เพื่อ debug Production ได้ ไม่ข้ามเงียบเหมือน V5
@@ -869,8 +871,8 @@ def _send_workflow_email(to_list, cc_list, subject, body, attachment_bytes=None,
         if attachment_bytes and attachment_name:
             msg.add_attachment(
                 attachment_bytes,
-                maintype='application',
-                subtype='pdf',
+                maintype=attachment_maintype,
+                subtype=attachment_subtype,
                 filename=attachment_name,
             )
 
@@ -1337,62 +1339,126 @@ def api_motor_qc_resolve(job_key):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+def _build_overdue_digest_excel(overdue_rows, now_th):
+    """สร้างไฟล์ Excel สรุปงานค้างเกิน 24 ชม. ทั้งหมด (1 ไฟล์ ใช้แนบอีเมลสรุปประจำวัน)"""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "งานค้างเกิน 24 ชม."
+
+    headers = ['OR No.', 'บริษัท', 'ขั้นตอนปัจจุบัน', 'ผู้รับผิดชอบ', 'รอมาแล้ว', 'ตั้งแต่', 'จำนวนรายการ', 'ลิงก์ PDF']
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+
+    for row in overdue_rows:
+        ws.append([
+            row.get('qr_no', ''),
+            row.get('company_name', ''),
+            row.get('waiting_label', ''),
+            row.get('owner_label', ''),
+            row.get('elapsed_label', ''),
+            row.get('since', ''),
+            row.get('item_count', ''),
+            row.get('pdf_url', ''),
+        ])
+
+    widths = [20, 28, 30, 22, 16, 18, 12, 45]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[chr(64 + i)].width = w
+
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _send_daily_overdue_digest():
+    """รวมงานที่ค้างเกิน 24 ชม. ทั้งหมด สรุปลงไฟล์ Excel ไฟล์เดียว แล้วส่งอีเมลแจ้งเตือนวันละ 1 ครั้งเท่านั้น
+    (แทนการส่งอีเมลแยกทีละงานซึ่งจะถล่มกล่องจดหมายเมื่อมีงานค้างพร้อมกันจำนวนมาก)"""
+    try:
+        rows = motor_qc_jobs_ref.get() or {}
+        if not isinstance(rows, dict):
+            return
+        now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
+
+        overdue_rows = []
+        to_set, cc_set = set(), set()
+        for key, job in rows.items():
+            if not isinstance(job, dict):
+                continue
+            status = _normalize_motor_qc_status(job.get('status') or '')
+            if status not in MOTOR_QC_STAGE_ORDER:
+                continue
+            progress = _motor_qc_job_progress(job, now_th)
+            if not progress['overdue']:
+                continue
+            progress['job_key'] = progress['job_key'] or key
+            overdue_rows.append(progress)
+            recip = _motor_qc_stage_recipients(status)
+            to_set.update(recip.get('to') or [])
+            cc_set.update(recip.get('cc') or [])
+
+        if not overdue_rows:
+            print("[DAILY OVERDUE DIGEST] ไม่มีงานค้างเกิน 24 ชม. วันนี้ ข้ามการส่งอีเมล", flush=True)
+            return
+
+        overdue_rows.sort(key=lambda r: r.get('elapsed_seconds', 0), reverse=True)
+        excel_bytes = _build_overdue_digest_excel(overdue_rows, now_th)
+        date_label = now_th.strftime('%d-%m-%Y')
+        filename = f"overdue_motor_qc_{now_th.strftime('%Y%m%d')}.xlsx"
+        status_url = _motor_qc_status_url()
+
+        subject = f"⏰ สรุปงานค้างเกิน 24 ชม. ประจำวันที่ {date_label} ({len(overdue_rows)} งาน)"
+        body = (
+            f"พบงาน QC-Motor ที่ค้างสถานะเดิมเกิน 24 ชม. ทั้งหมด {len(overdue_rows)} งาน ณ วันที่ {date_label} เวลา 17:30 น.\n"
+            f"รายละเอียดทั้งหมดอยู่ในไฟล์ Excel ที่แนบมา กรุณาช่วยกันเร่งดำเนินการในส่วนที่ค้างอยู่โดยเร็ว\n\n"
+            f"ตรวจสอบสถานะแบบ Real-time ทั้งหมดได้ที่: {status_url}\n\n"
+            f"ด้วยความเคารพ \nระบบแจ้งเตือน SAS QC Motor (Auto — สรุปวันละ 1 ครั้ง เวลา 17:30 น.)"
+        )
+
+        cc_set.add(ALERT_EMAIL)
+        mail_res = _send_workflow_email(
+            to_list=sorted(to_set) or [ALERT_EMAIL],
+            cc_list=sorted(cc_set),
+            subject=subject,
+            body=body,
+            attachment_bytes=excel_bytes,
+            attachment_name=filename,
+            attachment_maintype='application',
+            attachment_subtype='vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            stage='daily_overdue_digest',
+            job_key='daily_digest',
+        )
+        print(f"[DAILY OVERDUE DIGEST] ส่งสรุป {len(overdue_rows)} งาน -> ok={mail_res.get('ok')} err={mail_res.get('error')}", flush=True)
+    except Exception as e:
+        print(f"[DAILY OVERDUE DIGEST ERROR] {e}", flush=True)
+
+
+@app.route('/api/motor-qc/send-overdue-digest-now', methods=['POST'])
+def api_motor_qc_send_overdue_digest_now():
+    """Endpoint สำหรับทดสอบ/สั่งส่งสรุปงานค้างเกิน 24 ชม. (Excel แนบ 1 ไฟล์) ทันที โดยไม่ต้องรอถึง 17:30 น."""
+    try:
+        _send_daily_overdue_digest()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 def _motor_qc_overdue_watcher():
-    """ตรวจงานทุกใบที่ค้างสถานะเดิมเกิน 24 ชม. แล้วส่งอีเมลแจ้งเตือนซ้ำให้แผนกที่ต้องดำเนินการ (คูลดาวน์ 24 ชม./สถานะ)"""
+    """รอจนถึงเวลา 17:30 น. (เวลาไทย) ของทุกวัน แล้วส่งอีเมลสรุปงานค้างเกิน 24 ชม. เพียง 1 ฉบับ/วัน"""
+    DIGEST_HOUR, DIGEST_MINUTE = 17, 30
     while True:
         try:
-            time.sleep(900)  # ตรวจทุก 15 นาที
-            rows = motor_qc_jobs_ref.get() or {}
-            if not isinstance(rows, dict):
-                continue
             now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
-            for key, job in rows.items():
-                if not isinstance(job, dict):
-                    continue
-                status = str(job.get('status') or '')
-                if status not in MOTOR_QC_STAGE_ORDER:
-                    continue
-                progress = _motor_qc_job_progress(job, now_th)
-                if not progress['overdue']:
-                    continue
-
-                reminders = job.get('overdue_reminders') or {}
-                last_sent = reminders.get(status)
-                should_send = True
-                if last_sent:
-                    try:
-                        last_dt = datetime.datetime.strptime(last_sent, '%Y-%m-%d %H:%M:%S')
-                        should_send = (now_th - last_dt).total_seconds() >= 86400
-                    except Exception:
-                        should_send = True
-                if not should_send:
-                    continue
-
-                recip = _motor_qc_stage_recipients(status)
-                qr_no = job.get('qr_no') or key
-                company_name = job.get('company_name') or '-'
-                subject = f"⏰ แจ้งเตือนงานค้าง OR No. : {qr_no} : {company_name} ({progress['waiting_label']}) เกิน 24 ชม."
-                status_url = _motor_qc_status_url()
-                body = (
-                    f"งาน OR No. {qr_no} ({company_name}) ค้างอยู่ที่ขั้นตอน '{progress['waiting_label']}' "
-                    f"มาแล้ว {progress['elapsed_label']} (เกิน 24 ชม.) กรุณาดำเนินการโดยเร็ว\n\n"
-                    f"ตรวจสอบสถานะทั้งหมดได้ที่: {status_url}\n\n"
-                    f"ด้วยความเคารพ \nระบบแจ้งเตือน SAS QC Motor (Auto)"
-                )
-                mail_res = _send_workflow_email(
-                    to_list=recip.get('to'),
-                    cc_list=(recip.get('cc') or []) + [ALERT_EMAIL],
-                    subject=subject,
-                    body=body,
-                    stage=f'overdue_reminder_{status}',
-                    job_key=key,
-                )
-                if mail_res.get('ok'):
-                    motor_qc_jobs_ref.child(key).child('overdue_reminders').child(status).set(
-                        now_th.strftime('%Y-%m-%d %H:%M:%S')
-                    )
+            target = now_th.replace(hour=DIGEST_HOUR, minute=DIGEST_MINUTE, second=0, microsecond=0)
+            if now_th >= target:
+                target += datetime.timedelta(days=1)
+            sleep_seconds = (target - now_th).total_seconds()
+            time.sleep(max(5, sleep_seconds))
+            _send_daily_overdue_digest()
+            time.sleep(60)  # กันยิงซ้ำในนาทีเดียวกัน ก่อนวนไปคำนวณรอบถัดไป
         except Exception as e:
             print(f"[OVERDUE WATCHER ERROR] {e}", flush=True)
+            time.sleep(60)
 
 
 threading.Thread(target=_motor_qc_overdue_watcher, daemon=True).start()
