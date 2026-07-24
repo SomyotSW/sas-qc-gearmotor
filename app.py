@@ -1001,6 +1001,8 @@ MOTOR_QC_STAGE_WAITING_LABEL = {
     'qc_approved': 'รอ Warehouse บรรจุสินค้า (Packing)',
     'packed_ready_to_ship': 'รอขนส่งมารับของ',
     'delivered': 'จัดส่งเรียบร้อยแล้ว',
+    'closed_manual_shipped': 'ส่งสินค้าแล้ว (บันทึกเอง)',
+    'on_hold': 'ระงับชั่วคราว',
 }
 
 MOTOR_QC_STAGE_OWNER_LABEL = {
@@ -1009,6 +1011,8 @@ MOTOR_QC_STAGE_OWNER_LABEL = {
     'qc_approved': 'Warehouse / Packing',
     'packed_ready_to_ship': 'ขนส่ง (Transport)',
     'delivered': '—',
+    'closed_manual_shipped': '—',
+    'on_hold': 'รอดำเนินการเพิ่มเติม',
 }
 
 # สถานะเก่า/ชื่อย่อที่อาจถูกบันทึกไว้ในข้อมูลเดิม ให้ map มาเป็นสถานะมาตรฐานปัจจุบัน
@@ -1082,7 +1086,21 @@ def _motor_qc_job_progress(job: dict, now_th=None):
     elapsed_seconds = (now_th - since_dt).total_seconds()
     is_terminal = status not in MOTOR_QC_STAGE_ORDER
 
-    if is_terminal:
+    waiting_label = MOTOR_QC_STAGE_WAITING_LABEL.get(status, status)
+    extra_note = ''
+
+    if status == 'on_hold':
+        color = 'blue'
+        hold_info = job.get('hold_info') or {}
+        reason = hold_info.get('reason') or ''
+        if reason:
+            waiting_label = f"ระงับชั่วคราว: {reason}"
+        extra_note = hold_info.get('note') or ''
+    elif status == 'closed_manual_shipped':
+        color = 'gray'
+        mr = job.get('manual_resolution') or {}
+        extra_note = mr.get('note') or ''
+    elif is_terminal:
         color = 'gray'
     elif elapsed_seconds >= 86400:
         color = 'red'
@@ -1102,7 +1120,7 @@ def _motor_qc_job_progress(job: dict, now_th=None):
         'company_name': job.get('company_name') or '',
         'item_count': job.get('item_count') or len(job.get('items') or []),
         'status': status,
-        'waiting_label': MOTOR_QC_STAGE_WAITING_LABEL.get(status, status),
+        'waiting_label': waiting_label,
         'owner_label': MOTOR_QC_STAGE_OWNER_LABEL.get(status, '—'),
         'since': since_str,
         'elapsed_seconds': elapsed_seconds,
@@ -1113,6 +1131,8 @@ def _motor_qc_job_progress(job: dict, now_th=None):
         'created_at': job.get('created_at') or '',
         'has_note': bool(notes),
         'latest_note': latest_note,
+        'extra_note': extra_note,
+        'proof_url': (job.get('manual_resolution') or {}).get('proof_url') or '',
     }
 
 
@@ -1210,6 +1230,109 @@ def api_motor_qc_add_note(job_key):
             job_key=safe_key,
         )
         return jsonify({'ok': True, 'mail_ok': mail_result.get('ok'), 'mail_error': mail_result.get('error')})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/motor-qc/resolve/<job_key>', methods=['POST'])
+def api_motor_qc_resolve(job_key):
+    """สำหรับงานที่ค้างเกิน 24 ชม.: ให้ผู้เกี่ยวข้องยืนยันว่าส่งสินค้าแล้ว (นอกระบบ) พร้อมแนบไฟล์ยืนยัน
+    หรือแจ้งเหตุผลที่ยังไม่สามารถส่งสินค้ารายการนี้ได้ (เช่น รอลูกค้าโอนเงิน / ลูกค้ายกเลิกคำสั่งซื้อ)"""
+    try:
+        action = (request.form.get('action') or '').strip()
+        note = (request.form.get('note') or '').strip()
+        reason = (request.form.get('reason') or '').strip()
+        reported_by = (request.form.get('reported_by') or '').strip()
+
+        safe_key = _safe_firebase_key(job_key)
+        job = motor_qc_jobs_ref.child(safe_key).get()
+        if not job:
+            return jsonify({'ok': False, 'error': 'ไม่พบเอกสาร QC-Motor'}), 404
+
+        now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
+        now_str = now_th.strftime('%Y-%m-%d %H:%M:%S')
+        qr_no = job.get('qr_no') or safe_key
+        company_name = job.get('company_name') or '-'
+        prev_status = _normalize_motor_qc_status(job.get('status') or 'admin_generated')
+        recip = _motor_qc_stage_recipients(prev_status)
+        status_url = _motor_qc_status_url()
+
+        if action == 'shipped':
+            proof_url = ''
+            proof_filename = ''
+            proof_file = request.files.get('proof_file')
+            if proof_file and proof_file.filename:
+                proof_filename = proof_file.filename.strip()
+                safe_name = secure_filename(proof_filename) or f'{safe_key}_proof'
+                proof_key = f"motor_qc_jobs/{safe_key}/manual_proof_{int(now_th.timestamp())}_{safe_name}"
+                proof_bytes = proof_file.read()
+                proof_url = r2_upload_bytes(proof_bytes, proof_key, proof_file.mimetype or 'application/octet-stream')
+
+            motor_qc_jobs_ref.child(safe_key).update({
+                'status': 'closed_manual_shipped',
+                'updated_at': now_str,
+                'manual_resolution': {
+                    'action': 'shipped',
+                    'reported_by': reported_by[:80] or 'ไม่ระบุชื่อ',
+                    'note': note[:500],
+                    'proof_url': proof_url,
+                    'proof_filename': proof_filename,
+                    'resolved_at': now_str,
+                }
+            })
+
+            subject = f"✅ ปิดงานด้วยตนเอง OR No. : {qr_no} : {company_name} — ส่งสินค้าแล้ว (นอกระบบ)"
+            body = (
+                f"งาน OR No. {qr_no} ({company_name}) ถูกบันทึกว่าส่งสินค้าเรียบร้อยแล้ว โดย {reported_by or 'ไม่ระบุชื่อ'}\n"
+                f"หมายเหตุ: {note or '-'}\n"
+                + (f"ไฟล์แนบยืนยันการส่ง: {proof_url}\n" if proof_url else "ไม่มีไฟล์แนบยืนยัน\n")
+                + f"\nตรวจสอบสถานะทั้งหมดได้ที่: {status_url}\n\nด้วยความเคารพ \nระบบแจ้งเตือน SAS QC Motor (Auto)"
+            )
+            mail_result = _send_workflow_email(
+                to_list=(recip.get('to') or []) or [ALERT_EMAIL],
+                cc_list=(recip.get('cc') or []) + [ALERT_EMAIL],
+                subject=subject,
+                body=body,
+                stage='manual_resolution_shipped',
+                job_key=safe_key,
+            )
+            return jsonify({'ok': True, 'mail_ok': mail_result.get('ok'), 'mail_error': mail_result.get('error')})
+
+        elif action == 'hold':
+            if not reason:
+                return jsonify({'ok': False, 'error': 'กรุณาเลือกเหตุผล'}), 400
+
+            motor_qc_jobs_ref.child(safe_key).update({
+                'status': 'on_hold',
+                'updated_at': now_str,
+                'hold_info': {
+                    'reason': reason[:200],
+                    'note': note[:500],
+                    'reported_by': reported_by[:80] or 'ไม่ระบุชื่อ',
+                    'created_at': now_str,
+                    'prev_status': prev_status,
+                }
+            })
+
+            subject = f"⏸️ ระงับงานชั่วคราว OR No. : {qr_no} : {company_name} — {reason}"
+            body = (
+                f"งาน OR No. {qr_no} ({company_name}) ถูกระงับชั่วคราวโดย {reported_by or 'ไม่ระบุชื่อ'}\n"
+                f"เหตุผล: {reason}\n"
+                f"หมายเหตุ: {note or '-'}\n\n"
+                f"ตรวจสอบสถานะทั้งหมดได้ที่: {status_url}\n\nด้วยความเคารพ \nระบบแจ้งเตือน SAS QC Motor (Auto)"
+            )
+            mail_result = _send_workflow_email(
+                to_list=(recip.get('to') or []) or [ALERT_EMAIL],
+                cc_list=(recip.get('cc') or []) + [ALERT_EMAIL],
+                subject=subject,
+                body=body,
+                stage='manual_resolution_hold',
+                job_key=safe_key,
+            )
+            return jsonify({'ok': True, 'mail_ok': mail_result.get('ok'), 'mail_error': mail_result.get('error')})
+
+        else:
+            return jsonify({'ok': False, 'error': 'action ไม่ถูกต้อง ต้องเป็น shipped หรือ hold'}), 400
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
