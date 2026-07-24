@@ -16,13 +16,17 @@
     .hero h1{font-size:2rem;font-weight:900;margin:0;}
     .hero .sub{opacity:.9;margin-top:6px;font-size:1.05rem;}
     .card-body-shell{background:#fff;border-radius:0 0 22px 22px;box-shadow:0 24px 60px rgba(15,23,42,.10);padding:22px 26px 28px;}
-    .legend{display:flex;flex-wrap:wrap;gap:18px;margin:16px 0 20px;font-weight:800;font-size:1.05rem;}
-    .legend span{display:flex;align-items:center;gap:8px;}
+    .legend{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0 20px;}
+    .filter-btn{display:flex;align-items:center;gap:8px;font-weight:800;font-size:1.02rem;background:#fff;border:2px solid #e2e8f0;border-radius:999px;padding:9px 18px;color:#334155;cursor:pointer;transition:all .15s;}
+    .filter-btn:hover{border-color:#93c5fd;background:#f8fbff;}
+    .filter-btn.active{border-color:#0b63ce;background:#0b63ce;color:#fff;box-shadow:0 6px 16px rgba(11,99,206,.28);}
+    .filter-btn.active .dot{box-shadow:0 0 0 3px rgba(255,255,255,.55);}
     .dot{width:16px;height:16px;border-radius:50%;display:inline-block;flex:none;}
     .dot.green{background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.18);}
     .dot.yellow{background:#f59e0b;box-shadow:0 0 0 4px rgba(245,158,11,.18);}
     .dot.red{background:#ef4444;box-shadow:0 0 0 4px rgba(239,68,68,.18);animation:pulse 1.1s infinite;}
     .dot.gray{background:#94a3b8;}
+    .dot.all{background:linear-gradient(90deg,#22c55e,#f59e0b,#ef4444);}
     @keyframes pulse{0%{transform:scale(1);}50%{transform:scale(1.35);}100%{transform:scale(1);}}
     #searchBox{max-width:340px;font-size:1.1rem;padding:10px 14px;border-radius:12px;}
     table.qc-table{width:100%;border-collapse:separate;border-spacing:0 10px;}
@@ -42,6 +46,11 @@
     .since-line{font-size:.85rem;color:#64748b;font-weight:600;}
     .btn-pdf{background:#0b63ce;color:#fff;border-radius:10px;padding:8px 14px;font-weight:800;text-decoration:none;font-size:.95rem;white-space:nowrap;}
     .btn-deliver{background:#16a34a;color:#fff;border:0;border-radius:10px;padding:8px 14px;font-weight:800;font-size:.95rem;white-space:nowrap;}
+    .btn-note-q{width:30px;height:30px;border-radius:50%;border:2px solid #f59e0b;background:#fff7e6;color:#b45309;font-weight:900;font-size:1rem;line-height:1;cursor:pointer;margin-left:6px;}
+    .btn-note-q:hover{background:#fde8c8;}
+    .btn-note-q.has-note{background:#f59e0b;color:#fff;}
+    .note-flag{margin-top:6px;font-size:.85rem;color:#b45309;font-weight:800;}
+    .owner-cell{display:flex;align-items:center;flex-wrap:wrap;gap:4px;}
     .empty-state{text-align:center;padding:50px 10px;font-size:1.2rem;color:#64748b;font-weight:700;}
     .updated-note{text-align:right;color:#64748b;font-weight:700;font-size:.95rem;margin-top:10px;}
     @media(max-width:900px){table.qc-table thead{display:none;} table.qc-table tbody tr{display:block;border-radius:16px;padding:10px;} table.qc-table td{display:flex;justify-content:space-between;border-bottom:1px dashed #dbeafe;} table.qc-table td:last-child{border-bottom:0;}}
@@ -61,11 +70,12 @@
       <div class="sub">ติดตามสถานะทุก OR No. แบบ Real-time — งานค้างเกิน 24 ชม. จะระบบส่งอีเมลแจ้งเตือนแผนกที่รับผิดชอบอัตโนมัติ</div>
     </div>
     <div class="card-body-shell">
-      <div class="legend">
-        <span><span class="dot green"></span> ปกติ (&lt; 12 ชม.)</span>
-        <span><span class="dot yellow"></span> ใกล้ครบกำหนด (12-24 ชม.)</span>
-        <span><span class="dot red"></span> ค้างเกิน 24 ชม. (แจ้งเตือนแล้ว)</span>
-        <span><span class="dot gray"></span> จัดส่งเรียบร้อย</span>
+      <div class="legend" id="filterBar">
+        <button type="button" class="filter-btn active" data-filter="active"><span class="dot all"></span> ทั้งหมดที่กำลังทำงาน</button>
+        <button type="button" class="filter-btn" data-filter="green"><span class="dot green"></span> ปกติ (&lt; 12 ชม.)</button>
+        <button type="button" class="filter-btn" data-filter="yellow"><span class="dot yellow"></span> ใกล้ครบกำหนด (12-24 ชม.)</button>
+        <button type="button" class="filter-btn" data-filter="red"><span class="dot red"></span> ค้างเกิน 24 ชม.</button>
+        <button type="button" class="filter-btn" data-filter="gray"><span class="dot gray"></span> จัดส่งเรียบร้อย</button>
       </div>
       <input type="text" id="searchBox" class="form-control" placeholder="🔎 ค้นหา OR No. หรือ บริษัท...">
       <div id="tableWrap" class="mt-3">
@@ -75,20 +85,65 @@
     </div>
   </div>
 
+  <div class="modal fade" id="noteModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content" style="border-radius:18px;overflow:hidden;">
+        <div class="modal-header" style="background:#0b63ce;color:#fff;">
+          <h5 class="modal-title fw-bold">📝 แจ้งปัญหา / หมายเหตุ</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="fw-bold text-primary mb-3" id="noteModalJobLabel"></div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">ชื่อผู้แจ้ง</label>
+            <input type="text" id="noteReporter" class="form-control" placeholder="ชื่อของคุณ">
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-bold">หมายเหตุ / สาเหตุที่ทำงานต่อไม่ได้</label>
+            <textarea id="noteText" class="form-control" rows="4" placeholder="เช่น สินค้าชำรุดตอน QC, รอชิ้นส่วนเพิ่ม, รอเอกสารเพิ่มเติม..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary fw-bold" data-bs-dismiss="modal">ยกเลิก</button>
+          <button class="btn btn-danger fw-bold" id="noteSaveBtn">📩 บันทึกและแจ้งเตือนขั้นตอนถัดไป</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 let allJobs = [];
+let currentFilter = 'active'; // active = ทุกงานที่ยังไม่จัดส่ง (ไม่รวม gray/delivered)
 
 function esc(s){ const d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; }
+
+function setFilter(f){
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === f));
+  renderTable();
+}
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => setFilter(btn.dataset.filter));
+});
 
 function renderTable(){
   const q = (document.getElementById('searchBox').value || '').trim().toLowerCase();
   const wrap = document.getElementById('tableWrap');
   let jobs = allJobs;
+
+  if(currentFilter === 'active'){
+    jobs = jobs.filter(j => j.color !== 'gray');
+  } else {
+    jobs = jobs.filter(j => j.color === currentFilter);
+  }
+
   if(q){
     jobs = jobs.filter(j => (j.qr_no||'').toLowerCase().includes(q) || (j.company_name||'').toLowerCase().includes(q));
   }
   if(!jobs.length){
-    wrap.innerHTML = '<div class="empty-state">ไม่พบข้อมูลงาน QC-Motor</div>';
+    wrap.innerHTML = '<div class="empty-state">ไม่พบข้อมูลงานในหมวดนี้</div>';
     return;
   }
   let html = '<table class="qc-table"><thead><tr>' +
@@ -98,11 +153,15 @@ function renderTable(){
 
   jobs.forEach(j => {
     const rowClass = j.overdue ? 'overdue-row' : '';
+    const jobLabel = `${j.qr_no} - ${j.company_name}`.replace(/'/g, "\\'");
     html += `<tr class="${rowClass}">`;
     html += `<td data-label=""><span class="dot ${j.color}"></span></td>`;
     html += `<td data-label="OR No."><div class="or-no">${esc(j.qr_no)}</div><div class="company">${esc(j.company_name)}</div></td>`;
     html += `<td data-label="ขั้นตอน"><span class="stage-label">${esc(j.waiting_label)}</span></td>`;
-    html += `<td data-label="ผู้รับผิดชอบ"><span class="owner-badge">${esc(j.owner_label)}</span></td>`;
+    html += `<td data-label="ผู้รับผิดชอบ"><div class="owner-cell"><span class="owner-badge">${esc(j.owner_label)}</span>` +
+            `<button class="btn-note-q ${j.has_note ? 'has-note' : ''}" title="แจ้งปัญหา/หมายเหตุ" onclick="openNoteModal('${esc(j.job_key)}','${esc(jobLabel)}')">?</button></div>` +
+            (j.has_note && j.latest_note ? `<div class="note-flag">⚠️ ${esc(j.latest_note.note)}</div>` : '') +
+            `</td>`;
     html += `<td data-label="รอมาแล้ว"><div class="elapsed-big ${j.color}">${esc(j.elapsed_label)}</div><div class="since-line">ตั้งแต่ ${esc(j.since)}</div></td>`;
     html += `<td data-label="จำนวนรายการ">${esc(j.item_count)} รายการ</td>`;
     let docCell = '';
@@ -116,6 +175,42 @@ function renderTable(){
   html += '</tbody></table>';
   wrap.innerHTML = html;
 }
+
+let noteJobKey = null;
+function openNoteModal(jobKey, label){
+  noteJobKey = jobKey;
+  document.getElementById('noteModalJobLabel').textContent = label;
+  document.getElementById('noteReporter').value = '';
+  document.getElementById('noteText').value = '';
+  const modal = new bootstrap.Modal(document.getElementById('noteModal'));
+  modal.show();
+}
+
+document.getElementById('noteSaveBtn').addEventListener('click', async () => {
+  const note = document.getElementById('noteText').value.trim();
+  if(!note){ alert('กรุณากรอกหมายเหตุก่อนบันทึก'); return; }
+  const reporter = document.getElementById('noteReporter').value.trim();
+  const btn = document.getElementById('noteSaveBtn');
+  btn.disabled = true; btn.textContent = '⏳ กำลังบันทึก...';
+  try{
+    const res = await fetch(`/api/motor-qc/note/${encodeURIComponent(noteJobKey)}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({note, reported_by: reporter})
+    });
+    const data = await res.json();
+    if(data.ok){
+      bootstrap.Modal.getInstance(document.getElementById('noteModal')).hide();
+      fetchStatus();
+    } else {
+      alert('เกิดข้อผิดพลาด: ' + (data.error || ''));
+    }
+  }catch(e){
+    alert('เกิดข้อผิดพลาด: ' + e);
+  }finally{
+    btn.disabled = false; btn.textContent = '📩 บันทึกและแจ้งเตือนขั้นตอนถัดไป';
+  }
+});
 
 async function markDelivered(jobKey){
   if(!confirm('ยืนยันว่าขนส่งรับของและนำส่งลูกค้าเรียบร้อยแล้ว?')) return;

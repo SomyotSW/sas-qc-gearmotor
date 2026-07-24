@@ -1011,6 +1011,20 @@ MOTOR_QC_STAGE_OWNER_LABEL = {
     'delivered': '—',
 }
 
+# สถานะเก่า/ชื่อย่อที่อาจถูกบันทึกไว้ในข้อมูลเดิม ให้ map มาเป็นสถานะมาตรฐานปัจจุบัน
+MOTOR_QC_STATUS_ALIASES = {
+    'generated': 'admin_generated',
+    'admin': 'admin_generated',
+    'warehouse': 'warehouse_prepared',
+    'qc': 'qc_approved',
+    'packed': 'packed_ready_to_ship',
+}
+
+
+def _normalize_motor_qc_status(status: str) -> str:
+    status = str(status or '').strip()
+    return MOTOR_QC_STATUS_ALIASES.get(status, status) or 'admin_generated'
+
 
 def _motor_qc_stage_recipients(status: str):
     """ผู้รับผิดชอบขั้นตอนถัดไป ตามสถานะปัจจุบันของงาน (ใช้ทั้งแจ้งเตือนงานค้างและแสดงผล dashboard)"""
@@ -1057,7 +1071,7 @@ def _motor_qc_job_progress(job: dict, now_th=None):
     """คำนวณสถานะ real-time ของงานหนึ่งใบ: รอใคร / รอมานานแค่ไหน / สีไฟสถานะ"""
     job = job or {}
     now_th = now_th or (datetime.datetime.utcnow() + datetime.timedelta(hours=7))
-    status = str(job.get('status') or 'admin_generated')
+    status = _normalize_motor_qc_status(job.get('status') or 'admin_generated')
 
     since_str = job.get('updated_at') or job.get('created_at') or now_th.strftime('%Y-%m-%d %H:%M:%S')
     try:
@@ -1077,6 +1091,11 @@ def _motor_qc_job_progress(job: dict, now_th=None):
     else:
         color = 'green'
 
+    notes = job.get('issue_notes') or []
+    if not isinstance(notes, list):
+        notes = []
+    latest_note = notes[-1] if notes else None
+
     return {
         'job_key': job.get('job_key') or job.get('qr_no') or '',
         'qr_no': job.get('qr_no') or '',
@@ -1092,6 +1111,8 @@ def _motor_qc_job_progress(job: dict, now_th=None):
         'color': color,
         'pdf_url': job.get('pdf_url') or '',
         'created_at': job.get('created_at') or '',
+        'has_note': bool(notes),
+        'latest_note': latest_note,
     }
 
 
@@ -1130,6 +1151,65 @@ def motor_qc_mark_delivered(job_key):
         now_str = now_th.strftime('%Y-%m-%d %H:%M:%S')
         motor_qc_jobs_ref.child(safe_key).update({'status': 'delivered', 'updated_at': now_str})
         return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/motor-qc/note/<job_key>', methods=['POST'])
+def api_motor_qc_add_note(job_key):
+    """บันทึกหมายเหตุ/สาเหตุที่ทำงานต่อไม่ได้ (เช่น สินค้าชำรุด) แล้วแจ้งเตือนแผนกที่ต้องรับผิดชอบขั้นตอนถัดไปทันที"""
+    try:
+        body = request.get_json(silent=True) or request.form
+        note_text = str((body.get('note') if hasattr(body, 'get') else '') or '').strip()
+        reported_by = str((body.get('reported_by') if hasattr(body, 'get') else '') or '').strip()
+        if not note_text:
+            return jsonify({'ok': False, 'error': 'กรุณากรอกหมายเหตุ'}), 400
+
+        safe_key = _safe_firebase_key(job_key)
+        job = motor_qc_jobs_ref.child(safe_key).get()
+        if not job:
+            return jsonify({'ok': False, 'error': 'ไม่พบเอกสาร QC-Motor'}), 404
+
+        now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
+        now_str = now_th.strftime('%Y-%m-%d %H:%M:%S')
+        status = _normalize_motor_qc_status(job.get('status') or 'admin_generated')
+
+        note_entry = {
+            'note': note_text[:500],
+            'reported_by': reported_by[:80] or 'ไม่ระบุชื่อ',
+            'status_at_time': status,
+            'created_at': now_str,
+        }
+        notes = job.get('issue_notes') or []
+        if not isinstance(notes, list):
+            notes = []
+        notes.append(note_entry)
+        motor_qc_jobs_ref.child(safe_key).child('issue_notes').set(notes)
+
+        progress = _motor_qc_job_progress(job, now_th)
+        recip = _motor_qc_stage_recipients(status)
+        qr_no = job.get('qr_no') or safe_key
+        company_name = job.get('company_name') or '-'
+
+        subject = f"⚠️ แจ้งปัญหางาน OR No. : {qr_no} : {company_name} ที่ขั้นตอน {progress['waiting_label']}"
+        mail_body = (
+            f"มีการรายงานปัญหา / หมายเหตุ ในงาน OR No. {qr_no} ({company_name})\n"
+            f"ขั้นตอนปัจจุบัน: {progress['waiting_label']}\n"
+            f"ผู้แจ้ง: {note_entry['reported_by']}\n"
+            f"หมายเหตุ: {note_text}\n\n"
+            f"กรุณาช่วยตรวจสอบและเข้ามาช่วยแก้ไขปัญหาโดยเร็ว\n\n"
+            f"ตรวจสอบสถานะทั้งหมดได้ที่: {_motor_qc_status_url()}\n\n"
+            f"ด้วยความเคารพ \nระบบแจ้งเตือน SAS QC Motor (Auto)"
+        )
+        mail_result = _send_workflow_email(
+            to_list=recip.get('to'),
+            cc_list=(recip.get('cc') or []) + [ALERT_EMAIL],
+            subject=subject,
+            body=mail_body,
+            stage=f'issue_note_{status}',
+            job_key=safe_key,
+        )
+        return jsonify({'ok': True, 'mail_ok': mail_result.get('ok'), 'mail_error': mail_result.get('error')})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
