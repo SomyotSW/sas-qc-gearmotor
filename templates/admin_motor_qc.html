@@ -18,6 +18,7 @@
     .top-actions{position:fixed;top:15px;right:20px;z-index:10;display:flex;gap:10px;align-items:center;}
     .btn-home,.btn-login{background:linear-gradient(180deg,#5aa7ff 0%,#2f79d8 100%);color:#fff!important;border:none;border-radius:10px;padding:8px 18px;font-size:1.05rem;font-weight:800;box-shadow:0 4px 12px rgba(0,70,160,.25);text-decoration:none;white-space:nowrap;}
     .btn-login{background:linear-gradient(180deg,#34d270 0%,#169c4a 100%);}
+    .btn-status{background:linear-gradient(180deg,#f59e0b 0%,#b45309 100%);color:#fff!important;border:none;border-radius:10px;padding:8px 18px;font-size:1.05rem;font-weight:800;box-shadow:0 4px 12px rgba(180,83,9,.28);text-decoration:none;white-space:nowrap;}
     .shell{max-width:1180px;margin:auto;background:#fff;border-radius:22px;box-shadow:0 22px 50px rgba(15,23,42,.16);overflow:hidden;}
     .hero{background:linear-gradient(135deg,#0b63ce 0%,#38bdf8 100%);color:#fff;padding:28px 32px;}
     .hero h1{font-weight:900;margin:0;font-size:2rem;}
@@ -66,6 +67,7 @@
   <img src="{{ url_for('static', filename='logo_sas.png') }}" alt="SAS Logo" class="sas-logo">
   <div class="top-actions">
     <a href="/login" class="btn-login">🔐 QC Login</a>
+    <a href="/motor-qc-status" class="btn-status">📊 สถานะสินค้า</a>
     <a href="/" class="btn-home">🏠 Home</a>
   </div>
 

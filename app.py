@@ -990,6 +990,211 @@ def _motor_qc_role_config(role: str):
     return configs.get(role)
 
 
+# ============================================================
+# 📊 Motor QC — Real-time Status Dashboard Helpers
+# ============================================================
+MOTOR_QC_STAGE_ORDER = ['admin_generated', 'warehouse_prepared', 'qc_approved', 'packed_ready_to_ship']
+
+MOTOR_QC_STAGE_WAITING_LABEL = {
+    'admin_generated': 'รอ Warehouse เตรียมสินค้า',
+    'warehouse_prepared': 'รอ QC ตรวจสอบสินค้า',
+    'qc_approved': 'รอ Warehouse บรรจุสินค้า (Packing)',
+    'packed_ready_to_ship': 'รอขนส่งมารับของ',
+    'delivered': 'จัดส่งเรียบร้อยแล้ว',
+}
+
+MOTOR_QC_STAGE_OWNER_LABEL = {
+    'admin_generated': 'Warehouse',
+    'warehouse_prepared': 'QC Inspector',
+    'qc_approved': 'Warehouse / Packing',
+    'packed_ready_to_ship': 'ขนส่ง (Transport)',
+    'delivered': '—',
+}
+
+
+def _motor_qc_stage_recipients(status: str):
+    """ผู้รับผิดชอบขั้นตอนถัดไป ตามสถานะปัจจุบันของงาน (ใช้ทั้งแจ้งเตือนงานค้างและแสดงผล dashboard)"""
+    status = str(status or '')
+    if status == 'admin_generated':
+        return {
+            'to': ['tanai@synergy-as.com', 'paninee@synergy-as.com'],
+            'cc': ['Chottanin@synergy-as.com', 'psungpan@gmail.com', 'wiroj@synergy-as.com',
+                   'sas04@synergy-as.com', 'sas06@synergy-as.com', 'natenaree@synergy-as.com',
+                   'traiwit@synergy-as.com', 'kongkiat@synergy-as.com'],
+        }
+    if status == 'warehouse_prepared':
+        cfg = _motor_qc_role_config('warehouse')
+        return {'to': cfg['to'], 'cc': cfg['cc']}
+    if status == 'qc_approved':
+        cfg = _motor_qc_role_config('qc')
+        return {'to': cfg['to'], 'cc': cfg['cc']}
+    if status == 'packed_ready_to_ship':
+        cfg = _motor_qc_role_config('packed')
+        return {'to': cfg['to'], 'cc': cfg['cc']}
+    return {'to': [], 'cc': []}
+
+
+def _motor_qc_status_url(_external: bool = True):
+    try:
+        return url_for('motor_qc_status_page', _external=_external)
+    except Exception:
+        return ''
+
+
+def _format_elapsed_th(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, _ = divmod(rem, 60)
+    if days > 0:
+        return f"{days} วัน {hours} ชม."
+    if hours > 0:
+        return f"{hours} ชม. {minutes} นาที"
+    return f"{minutes} นาที"
+
+
+def _motor_qc_job_progress(job: dict, now_th=None):
+    """คำนวณสถานะ real-time ของงานหนึ่งใบ: รอใคร / รอมานานแค่ไหน / สีไฟสถานะ"""
+    job = job or {}
+    now_th = now_th or (datetime.datetime.utcnow() + datetime.timedelta(hours=7))
+    status = str(job.get('status') or 'admin_generated')
+
+    since_str = job.get('updated_at') or job.get('created_at') or now_th.strftime('%Y-%m-%d %H:%M:%S')
+    try:
+        since_dt = datetime.datetime.strptime(since_str, '%Y-%m-%d %H:%M:%S')
+    except Exception:
+        since_dt = now_th
+
+    elapsed_seconds = (now_th - since_dt).total_seconds()
+    is_terminal = status not in MOTOR_QC_STAGE_ORDER
+
+    if is_terminal:
+        color = 'gray'
+    elif elapsed_seconds >= 86400:
+        color = 'red'
+    elif elapsed_seconds >= 43200:
+        color = 'yellow'
+    else:
+        color = 'green'
+
+    return {
+        'job_key': job.get('job_key') or job.get('qr_no') or '',
+        'qr_no': job.get('qr_no') or '',
+        'company_name': job.get('company_name') or '',
+        'item_count': job.get('item_count') or len(job.get('items') or []),
+        'status': status,
+        'waiting_label': MOTOR_QC_STAGE_WAITING_LABEL.get(status, status),
+        'owner_label': MOTOR_QC_STAGE_OWNER_LABEL.get(status, '—'),
+        'since': since_str,
+        'elapsed_seconds': elapsed_seconds,
+        'elapsed_label': _format_elapsed_th(elapsed_seconds),
+        'overdue': (not is_terminal) and elapsed_seconds >= 86400,
+        'color': color,
+        'pdf_url': job.get('pdf_url') or '',
+        'created_at': job.get('created_at') or '',
+    }
+
+
+@app.route('/motor-qc-status')
+def motor_qc_status_page():
+    return render_template('motor_qc_status.html')
+
+
+@app.route('/api/motor-qc/status')
+def api_motor_qc_status():
+    try:
+        rows = motor_qc_jobs_ref.get() or {}
+        now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
+        jobs = []
+        if isinstance(rows, dict):
+            for key, job in rows.items():
+                if not isinstance(job, dict):
+                    continue
+                progress = _motor_qc_job_progress(job, now_th)
+                progress['job_key'] = progress['job_key'] or key
+                jobs.append(progress)
+        jobs.sort(key=lambda r: r.get('elapsed_seconds', 0), reverse=True)
+        return jsonify({'ok': True, 'now': now_th.strftime('%Y-%m-%d %H:%M:%S'), 'jobs': jobs})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/motor-qc-status/mark-delivered/<job_key>', methods=['POST'])
+def motor_qc_mark_delivered(job_key):
+    try:
+        safe_key = _safe_firebase_key(job_key)
+        job = motor_qc_jobs_ref.child(safe_key).get()
+        if not job:
+            return jsonify({'ok': False, 'error': 'ไม่พบเอกสาร'}), 404
+        now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
+        now_str = now_th.strftime('%Y-%m-%d %H:%M:%S')
+        motor_qc_jobs_ref.child(safe_key).update({'status': 'delivered', 'updated_at': now_str})
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+def _motor_qc_overdue_watcher():
+    """ตรวจงานทุกใบที่ค้างสถานะเดิมเกิน 24 ชม. แล้วส่งอีเมลแจ้งเตือนซ้ำให้แผนกที่ต้องดำเนินการ (คูลดาวน์ 24 ชม./สถานะ)"""
+    while True:
+        try:
+            time.sleep(900)  # ตรวจทุก 15 นาที
+            rows = motor_qc_jobs_ref.get() or {}
+            if not isinstance(rows, dict):
+                continue
+            now_th = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
+            for key, job in rows.items():
+                if not isinstance(job, dict):
+                    continue
+                status = str(job.get('status') or '')
+                if status not in MOTOR_QC_STAGE_ORDER:
+                    continue
+                progress = _motor_qc_job_progress(job, now_th)
+                if not progress['overdue']:
+                    continue
+
+                reminders = job.get('overdue_reminders') or {}
+                last_sent = reminders.get(status)
+                should_send = True
+                if last_sent:
+                    try:
+                        last_dt = datetime.datetime.strptime(last_sent, '%Y-%m-%d %H:%M:%S')
+                        should_send = (now_th - last_dt).total_seconds() >= 86400
+                    except Exception:
+                        should_send = True
+                if not should_send:
+                    continue
+
+                recip = _motor_qc_stage_recipients(status)
+                qr_no = job.get('qr_no') or key
+                company_name = job.get('company_name') or '-'
+                subject = f"⏰ แจ้งเตือนงานค้าง OR No. : {qr_no} : {company_name} ({progress['waiting_label']}) เกิน 24 ชม."
+                status_url = _motor_qc_status_url()
+                body = (
+                    f"งาน OR No. {qr_no} ({company_name}) ค้างอยู่ที่ขั้นตอน '{progress['waiting_label']}' "
+                    f"มาแล้ว {progress['elapsed_label']} (เกิน 24 ชม.) กรุณาดำเนินการโดยเร็ว\n\n"
+                    f"ตรวจสอบสถานะทั้งหมดได้ที่: {status_url}\n\n"
+                    f"ด้วยความเคารพ \nระบบแจ้งเตือน SAS QC Motor (Auto)"
+                )
+                mail_res = _send_workflow_email(
+                    to_list=recip.get('to'),
+                    cc_list=(recip.get('cc') or []) + [ALERT_EMAIL],
+                    subject=subject,
+                    body=body,
+                    stage=f'overdue_reminder_{status}',
+                    job_key=key,
+                )
+                if mail_res.get('ok'):
+                    motor_qc_jobs_ref.child(key).child('overdue_reminders').child(status).set(
+                        now_th.strftime('%Y-%m-%d %H:%M:%S')
+                    )
+        except Exception as e:
+            print(f"[OVERDUE WATCHER ERROR] {e}", flush=True)
+
+
+threading.Thread(target=_motor_qc_overdue_watcher, daemon=True).start()
+
+
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -1235,7 +1440,11 @@ def admin_motor_qc_generate():
 
         # ✅ ส่งอีเมลถึง Warehouse พร้อมแนบ PDF ฉบับเดียวกับที่ดาวน์โหลด
         subject = f"เอกสาร QC Report OR No. : {qr_no} : {company_name} โปรดเตรียมสินค้าตามรายการที่กำหนด"
-        body = f"เอกสาร QC Report OR No. : {qr_no} : {company_name} เรียบร้อยแล้ว โปรดเตรียมสินค้าตามรายการที่กำหนด\n\nด้วยความเคารพ \nAdmin SAS04"
+        body = (
+            f"เอกสาร QC Report OR No. : {qr_no} : {company_name} เรียบร้อยแล้ว โปรดเตรียมสินค้าตามรายการที่กำหนด\n\n"
+            f"🔗 ตรวจสอบสถานะงานทั้งหมด (Real-time): {_motor_qc_status_url()}\n\n"
+            f"ด้วยความเคารพ \nAdmin SAS04"
+        )
         mail_result = _send_workflow_email(
             to_list=['tanai@synergy-as.com' , 'paninee@synergy-as.com'],
             cc_list=['Chottanin@synergy-as.com' , 'psungpan@gmail.com','wiroj@synergy-as.com' , 'sas04@synergy-as.com' ,'sas06@synergy-as.com' , 'natenaree@synergy-as.com' , 'traiwit@synergy-as.com' , 'kongkiat@synergy-as.com'],
@@ -1364,6 +1573,7 @@ def motor_qc_department_approve(role, job_key):
         company_name = job.get('company_name') or '-'
         subject = cfg['subject_tpl'].format(qr_no=qr_no, company_name=company_name)
         body = cfg['body_tpl'].format(qr_no=qr_no, company_name=company_name)
+        body += f"\n\n🔗 ตรวจสอบสถานะงานทั้งหมด (Real-time): {_motor_qc_status_url()}"
 
         mail_result = _send_workflow_email(
             to_list=cfg['to'],
